@@ -1,4 +1,3 @@
-```tsx
 import { useEffect, useMemo, useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./style.css";
@@ -1747,4 +1746,3 @@ ReactDOM.createRoot(
 ).render(
   <App />
 );
-```
