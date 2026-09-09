@@ -612,16 +612,20 @@ function Rooms() {
               </div>
 
               <div className="bed-status">
-                <span className="available">Available</span>
-                <span>
-                  {room.beds} beds available
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </section>
+  <div className="bed-list">
+    {Array.from({ length: room.beds }, (_, index) => (
+      <div className="bed-item" key={index}>
+        <span className="bed-name">
+          Bed {String.fromCharCode(65 + index)}
+        </span>
+
+        <span className="available">
+          Available
+        </span>
+      </div>
+    ))}
+  </div>
+</div>
   );
 }
 
