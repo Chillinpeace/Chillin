@@ -635,3 +635,158 @@ button {
     flex-wrap: wrap;
   }
 }
+/* ROOMS & BEDS */
+
+.rooms-page {
+  max-width: 1100px;
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 25px;
+}
+
+.room-form {
+  margin-bottom: 20px;
+}
+
+.room-form h3 {
+  font-size: 17px;
+  margin-bottom: 22px;
+}
+
+.room-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-bottom: 20px;
+}
+
+.room-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 18px;
+}
+
+.room-card {
+  padding: 20px;
+}
+
+.room-card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 20px;
+}
+
+.room-label {
+  color: #9299aa;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 1px;
+}
+
+.room-card-top h3 {
+  font-size: 24px;
+  margin-top: 3px;
+}
+
+.delete-btn {
+  border: 1px solid #f0d6d6;
+  background: #fff7f7;
+  color: #c24141;
+  border-radius: 8px;
+  padding: 7px 10px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.delete-btn:hover {
+  background: #fff0f0;
+}
+
+.room-details {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 15px 0;
+  border-top: 1px solid #f0f1f4;
+  border-bottom: 1px solid #f0f1f4;
+}
+
+.room-details div {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.room-details span {
+  color: #969dac;
+  font-size: 10px;
+}
+
+.room-details strong {
+  color: #30374a;
+  font-size: 12px;
+}
+
+.bed-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 15px;
+  color: #8b92a2;
+  font-size: 11px;
+}
+
+.available {
+  color: #16805a;
+  background: #eaf8f2;
+  border-radius: 20px;
+  padding: 5px 9px;
+  font-weight: 700;
+}
+
+.empty-state {
+  text-align: center;
+  padding: 60px 20px;
+}
+
+.empty-state h3 {
+  font-size: 17px;
+  margin-bottom: 7px;
+}
+
+.empty-state p {
+  color: #9299aa;
+  font-size: 13px;
+}
+
+/* ROOM MOBILE */
+
+@media (max-width: 700px) {
+  .page-header {
+    flex-direction: column;
+  }
+
+  .page-header .primary-btn {
+    width: 100%;
+  }
+
+  .room-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .room-list {
+    grid-template-columns: 1fr;
+  }
+
+  .room-details {
+    gap: 5px;
+  }
+}
