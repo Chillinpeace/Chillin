@@ -19,6 +19,14 @@ type PropertyData = {
   rooms: string;
 };
 
+type Room = {
+  id: number;
+  number: string;
+  type: string;
+  beds: number;
+  rent: number;
+};
+
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
 
@@ -63,15 +71,10 @@ function App() {
 
         <main className="dashboard">
           {page === "dashboard" && <Dashboard setPage={setPage} />}
-
           {page === "property" && <Property />}
-
-          {page === "rooms" && <ComingSoon title="Rooms & Beds" />}
-
+          {page === "rooms" && <Rooms />}
           {page === "tenants" && <ComingSoon title="Tenants" />}
-
           {page === "rent" && <ComingSoon title="Rent & Payments" />}
-
           {page === "invoices" && <ComingSoon title="Invoices" />}
         </main>
       </div>
@@ -187,16 +190,14 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
           <div className="quick-actions">
             <button>
               <span>👤</span>
-
               <div>
                 <strong>Add Tenant</strong>
                 <small>Register a new tenant</small>
               </div>
             </button>
 
-            <button>
+            <button onClick={() => setPage("rooms")}>
               <span>🛏️</span>
-
               <div>
                 <strong>Manage Rooms</strong>
                 <small>View rooms and beds</small>
@@ -205,7 +206,6 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
             <button>
               <span>💰</span>
-
               <div>
                 <strong>Collect Rent</strong>
                 <small>Record a payment</small>
@@ -214,7 +214,6 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
             <button>
               <span>🧾</span>
-
               <div>
                 <strong>Invoices</strong>
                 <small>View rent invoices</small>
@@ -249,13 +248,19 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 }
 
 function Property() {
-  const [property, setProperty] = useState<PropertyData>({
-    name: "",
-    type: "",
-    address: "",
-    city: "",
-    floors: "",
-    rooms: "",
+  const [property, setProperty] = useState<PropertyData>(() => {
+    const saved = localStorage.getItem("peacely_property");
+
+    return saved
+      ? JSON.parse(saved)
+      : {
+          name: "",
+          type: "",
+          address: "",
+          city: "",
+          floors: "",
+          rooms: "",
+        };
   });
 
   const [saved, setSaved] = useState(false);
@@ -302,7 +307,6 @@ function Property() {
         <div className="form-grid">
           <label>
             Property Name
-
             <input
               value={property.name}
               onChange={(e) =>
@@ -314,7 +318,6 @@ function Property() {
 
           <label>
             Property Type
-
             <select
               value={property.type}
               onChange={(e) =>
@@ -333,7 +336,6 @@ function Property() {
 
           <label>
             Address
-
             <input
               value={property.address}
               onChange={(e) =>
@@ -345,7 +347,6 @@ function Property() {
 
           <label>
             City
-
             <input
               value={property.city}
               onChange={(e) =>
@@ -357,7 +358,6 @@ function Property() {
 
           <label>
             Total Floors
-
             <input
               type="number"
               value={property.floors}
@@ -370,7 +370,6 @@ function Property() {
 
           <label>
             Total Rooms
-
             <input
               type="number"
               value={property.rooms}
@@ -399,6 +398,233 @@ function Property() {
   );
 }
 
+function Rooms() {
+  const [rooms, setRooms] = useState<Room[]>(() => {
+    const saved = localStorage.getItem("peacely_rooms");
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  const [showForm, setShowForm] = useState(false);
+
+  const [roomNumber, setRoomNumber] = useState("");
+  const [roomType, setRoomType] = useState("");
+  const [beds, setBeds] = useState("");
+  const [rent, setRent] = useState("");
+
+  function addRoom() {
+    if (!roomNumber || !roomType || !beds || !rent) {
+      alert("Please fill all room details.");
+      return;
+    }
+
+    const newRoom: Room = {
+      id: Date.now(),
+      number: roomNumber,
+      type: roomType,
+      beds: Number(beds),
+      rent: Number(rent),
+    };
+
+    const updatedRooms = [...rooms, newRoom];
+
+    setRooms(updatedRooms);
+
+    localStorage.setItem(
+      "peacely_rooms",
+      JSON.stringify(updatedRooms)
+    );
+
+    setRoomNumber("");
+    setRoomType("");
+    setBeds("");
+    setRent("");
+    setShowForm(false);
+  }
+
+  function deleteRoom(id: number) {
+    const updatedRooms = rooms.filter(
+      (room) => room.id !== id
+    );
+
+    setRooms(updatedRooms);
+
+    localStorage.setItem(
+      "peacely_rooms",
+      JSON.stringify(updatedRooms)
+    );
+  }
+
+  const totalBeds = rooms.reduce(
+    (total, room) => total + room.beds,
+    0
+  );
+
+  return (
+    <section className="property-page rooms-page">
+      <div className="page-header">
+        <div>
+          <p className="eyebrow">PROPERTY MANAGEMENT</p>
+
+          <h2>Rooms & Beds</h2>
+
+          <p className="subtitle">
+            Create rooms and manage the beds available in your property.
+          </p>
+        </div>
+
+        <button
+          className="primary-btn"
+          onClick={() => setShowForm(!showForm)}
+        >
+          {showForm ? "Cancel" : "+ Add Room"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="panel room-form">
+          <h3>Add New Room</h3>
+
+          <div className="form-grid">
+            <label>
+              Room Number
+              <input
+                value={roomNumber}
+                onChange={(e) =>
+                  setRoomNumber(e.target.value)
+                }
+                placeholder="Example: 101"
+              />
+            </label>
+
+            <label>
+              Room Type
+              <select
+                value={roomType}
+                onChange={(e) =>
+                  setRoomType(e.target.value)
+                }
+              >
+                <option value="">Select room type</option>
+                <option value="Single">Single</option>
+                <option value="Double Sharing">
+                  Double Sharing
+                </option>
+                <option value="Triple Sharing">
+                  Triple Sharing
+                </option>
+                <option value="Four Sharing">
+                  Four Sharing
+                </option>
+              </select>
+            </label>
+
+            <label>
+              Number of Beds
+              <input
+                type="number"
+                min="1"
+                value={beds}
+                onChange={(e) => setBeds(e.target.value)}
+                placeholder="Example: 3"
+              />
+            </label>
+
+            <label>
+              Monthly Rent / Bed
+              <input
+                type="number"
+                min="0"
+                value={rent}
+                onChange={(e) => setRent(e.target.value)}
+                placeholder="Example: 8000"
+              />
+            </label>
+          </div>
+
+          <button
+            className="primary-btn"
+            onClick={addRoom}
+          >
+            Save Room
+          </button>
+        </div>
+      )}
+
+      <div className="room-summary">
+        <div className="stat-card">
+          <div className="stat-icon">🚪</div>
+          <p>Total Rooms</p>
+          <h3>{rooms.length}</h3>
+          <span>Rooms created</span>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">🛏️</div>
+          <p>Total Beds</p>
+          <h3>{totalBeds}</h3>
+          <span>Bed capacity</span>
+        </div>
+      </div>
+
+      {rooms.length === 0 ? (
+        <div className="panel empty-state">
+          <div className="coming-icon">🛏️</div>
+          <h3>No rooms added yet</h3>
+          <p>
+            Click “Add Room” to create your first room.
+          </p>
+        </div>
+      ) : (
+        <div className="room-list">
+          {rooms.map((room) => (
+            <div className="panel room-card" key={room.id}>
+              <div className="room-card-top">
+                <div>
+                  <span className="room-label">ROOM</span>
+                  <h3>{room.number}</h3>
+                </div>
+
+                <button
+                  className="delete-btn"
+                  onClick={() => deleteRoom(room.id)}
+                >
+                  Delete
+                </button>
+              </div>
+
+              <div className="room-details">
+                <div>
+                  <span>Type</span>
+                  <strong>{room.type}</strong>
+                </div>
+
+                <div>
+                  <span>Beds</span>
+                  <strong>{room.beds}</strong>
+                </div>
+
+                <div>
+                  <span>Rent / Bed</span>
+                  <strong>
+                    ₹{room.rent.toLocaleString("en-IN")}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="bed-status">
+                <span className="available">Available</span>
+                <span>
+                  {room.beds} beds available
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ComingSoon({ title }: { title: string }) {
   return (
     <section className="property-page">
@@ -412,8 +638,8 @@ function ComingSoon({ title }: { title: string }) {
         <h3>This section is coming next</h3>
 
         <p>
-          We are building Peacely step by step. This section will
-          become fully functional.
+          We are building Peacely step by step. This section
+          will become fully functional.
         </p>
       </div>
     </section>
