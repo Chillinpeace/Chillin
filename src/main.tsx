@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from "react";
-import ReactDOM from "react-dom/client";
 import "./style.css";
 
 type Page =
@@ -27,7 +26,7 @@ type Room = {
   type: string;
   beds: number;
   rent: number;
-  bedStatus?: BedStatus[];
+  bedStatus: BedStatus[];
 };
 
 type Tenant = {
@@ -55,380 +54,550 @@ type Payment = {
   paymentMethod: PaymentMethod;
 };
 
-const propertyStorageKey = "peacely_property";
-const roomsStorageKey = "peacely_rooms";
-const tenantsStorageKey = "peacely_tenants";
-const paymentsStorageKey = "peacely_payments";
+const PROPERTY_KEY = "peacely_property";
+const ROOMS_KEY = "peacely_rooms";
+const TENANTS_KEY = "peacely_tenants";
+const PAYMENTS_KEY = "peacely_payments";
+
+const defaultProperty: PropertyData = {
+  name: "",
+  type: "PG",
+  address: "",
+  city: "",
+  floors: "",
+  rooms: "",
+};
+
+const readStorage = <T,>(key: string, fallback: T): T => {
+  try {
+    const saved = localStorage.getItem(key);
+
+    if (!saved) {
+      return fallback;
+    }
+
+    return JSON.parse(saved) as T;
+  } catch {
+    return fallback;
+  }
+};
+
+const saveStorage = <T,>(key: string, value: T) => {
+  localStorage.setItem(key, JSON.stringify(value));
+};
+
+const formatCurrency = (amount: number) => {
+  return `₹${amount.toLocaleString("en-IN")}`;
+};
+
+const formatDate = (date: string) => {
+  if (!date) return "-";
+
+  const parsed = new Date(`${date}T00:00:00`);
+
+  if (Number.isNaN(parsed.getTime())) {
+    return date;
+  }
+
+  return parsed.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+};
+
+const getInitials = (name: string) => {
+  if (!name.trim()) return "P";
+
+  return name
+    .trim()
+    .split(" ")
+    .slice(0, 2)
+    .map((part) => part.charAt(0).toUpperCase())
+    .join("");
+};
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
 
-  return (
-    <div className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="brand-mark">P</div>
-          <div>
-            <h1>Peacely</h1>
-            <span>PG Management</span>
-          </div>
-        </div>
+  const [property, setProperty] = useState<PropertyData>(() =>
+    readStorage(PROPERTY_KEY, defaultProperty)
+  );
 
-        <div className="topbar-right">
-          <div className="admin-avatar">A</div>
-        </div>
-      </header>
+  const [rooms, setRooms] = useState<Room[]>(() =>
+    readStorage(ROOMS_KEY, [])
+  );
+
+  const [tenants, setTenants] = useState<Tenant[]>(() =>
+    readStorage(TENANTS_KEY, [])
+  );
+
+  const [payments, setPayments] = useState<Payment[]>(() =>
+    readStorage(PAYMENTS_KEY, [])
+  );
+
+  useEffect(() => {
+    saveStorage(PROPERTY_KEY, property);
+  }, [property]);
+
+  useEffect(() => {
+    saveStorage(ROOMS_KEY, rooms);
+  }, [rooms]);
+
+  useEffect(() => {
+    saveStorage(TENANTS_KEY, tenants);
+  }, [tenants]);
+
+  useEffect(() => {
+    saveStorage(PAYMENTS_KEY, payments);
+  }, [payments]);
+
+  const handlePropertySave = (data: PropertyData) => {
+    setProperty(data);
+  };
+
+  const handleRoomsChange = (updatedRooms: Room[]) => {
+    setRooms(updatedRooms);
+  };
+
+  const handleTenantsChange = (updatedTenants: Tenant[]) => {
+    setTenants(updatedTenants);
+  };
+
+  const handlePaymentsChange = (updatedPayments: Payment[]) => {
+    setPayments(updatedPayments);
+  };
+
+  return (
+    <div className="app">
+      <TopBar />
 
       <div className="app-body">
-        <aside className="sidebar">
-          <nav>
-            <NavItem
-              label="Dashboard"
-              icon="⌂"
-              active={page === "dashboard"}
-              onClick={() => setPage("dashboard")}
-            />
+        <Sidebar page={page} setPage={setPage} />
 
-            <NavItem
-              label="Property"
-              icon="▣"
-              active={page === "property"}
-              onClick={() => setPage("property")}
-            />
+        <main className="main">
+          <div className="main-content">
+            {page === "dashboard" && (
+              <Dashboard
+                property={property}
+                rooms={rooms}
+                tenants={tenants}
+                payments={payments}
+                setPage={setPage}
+              />
+            )}
 
-            <NavItem
-              label="Rooms & Beds"
-              icon="▦"
-              active={page === "rooms"}
-              onClick={() => setPage("rooms")}
-            />
+            {page === "property" && (
+              <Property
+                property={property}
+                onSave={handlePropertySave}
+              />
+            )}
 
-            <NavItem
-              label="Tenants"
-              icon="♙"
-              active={page === "tenants"}
-              onClick={() => setPage("tenants")}
-            />
+            {page === "rooms" && (
+              <Rooms
+                rooms={rooms}
+                onRoomsChange={handleRoomsChange}
+              />
+            )}
 
-            <NavItem
-              label="Rent & Payments"
-              icon="₹"
-              active={page === "rent"}
-              onClick={() => setPage("rent")}
-            />
+            {page === "tenants" && (
+              <Tenants
+                tenants={tenants}
+                rooms={rooms}
+                onTenantsChange={handleTenantsChange}
+                onRoomsChange={handleRoomsChange}
+              />
+            )}
 
-            <NavItem
-              label="Invoices"
-              icon="▤"
-              active={page === "invoices"}
-              onClick={() => setPage("invoices")}
-            />
-          </nav>
+            {page === "rent" && (
+              <RentPayments
+                tenants={tenants}
+                payments={payments}
+                onPaymentsChange={handlePaymentsChange}
+              />
+            )}
 
-          <div className="sidebar-bottom">
-            <div className="sidebar-help">
-              <strong>Peacely</strong>
-              <span>Manage your PG peacefully.</span>
-            </div>
+            {page === "invoices" && <Invoices />}
           </div>
-        </aside>
-
-        <main className="main-content">
-          {page === "dashboard" && (
-            <Dashboard
-              goToTenants={() => setPage("tenants")}
-              goToRooms={() => setPage("rooms")}
-            />
-          )}
-
-          {page === "property" && <Property />}
-          {page === "rooms" && <Rooms />}
-          {page === "tenants" && <Tenants />}
-          {page === "rent" && <RentPayments />}
-          {page === "invoices" && <ComingSoon title="Invoices" />}
         </main>
       </div>
     </div>
   );
 }
 
-function NavItem({
-  label,
-  icon,
-  active,
-  onClick
-}: {
-  label: string;
-  icon: string;
-  active: boolean;
-  onClick: () => void;
-}) {
+/* =========================
+   TOP BAR
+========================= */
+
+function TopBar() {
   return (
-    <button
-      className={`nav-item ${active ? "active" : ""}`}
-      onClick={onClick}
-    >
-      <span className="nav-icon">{icon}</span>
-      <span>{label}</span>
-    </button>
+    <header className="topbar">
+      <div className="brand">
+        <div className="brand-logo">P</div>
+
+        <div>
+          <div className="brand-name">Peacely</div>
+          <div className="brand-subtitle">PG Management</div>
+        </div>
+      </div>
+
+      <div className="profile">
+        <div className="profile-avatar">A</div>
+
+        <div className="profile-text">
+          <div className="profile-name">Admin</div>
+          <div className="profile-role">Property Manager</div>
+        </div>
+      </div>
+    </header>
   );
 }
 
-function Dashboard({
-  goToTenants,
-  goToRooms
-}: {
-  goToTenants: () => void;
-  goToRooms: () => void;
-}) {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
+/* =========================
+   SIDEBAR
+========================= */
 
-  useEffect(() => {
-    const stored = localStorage.getItem(tenantsStorageKey);
+type SidebarProps = {
+  page: Page;
+  setPage: (page: Page) => void;
+};
 
-    if (stored) {
-      try {
-        setTenants(JSON.parse(stored));
-      } catch {
-        setTenants([]);
-      }
-    }
-  }, []);
+function Sidebar({ page, setPage }: SidebarProps) {
+  const items: { id: Page; icon: string; label: string }[] = [
+    {
+      id: "dashboard",
+      icon: "⌂",
+      label: "Dashboard",
+    },
+    {
+      id: "property",
+      icon: "▣",
+      label: "Property",
+    },
+    {
+      id: "rooms",
+      icon: "▦",
+      label: "Rooms & Beds",
+    },
+    {
+      id: "tenants",
+      icon: "♙",
+      label: "Tenants",
+    },
+    {
+      id: "rent",
+      icon: "₹",
+      label: "Rent & Payments",
+    },
+    {
+      id: "invoices",
+      icon: "▤",
+      label: "Invoices",
+    },
+  ];
 
   return (
-    <div className="dashboard">
-      <section className="welcome-card">
-        <div>
-          <p className="eyebrow">WELCOME BACK</p>
-          <h2>Good day, Admin 👋</h2>
-          <p className="welcome-text">
-            Manage your property, rooms, tenants and payments from one place.
-          </p>
-        </div>
+    <aside className="sidebar">
+      <div className="sidebar-label">MAIN MENU</div>
 
-        <div className="welcome-icon">🏠</div>
-      </section>
+      <nav className="nav-list">
+        {items.map((item) => (
+          <button
+            key={item.id}
+            className={`nav-item ${page === item.id ? "active" : ""}`}
+            onClick={() => setPage(item.id)}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            <span>{item.label}</span>
+          </button>
+        ))}
+      </nav>
+    </aside>
+  );
+}
 
-      <section className="stats-grid">
-        <StatCard
-          title="TOTAL BEDS"
-          value="100"
-          subtitle="Across all rooms"
-          icon="🛏"
-        />
-        <StatCard
-          title="OCCUPIED"
-          value="72"
-          subtitle="72% occupancy"
-          icon="👤"
-        />
-        <StatCard
-          title="AVAILABLE"
-          value="28"
-          subtitle="Ready for admission"
-          icon="✓"
-        />
-        <StatCard
-          title="RENT DUE"
-          value="₹24,500"
-          subtitle="This month"
-          icon="₹"
-        />
-      </section>
+/* =========================
+   DASHBOARD
+========================= */
 
-      <section className="dashboard-grid">
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">TENANTS</p>
-              <h3>Recent Tenants</h3>
-            </div>
+type DashboardProps = {
+  property: PropertyData;
+  rooms: Room[];
+  tenants: Tenant[];
+  payments: Payment[];
+  setPage: (page: Page) => void;
+};
 
-            <button className="text-btn" onClick={goToTenants}>
-              View all →
-            </button>
+function Dashboard({
+  property,
+  rooms,
+  tenants,
+  payments,
+  setPage,
+}: DashboardProps) {
+  const totalBeds = rooms.reduce((sum, room) => sum + room.beds, 0);
+
+  const occupiedBeds = rooms.reduce(
+    (sum, room) =>
+      sum +
+      room.bedStatus.filter((status) => status === "occupied").length,
+    0
+  );
+
+  const availableBeds = Math.max(totalBeds - occupiedBeds, 0);
+
+  const currentMonth = new Date().toISOString().slice(0, 7);
+
+  const monthlyCollected = payments
+    .filter((payment) => payment.paymentDate.startsWith(currentMonth))
+    .reduce((sum, payment) => sum + payment.amount, 0);
+
+  const totalMonthlyRent = tenants.reduce(
+    (sum, tenant) => sum + tenant.rent,
+    0
+  );
+
+  const rentDue = Math.max(totalMonthlyRent - monthlyCollected, 0);
+
+  const recentTenants = [...tenants]
+    .sort((a, b) => b.id - a.id)
+    .slice(0, 5);
+
+  return (
+    <>
+      <div className="welcome">
+        <h1>Welcome to Peacely 👋</h1>
+        <p>
+          {property.name
+            ? `Manage ${property.name} from one simple dashboard.`
+            : "Manage your PG, rooms, tenants and payments from one simple dashboard."}
+        </p>
+      </div>
+
+      <div className="stats">
+        <StatCard
+          label="TOTAL BEDS"
+          value={totalBeds}
+          note="Across all rooms"
+        />
+
+        <StatCard
+          label="OCCUPIED"
+          value={occupiedBeds}
+          note="Currently occupied"
+        />
+
+        <StatCard
+          label="AVAILABLE"
+          value={availableBeds}
+          note="Beds available"
+        />
+
+        <StatCard
+          label="RENT DUE"
+          value={formatCurrency(rentDue)}
+          note="Current month"
+        />
+      </div>
+
+      <div className="dashboard-grid">
+        <section className="panel dashboard-panel">
+          <div>
+            <h2 className="panel-title">Recent Tenants</h2>
+            <p className="panel-subtitle">
+              Latest tenant admissions
+            </p>
           </div>
 
-          {tenants.length === 0 ? (
-            <div className="empty-dashboard">
-              <div className="empty-icon">♙</div>
-              <h4>No tenants yet</h4>
-              <p>Add your first tenant from the Tenants page.</p>
+          {recentTenants.length === 0 ? (
+            <div className="empty-message">
+              No tenants added yet.
             </div>
           ) : (
             <div className="recent-list">
-              {tenants.slice(0, 5).map((tenant) => (
+              {recentTenants.map((tenant) => (
                 <div className="recent-item" key={tenant.id}>
-                  <div className="small-avatar">
-                    {tenant.name.charAt(0).toUpperCase()}
+                  <div className="recent-main">
+                    <div className="avatar">
+                      {getInitials(tenant.name)}
+                    </div>
+
+                    <div>
+                      <div className="recent-name">
+                        {tenant.name}
+                      </div>
+
+                      <div className="recent-room">
+                        Room {tenant.roomNumber} • {tenant.bedName}
+                      </div>
+                    </div>
                   </div>
 
-                  <div className="recent-info">
-                    <strong>{tenant.name}</strong>
-                    <span>
-                      Room {tenant.roomNumber} • {tenant.bedName}
-                    </span>
-                  </div>
-
-                  <div className="recent-rent">
-                    ₹{tenant.rent.toLocaleString("en-IN")}
+                  <div className="recent-date">
+                    {formatDate(tenant.joiningDate)}
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </section>
 
-        <div className="panel">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">QUICK ACTIONS</p>
-              <h3>Manage Peacely</h3>
-            </div>
-          </div>
+        <section className="panel dashboard-panel">
+          <h2 className="panel-title">Quick Actions</h2>
+
+          <p className="panel-subtitle">
+            Common tasks
+          </p>
 
           <div className="quick-actions">
-            <button onClick={goToTenants}>
-              <span>+</span>
-              <div>
-                <strong>New Admission</strong>
-                <small>Add a new tenant</small>
-              </div>
+            <button
+              className="quick-action"
+              onClick={() => setPage("property")}
+            >
+              <span>Set up property</span>
+              <span>→</span>
             </button>
 
-            <button onClick={goToRooms}>
-              <span>▦</span>
-              <div>
-                <strong>Manage Rooms</strong>
-                <small>Add rooms and beds</small>
-              </div>
+            <button
+              className="quick-action"
+              onClick={() => setPage("rooms")}
+            >
+              <span>Add rooms & beds</span>
+              <span>→</span>
+            </button>
+
+            <button
+              className="quick-action"
+              onClick={() => setPage("tenants")}
+            >
+              <span>Admit new tenant</span>
+              <span>→</span>
+            </button>
+
+            <button
+              className="quick-action"
+              onClick={() => setPage("rent")}
+            >
+              <span>Record rent payment</span>
+              <span>→</span>
             </button>
           </div>
-        </div>
-      </section>
-    </div>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-  icon
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-  icon: string;
-}) {
-  return (
-    <div className="stat-card">
-      <div className="stat-top">
-        <span>{title}</span>
-        <div className="stat-icon">{icon}</div>
+        </section>
       </div>
-
-      <strong>{value}</strong>
-      <small>{subtitle}</small>
-    </div>
+    </>
   );
 }
 
-function Property() {
-  const [form, setForm] = useState<PropertyData>({
-    name: "",
-    type: "",
-    address: "",
-    city: "",
-    floors: "",
-    rooms: ""
-  });
+/* =========================
+   PROPERTY
+========================= */
 
-  const [saved, setSaved] = useState(false);
+type PropertyProps = {
+  property: PropertyData;
+  onSave: (data: PropertyData) => void;
+};
+
+function Property({ property, onSave }: PropertyProps) {
+  const [form, setForm] = useState<PropertyData>(property);
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
 
   useEffect(() => {
-    const stored = localStorage.getItem(propertyStorageKey);
+    setForm(property);
+  }, [property]);
 
-    if (stored) {
-      try {
-        setForm(JSON.parse(stored));
-      } catch {
-        // Ignore invalid saved data.
-      }
-    }
-  }, []);
-
-  const updateField = (field: keyof PropertyData, value: string) => {
+  const updateField = (
+    field: keyof PropertyData,
+    value: string
+  ) => {
     setForm((current) => ({
       ...current,
-      [field]: value
+      [field]: value,
     }));
   };
 
   const saveProperty = () => {
-    if (!form.name.trim() || !form.type || !form.city.trim()) {
-      alert("Please fill Property Name, Property Type and City.");
+    setMessage("");
+    setError("");
+
+    if (!form.name.trim()) {
+      setError("Please enter the property name.");
       return;
     }
 
-    localStorage.setItem(propertyStorageKey, JSON.stringify(form));
-    setSaved(true);
+    if (!form.city.trim()) {
+      setError("Please enter the city.");
+      return;
+    }
 
-    setTimeout(() => {
-      setSaved(false);
-    }, 2500);
+    onSave(form);
+    setMessage("Property saved successfully.");
   };
 
   return (
     <div className="property-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">PROPERTY</p>
-          <h2>Property Setup</h2>
+          <h1 className="page-title">Property</h1>
           <p className="page-description">
-            Add your PG or property details.
+            Set up your PG or property details.
           </p>
         </div>
       </div>
 
-      <div className="panel property-panel">
-        <div className="panel-header">
-          <div>
-            <h3>Property Details</h3>
-            <p>Basic information about your property.</p>
+      <section className="panel property-form">
+        <div className="property-info">
+          <div className="property-info-title">
+            PROPERTY SETUP
+          </div>
+
+          <div className="property-info-text">
+            Add your property details once and use them
+            throughout Peacely.
           </div>
         </div>
 
+        {message && (
+          <div className="success-message">{message}</div>
+        )}
+
+        {error && (
+          <div className="error-message">{error}</div>
+        )}
+
         <div className="form-grid">
           <FormField
-            label="Property Name"
+            label="Property / PG Name"
             value={form.name}
             placeholder="Example: Peace Residency"
-            onChange={(value) => updateField("name", value)}
+            onChange={(value) =>
+              updateField("name", value)
+            }
           />
 
-          <div className="form-field">
-            <label>Property Type</label>
-
-            <select
-              value={form.type}
-              onChange={(event) =>
-                updateField("type", event.target.value)
-              }
-            >
-              <option value="">Select property type</option>
-              <option value="PG">PG</option>
-              <option value="Hostel">Hostel</option>
-              <option value="Coliving">Co-Living</option>
-              <option value="Apartment">Apartment</option>
-            </select>
-          </div>
+          <FormField
+            label="Property Type"
+            value={form.type}
+            type="select"
+            options={[
+              "PG",
+              "Hostel",
+              "Apartment",
+              "Shared Accommodation",
+            ]}
+            onChange={(value) =>
+              updateField("type", value)
+            }
+          />
 
           <FormField
             label="Address"
             value={form.address}
-            placeholder="Full property address"
-            onChange={(value) => updateField("address", value)}
+            placeholder="Full address"
+            onChange={(value) =>
+              updateField("address", value)
+            }
             full
           />
 
@@ -436,141 +605,122 @@ function Property() {
             label="City"
             value={form.city}
             placeholder="Example: Bengaluru"
-            onChange={(value) => updateField("city", value)}
+            onChange={(value) =>
+              updateField("city", value)
+            }
           />
 
           <FormField
-            label="Total Floors"
+            label="Number of Floors"
             value={form.floors}
-            placeholder="Example: 4"
-            onChange={(value) => updateField("floors", value)}
-            type="number"
+            placeholder="Example: 3"
+            onChange={(value) =>
+              updateField("floors", value)
+            }
           />
 
           <FormField
-            label="Total Rooms"
+            label="Number of Rooms"
             value={form.rooms}
-            placeholder="Example: 30"
-            onChange={(value) => updateField("rooms", value)}
-            type="number"
+            placeholder="Example: 25"
+            onChange={(value) =>
+              updateField("rooms", value)
+            }
           />
         </div>
 
-        <div className="form-footer">
-          {saved && (
-            <span className="success-message">
-              ✓ Saved successfully
-            </span>
-          )}
-
-          <button className="primary-btn" onClick={saveProperty}>
+        <div className="form-actions">
+          <button
+            className="primary-btn"
+            onClick={saveProperty}
+          >
             Save Property
           </button>
         </div>
-      </div>
+      </section>
     </div>
   );
 }
 
-function FormField({
-  label,
-  value,
-  placeholder,
-  onChange,
-  type = "text",
-  full = false
-}: {
-  label: string;
-  value: string;
-  placeholder: string;
-  onChange: (value: string) => void;
-  type?: string;
-  full?: boolean;
-}) {
-  return (
-    <div className={`form-field ${full ? "full" : ""}`}>
-      <label>{label}</label>
+/* =========================
+   ROOMS & BEDS
+========================= */
 
-      <input
-        type={type}
-        value={value}
-        placeholder={placeholder}
-        onChange={(event) => onChange(event.target.value)}
-      />
-    </div>
+type RoomsProps = {
+  rooms: Room[];
+  onRoomsChange: (rooms: Room[]) => void;
+};
+
+function Rooms({ rooms, onRoomsChange }: RoomsProps) {
+  const [showForm, setShowForm] = useState(
+    rooms.length === 0
   );
-}
 
-function Rooms() {
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [showForm, setShowForm] = useState(false);
-
-  const [number, setNumber] = useState("");
-  const [type, setType] = useState("Double Sharing");
+  const [roomNumber, setRoomNumber] = useState("");
+  const [roomType, setRoomType] =
+    useState("Double Sharing");
   const [beds, setBeds] = useState("2");
   const [rent, setRent] = useState("");
+  const [error, setError] = useState("");
 
-  useEffect(() => {
-    const stored = localStorage.getItem(roomsStorageKey);
+  const totalBeds = rooms.reduce(
+    (sum, room) => sum + room.beds,
+    0
+  );
 
-    if (stored) {
-      try {
-        const parsed: Room[] = JSON.parse(stored);
+  const occupiedBeds = rooms.reduce(
+    (sum, room) =>
+      sum +
+      room.bedStatus.filter(
+        (status) => status === "occupied"
+      ).length,
+    0
+  );
 
-        const normalized = parsed.map((room) => ({
-          ...room,
-          bedStatus:
-            room.bedStatus &&
-            room.bedStatus.length === room.beds
-              ? room.bedStatus
-              : Array.from(
-                  { length: room.beds },
-                  () => "available" as BedStatus
-                )
-        }));
-
-        setRooms(normalized);
-      } catch {
-        setRooms([]);
-      }
-    }
-  }, []);
-
-  const saveRooms = (updatedRooms: Room[]) => {
-    setRooms(updatedRooms);
-    localStorage.setItem(
-      roomsStorageKey,
-      JSON.stringify(updatedRooms)
-    );
-  };
+  const availableBeds = totalBeds - occupiedBeds;
 
   const addRoom = () => {
-    if (!number.trim() || !beds || !rent) {
-      alert(
-        "Please fill Room Number, Number of Beds and Monthly Rent."
-      );
+    setError("");
+
+    if (!roomNumber.trim()) {
+      setError("Please enter a room number.");
       return;
     }
 
-    const bedCount = Math.max(1, Number(beds));
-    const rentAmount = Math.max(0, Number(rent));
+    if (rooms.some((room) => room.number === roomNumber.trim())) {
+      setError("This room number already exists.");
+      return;
+    }
+
+    const bedCount = Number(beds);
+    const monthlyRent = Number(rent);
+
+    if (!bedCount || bedCount < 1) {
+      setError("Please enter a valid number of beds.");
+      return;
+    }
+
+    if (!monthlyRent || monthlyRent < 0) {
+      setError("Please enter a valid monthly rent.");
+      return;
+    }
 
     const newRoom: Room = {
       id: Date.now(),
-      number: number.trim(),
-      type,
+      number: roomNumber.trim(),
+      type: roomType,
       beds: bedCount,
-      rent: rentAmount,
+      rent: monthlyRent,
       bedStatus: Array.from(
         { length: bedCount },
-        () => "available" as BedStatus
-      )
+        () => "available"
+      ),
     };
 
-    saveRooms([...rooms, newRoom]);
+    onRoomsChange([...rooms, newRoom]);
 
-    setNumber("");
-    setType("Double Sharing");
+    setRoomNumber("");
+    setRoomType("Double Sharing");
     setBeds("2");
     setRent("");
     setShowForm(false);
@@ -579,208 +729,183 @@ function Rooms() {
   const deleteRoom = (roomId: number) => {
     const room = rooms.find((item) => item.id === roomId);
 
-    if (!room) {
-      return;
-    }
+    if (!room) return;
 
-    if (room.bedStatus?.some((status) => status === "occupied")) {
+    const hasOccupiedBed = room.bedStatus.some(
+      (status) => status === "occupied"
+    );
+
+    if (hasOccupiedBed) {
       alert(
-        "This room has occupied beds. Please remove the tenants first."
+        "This room cannot be deleted because one or more beds are occupied."
       );
       return;
     }
 
-    if (!window.confirm(`Delete Room ${room.number}?`)) {
-      return;
-    }
-
-    saveRooms(
+    onRoomsChange(
       rooms.filter((item) => item.id !== roomId)
     );
   };
 
   const toggleBed = (roomId: number, bedIndex: number) => {
     const updatedRooms = rooms.map((room) => {
-      if (room.id !== roomId) {
-        return room;
-      }
+      if (room.id !== roomId) return room;
 
-      const statuses =
-        room.bedStatus ??
-        Array.from(
-          { length: room.beds },
-          () => "available" as BedStatus
-        );
+      const updatedStatus = [...room.bedStatus];
 
-      const updatedStatuses = [...statuses];
-
-      updatedStatuses[bedIndex] =
-        updatedStatuses[bedIndex] === "occupied"
-          ? "available"
-          : "occupied";
+      updatedStatus[bedIndex] =
+        updatedStatus[bedIndex] === "available"
+          ? "occupied"
+          : "available";
 
       return {
         ...room,
-        bedStatus: updatedStatuses
+        bedStatus: updatedStatus,
       };
     });
 
-    saveRooms(updatedRooms);
+    onRoomsChange(updatedRooms);
   };
-
-  const totalRooms = rooms.length;
-
-  const totalBeds = rooms.reduce(
-    (sum, room) => sum + room.beds,
-    0
-  );
-
-  const occupiedBeds = rooms.reduce((sum, room) => {
-    const statuses =
-      room.bedStatus ??
-      Array.from(
-        { length: room.beds },
-        () => "available" as BedStatus
-      );
-
-    return (
-      sum +
-      statuses.filter(
-        (status) => status === "occupied"
-      ).length
-    );
-  }, 0);
-
-  const availableBeds = totalBeds - occupiedBeds;
 
   return (
     <div className="rooms-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">ROOMS & BEDS</p>
-          <h2>Rooms & Beds</h2>
+          <h1 className="page-title">Rooms & Beds</h1>
           <p className="page-description">
-            Manage rooms, beds and availability.
+            Manage rooms, beds, rent and occupancy.
           </p>
         </div>
 
         <button
           className="primary-btn"
-          onClick={() => setShowForm((current) => !current)}
+          onClick={() => {
+            setShowForm((current) => !current);
+            setError("");
+          }}
         >
-          {showForm ? "Close" : "+ Add Room"}
+          {showForm ? "Close Form" : "+ Add Room"}
         </button>
       </div>
 
       {showForm && (
-        <div className="panel room-form">
+        <section className="panel room-form">
           <h3>Add New Room</h3>
+
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
 
           <div className="form-grid">
             <FormField
               label="Room Number"
-              value={number}
+              value={roomNumber}
               placeholder="Example: 101"
-              onChange={setNumber}
+              onChange={setRoomNumber}
             />
 
-            <div className="form-field">
-              <label>Room Type</label>
-
-              <select
-                value={type}
-                onChange={(event) =>
-                  setType(event.target.value)
-                }
-              >
-                <option>Single</option>
-                <option>Double Sharing</option>
-                <option>Triple Sharing</option>
-                <option>Four Sharing</option>
-              </select>
-            </div>
+            <FormField
+              label="Room Type"
+              value={roomType}
+              type="select"
+              options={[
+                "Single",
+                "Double Sharing",
+                "Triple Sharing",
+                "Four Sharing",
+              ]}
+              onChange={setRoomType}
+            />
 
             <FormField
               label="Number of Beds"
               value={beds}
+              type="number"
               placeholder="Example: 2"
               onChange={setBeds}
-              type="number"
             />
 
             <FormField
               label="Monthly Rent / Bed"
               value={rent}
+              type="number"
               placeholder="Example: 8000"
               onChange={setRent}
-              type="number"
             />
           </div>
 
-          <div className="form-footer">
-            <button className="primary-btn" onClick={addRoom}>
-              Save Room
+          <div className="form-actions">
+            <button
+              className="primary-btn"
+              onClick={addRoom}
+            >
+              Add Room
             </button>
           </div>
-        </div>
+        </section>
       )}
 
       <div className="room-summary">
         <StatCard
-          title="TOTAL ROOMS"
-          value={String(totalRooms)}
-          subtitle="Rooms added"
-          icon="▦"
+          label="TOTAL ROOMS"
+          value={rooms.length}
+          note="Configured rooms"
         />
 
         <StatCard
-          title="TOTAL BEDS"
-          value={String(totalBeds)}
-          subtitle="Across all rooms"
-          icon="🛏"
+          label="TOTAL BEDS"
+          value={totalBeds}
+          note="Across all rooms"
         />
 
         <StatCard
-          title="OCCUPIED"
-          value={String(occupiedBeds)}
-          subtitle="Occupied beds"
-          icon="👤"
+          label="OCCUPIED"
+          value={occupiedBeds}
+          note="Currently occupied"
         />
 
         <StatCard
-          title="AVAILABLE"
-          value={String(availableBeds)}
-          subtitle="Available beds"
-          icon="✓"
+          label="AVAILABLE"
+          value={availableBeds}
+          note="Ready for admission"
         />
       </div>
 
       {rooms.length === 0 ? (
-        <div className="panel empty-state">
+        <section className="panel empty-state">
           <h3>No rooms added yet</h3>
-          <p>Add your first room to start managing beds.</p>
-        </div>
+          <p>
+            Add your first room to start managing beds.
+          </p>
+        </section>
       ) : (
         <div className="room-list">
           {rooms.map((room) => {
-            const statuses =
-              room.bedStatus ??
-              Array.from(
-                { length: room.beds },
-                () => "available" as BedStatus
-              );
+            const occupied = room.bedStatus.filter(
+              (status) => status === "occupied"
+            ).length;
+
+            const available = room.beds - occupied;
 
             return (
-              <div className="panel room-card" key={room.id}>
+              <section
+                className="panel room-card"
+                key={room.id}
+              >
                 <div className="room-card-top">
                   <div>
-                    <span className="room-label">ROOM</span>
+                    <div className="room-label">
+                      ROOM
+                    </div>
+
                     <h3>{room.number}</h3>
                   </div>
 
                   <button
                     className="delete-btn"
-                    onClick={() => deleteRoom(room.id)}
+                    onClick={() =>
+                      deleteRoom(room.id)
+                    }
                   >
                     Delete
                   </button>
@@ -788,89 +913,99 @@ function Rooms() {
 
                 <div className="room-details">
                   <div>
-                    <span>Type</span>
+                    <span>TYPE</span>
                     <strong>{room.type}</strong>
                   </div>
 
                   <div>
-                    <span>Beds</span>
+                    <span>BEDS</span>
                     <strong>{room.beds}</strong>
                   </div>
 
                   <div>
-                    <span>Rent / Bed</span>
+                    <span>RENT / BED</span>
                     <strong>
-                      ₹{room.rent.toLocaleString("en-IN")}
+                      {formatCurrency(room.rent)}
                     </strong>
                   </div>
                 </div>
 
                 <div className="bed-status">
-                  <span>Bed Status</span>
+                  <span>
+                    {occupied} occupied • {available}{" "}
+                    available
+                  </span>
 
-                  <strong className="available">
-                    {
-                      statuses.filter(
-                        (status) => status === "available"
-                      ).length
-                    }{" "}
-                    Available
-                  </strong>
+                  <span
+                    className={
+                      available > 0
+                        ? "available"
+                        : "occupied"
+                    }
+                  >
+                    {available > 0
+                      ? "Available"
+                      : "Full"}
+                  </span>
                 </div>
 
                 <div className="bed-list">
-                  {statuses.map((status, index) => {
-                    const bedName = `Bed ${String.fromCharCode(
-                      65 + index
-                    )}`;
+                  {room.bedStatus.map(
+                    (status, index) => {
+                      const isOccupied =
+                        status === "occupied";
 
-                    return (
-                      <button
-                        key={index}
-                        className={`bed-item ${
-                          status === "occupied"
-                            ? "bed-occupied"
-                            : "bed-available"
-                        }`}
-                        onClick={() =>
-                          toggleBed(room.id, index)
-                        }
-                      >
-                        <span className="bed-item-left">
-                          <span className="bed-icon">
-                            🛏
-                          </span>
-
-                          <span>
-                            <strong>{bedName}</strong>
-                            <small>
-                              {status === "occupied"
-                                ? "Occupied"
-                                : "Available"}
-                            </small>
-                          </span>
-                        </span>
-
-                        <span
-                          className={
-                            status === "occupied"
-                              ? "occupied"
-                              : "available"
-                          }
+                      return (
+                        <div
+                          key={index}
+                          className={`bed-item ${
+                            isOccupied
+                              ? "bed-occupied"
+                              : "bed-available"
+                          }`}
                         >
-                          {status === "occupied"
-                            ? "Occupied"
-                            : "Available"}
-                        </span>
-                      </button>
-                    );
-                  })}
+                          <div className="bed-item-left">
+                            <div className="bed-icon">
+                              🛏
+                            </div>
+
+                            <div>
+                              <strong>
+                                Bed {index + 1}
+                              </strong>
+
+                              <small>
+                                {isOccupied
+                                  ? "Occupied"
+                                  : "Available"}
+                              </small>
+                            </div>
+                          </div>
+
+                          <button
+                            className="bed-toggle"
+                            onClick={() =>
+                              toggleBed(
+                                room.id,
+                                index
+                              )
+                            }
+                          >
+                            {isOccupied
+                              ? "Free"
+                              : "Occupy"}
+                          </button>
+                        </div>
+                      );
+                    }
+                  )}
                 </div>
 
                 <p className="bed-help">
-                  Tap a bed to change its status.
+                  Tap Occupy/Free to manually change
+                  bed status.
                 </p>
-              </div>
+              </section>
             );
           })}
         </div>
@@ -879,10 +1014,26 @@ function Rooms() {
   );
 }
 
-function Tenants() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [showForm, setShowForm] = useState(false);
+/* =========================
+   TENANTS
+========================= */
+
+type TenantsProps = {
+  tenants: Tenant[];
+  rooms: Room[];
+  onTenantsChange: (tenants: Tenant[]) => void;
+  onRoomsChange: (rooms: Room[]) => void;
+};
+
+function Tenants({
+  tenants,
+  rooms,
+  onTenantsChange,
+  onRoomsChange,
+}: TenantsProps) {
+  const [showForm, setShowForm] = useState(
+    tenants.length === 0
+  );
 
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
@@ -892,187 +1043,38 @@ function Tenants() {
   );
   const [roomId, setRoomId] = useState("");
   const [bedIndex, setBedIndex] = useState("");
-  const [rent, setRent] = useState("");
+  const [monthlyRent, setMonthlyRent] = useState("");
   const [deposit, setDeposit] = useState("");
-  const [emergencyContact, setEmergencyContact] = useState("");
+  const [emergencyContact, setEmergencyContact] =
+    useState("");
 
-  useEffect(() => {
-    const storedTenants =
-      localStorage.getItem(tenantsStorageKey);
-
-    const storedRooms =
-      localStorage.getItem(roomsStorageKey);
-
-    if (storedTenants) {
-      try {
-        setTenants(JSON.parse(storedTenants));
-      } catch {
-        setTenants([]);
-      }
-    }
-
-    if (storedRooms) {
-      try {
-        const parsed: Room[] = JSON.parse(storedRooms);
-
-        const normalized = parsed.map((room) => ({
-          ...room,
-          bedStatus:
-            room.bedStatus &&
-            room.bedStatus.length === room.beds
-              ? room.bedStatus
-              : Array.from(
-                  { length: room.beds },
-                  () => "available" as BedStatus
-                )
-        }));
-
-        setRooms(normalized);
-      } catch {
-        setRooms([]);
-      }
-    }
-  }, []);
-
-  const availableRooms = rooms.filter((room) => {
-    const statuses =
-      room.bedStatus ??
-      Array.from(
-        { length: room.beds },
-        () => "available" as BedStatus
-      );
-
-    return statuses.some(
-      (status) => status === "available"
-    );
-  });
+  const [error, setError] = useState("");
 
   const selectedRoom = rooms.find(
     (room) => room.id === Number(roomId)
   );
 
   const availableBeds = selectedRoom
-    ? (
-        selectedRoom.bedStatus ??
-        Array.from(
-          { length: selectedRoom.beds },
-          () => "available" as BedStatus
-        )
-      )
+    ? selectedRoom.bedStatus
         .map((status, index) => ({
           status,
-          index
+          index,
         }))
-        .filter(
-          (bed) => bed.status === "available"
-        )
+        .filter((bed) => bed.status === "available")
     : [];
 
   useEffect(() => {
-    if (selectedRoom) {
-      setRent(String(selectedRoom.rent));
-
-      if (
-        bedIndex === "" ||
-        !availableBeds.some(
-          (bed) => bed.index === Number(bedIndex)
-        )
-      ) {
-        setBedIndex(
-          availableBeds.length > 0
-            ? String(availableBeds[0].index)
-            : ""
-        );
-      }
-    } else {
-      setRent("");
+    if (!selectedRoom) {
+      setMonthlyRent("");
       setBedIndex("");
+      return;
     }
+
+    setMonthlyRent(String(selectedRoom.rent));
+    setBedIndex("");
   }, [roomId]);
 
-  const addTenant = () => {
-    if (
-      !name.trim() ||
-      !phone.trim() ||
-      !roomId ||
-      bedIndex === ""
-    ) {
-      alert(
-        "Please fill Full Name, Phone Number, Room and Bed."
-      );
-      return;
-    }
-
-    const room = rooms.find(
-      (item) => item.id === Number(roomId)
-    );
-
-    if (!room) {
-      alert("Selected room not found.");
-      return;
-    }
-
-    const statuses =
-      room.bedStatus ??
-      Array.from(
-        { length: room.beds },
-        () => "available" as BedStatus
-      );
-
-    if (statuses[Number(bedIndex)] !== "available") {
-      alert("This bed is no longer available.");
-      return;
-    }
-
-    const index = Number(bedIndex);
-    const updatedStatuses = [...statuses];
-
-    updatedStatuses[index] = "occupied";
-
-    const updatedRooms = rooms.map((item) =>
-      item.id === room.id
-        ? {
-            ...item,
-            bedStatus: updatedStatuses
-          }
-        : item
-    );
-
-    const newTenant: Tenant = {
-      id: Date.now(),
-      name: name.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-      joiningDate,
-      roomNumber: room.number,
-      roomId: room.id,
-      bedIndex: index,
-      bedName: `Bed ${String.fromCharCode(
-        65 + index
-      )}`,
-      rent: Number(rent) || room.rent,
-      deposit: Number(deposit) || 0,
-      emergencyContact: emergencyContact.trim()
-    };
-
-    const updatedTenants = [
-      ...tenants,
-      newTenant
-    ];
-
-    localStorage.setItem(
-      roomsStorageKey,
-      JSON.stringify(updatedRooms)
-    );
-
-    localStorage.setItem(
-      tenantsStorageKey,
-      JSON.stringify(updatedTenants)
-    );
-
-    setRooms(updatedRooms);
-    setTenants(updatedTenants);
-
+  const resetForm = () => {
     setName("");
     setPhone("");
     setEmail("");
@@ -1081,28 +1083,102 @@ function Tenants() {
     );
     setRoomId("");
     setBedIndex("");
-    setRent("");
+    setMonthlyRent("");
     setDeposit("");
     setEmergencyContact("");
-
-    setShowForm(false);
-
-    alert(
-      "Tenant added successfully. Bed marked as occupied."
-    );
+    setError("");
   };
 
-  const removeTenant = (tenant: Tenant) => {
-    if (
-      !window.confirm(
-        `Remove ${tenant.name} from Peacely?`
-      )
-    ) {
+  const addTenant = () => {
+    setError("");
+
+    if (!name.trim()) {
+      setError("Please enter the tenant name.");
       return;
     }
 
-    const updatedTenants = tenants.filter(
-      (item) => item.id !== tenant.id
+    if (!phone.trim()) {
+      setError("Please enter the phone number.");
+      return;
+    }
+
+    if (!roomId) {
+      setError("Please select a room.");
+      return;
+    }
+
+    if (bedIndex === "") {
+      setError("Please select an available bed.");
+      return;
+    }
+
+    if (!monthlyRent || Number(monthlyRent) < 0) {
+      setError("Please enter a valid monthly rent.");
+      return;
+    }
+
+    if (!selectedRoom) {
+      setError("Selected room could not be found.");
+      return;
+    }
+
+    const selectedBed = Number(bedIndex);
+
+    if (
+      selectedRoom.bedStatus[selectedBed] !==
+      "available"
+    ) {
+      setError("This bed is no longer available.");
+      return;
+    }
+
+    const newTenant: Tenant = {
+      id: Date.now(),
+      name: name.trim(),
+      phone: phone.trim(),
+      email: email.trim(),
+      joiningDate,
+      roomNumber: selectedRoom.number,
+      roomId: selectedRoom.id,
+      bedIndex: selectedBed,
+      bedName: `Bed ${selectedBed + 1}`,
+      rent: Number(monthlyRent),
+      deposit: Number(deposit) || 0,
+      emergencyContact: emergencyContact.trim(),
+    };
+
+    onTenantsChange([...tenants, newTenant]);
+
+    const updatedRooms = rooms.map((room) => {
+      if (room.id !== selectedRoom.id) {
+        return room;
+      }
+
+      const updatedStatus = [...room.bedStatus];
+
+      updatedStatus[selectedBed] = "occupied";
+
+      return {
+        ...room,
+        bedStatus: updatedStatus,
+      };
+    });
+
+    onRoomsChange(updatedRooms);
+
+    resetForm();
+    setShowForm(false);
+  };
+
+  const removeTenant = (tenant: Tenant) => {
+    const confirmed = window.confirm(
+      `Remove ${tenant.name} from Peacely?`
+    );
+
+    if (!confirmed) return;
+
+    onTenantsChange(
+      tenants.filter((item) => item.id !== tenant.id)
     );
 
     const updatedRooms = rooms.map((room) => {
@@ -1110,49 +1186,26 @@ function Tenants() {
         return room;
       }
 
-      const statuses =
-        room.bedStatus ??
-        Array.from(
-          { length: room.beds },
-          () => "available" as BedStatus
-        );
+      const updatedStatus = [...room.bedStatus];
 
-      const updatedStatuses = [...statuses];
-
-      if (
-        updatedStatuses[tenant.bedIndex] !==
-        undefined
-      ) {
-        updatedStatuses[tenant.bedIndex] =
-          "available";
+      if (updatedStatus[tenant.bedIndex]) {
+        updatedStatus[tenant.bedIndex] = "available";
       }
 
       return {
         ...room,
-        bedStatus: updatedStatuses
+        bedStatus: updatedStatus,
       };
     });
 
-    localStorage.setItem(
-      tenantsStorageKey,
-      JSON.stringify(updatedTenants)
-    );
-
-    localStorage.setItem(
-      roomsStorageKey,
-      JSON.stringify(updatedRooms)
-    );
-
-    setTenants(updatedTenants);
-    setRooms(updatedRooms);
+    onRoomsChange(updatedRooms);
   };
 
   return (
     <div className="tenant-list-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">TENANTS</p>
-          <h2>Tenants</h2>
+          <h1 className="page-title">Tenants</h1>
           <p className="page-description">
             Manage admissions and tenant information.
           </p>
@@ -1160,232 +1213,226 @@ function Tenants() {
 
         <button
           className="primary-btn"
-          onClick={() =>
-            setShowForm((current) => !current)
-          }
+          onClick={() => {
+            setShowForm((current) => !current);
+            setError("");
+          }}
         >
-          {showForm
-            ? "Close"
-            : "+ New Admission"}
+          {showForm ? "Close Form" : "+ Add Tenant"}
         </button>
       </div>
 
       {showForm && (
-        <div className="panel room-form">
+        <section className="panel room-form">
           <h3>New Tenant Admission</h3>
 
-          <div className="form-grid">
-            <FormField
-              label="Full Name"
-              value={name}
-              placeholder="Tenant full name"
-              onChange={setName}
-            />
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
 
-            <FormField
-              label="Phone Number"
-              value={phone}
-              placeholder="10 digit mobile number"
-              onChange={setPhone}
-              type="tel"
-            />
-
-            <FormField
-              label="Email"
-              value={email}
-              placeholder="tenant@email.com"
-              onChange={setEmail}
-              type="email"
-            />
-
-            <FormField
-              label="Joining Date"
-              value={joiningDate}
-              placeholder=""
-              onChange={setJoiningDate}
-              type="date"
-            />
-
-            <div className="form-field">
-              <label>Room</label>
-
-              <select
-                value={roomId}
-                onChange={(event) =>
-                  setRoomId(event.target.value)
-                }
-              >
-                <option value="">
-                  Select room
-                </option>
-
-                {availableRooms.map((room) => (
-                  <option
-                    key={room.id}
-                    value={room.id}
-                  >
-                    Room {room.number} — ₹
-                    {room.rent.toLocaleString(
-                      "en-IN"
-                    )}
-                  </option>
-                ))}
-              </select>
+          {rooms.length === 0 ? (
+            <div className="empty-message">
+              Please add a room before admitting a
+              tenant.
             </div>
+          ) : (
+            <>
+              <div className="form-grid">
+                <FormField
+                  label="Full Name"
+                  value={name}
+                  placeholder="Tenant full name"
+                  onChange={setName}
+                />
 
-            <div className="form-field">
-              <label>Bed</label>
+                <FormField
+                  label="Phone Number"
+                  value={phone}
+                  type="tel"
+                  placeholder="10 digit mobile number"
+                  onChange={setPhone}
+                />
 
-              <select
-                value={bedIndex}
-                onChange={(event) =>
-                  setBedIndex(event.target.value)
-                }
-                disabled={!roomId}
-              >
-                <option value="">
-                  Select bed
-                </option>
+                <FormField
+                  label="Email"
+                  value={email}
+                  type="email"
+                  placeholder="tenant@example.com"
+                  onChange={setEmail}
+                />
 
-                {availableBeds.map((bed) => (
-                  <option
-                    key={bed.index}
-                    value={bed.index}
-                  >
-                    Bed{" "}
-                    {String.fromCharCode(
-                      65 + bed.index
-                    )}
-                  </option>
-                ))}
-              </select>
-            </div>
+                <FormField
+                  label="Joining Date"
+                  value={joiningDate}
+                  type="date"
+                  onChange={setJoiningDate}
+                />
 
-            <FormField
-              label="Monthly Rent"
-              value={rent}
-              placeholder="Monthly rent"
-              onChange={setRent}
-              type="number"
-            />
+                <FormField
+                  label="Room"
+                  value={roomId}
+                  type="select"
+                  options={rooms.map(
+                    (room) =>
+                      `${room.id}|||Room ${room.number}`
+                  )}
+                  onChange={setRoomId}
+                  optionValues={rooms.map((room) =>
+                    String(room.id)
+                  )}
+                />
 
-            <FormField
-              label="Security Deposit"
-              value={deposit}
-              placeholder="Deposit amount"
-              onChange={setDeposit}
-              type="number"
-            />
+                <FormField
+                  label="Bed"
+                  value={bedIndex}
+                  type="select"
+                  options={availableBeds.map(
+                    (bed) =>
+                      `${bed.index}|||Bed ${
+                        bed.index + 1
+                      }`
+                  )}
+                  onChange={setBedIndex}
+                  optionValues={availableBeds.map(
+                    (bed) => String(bed.index)
+                  )}
+                  disabled={availableBeds.length === 0}
+                />
 
-            <FormField
-              label="Emergency Contact"
-              value={emergencyContact}
-              placeholder="Emergency contact number"
-              onChange={setEmergencyContact}
-              type="tel"
-            />
-          </div>
+                <FormField
+                  label="Monthly Rent"
+                  value={monthlyRent}
+                  type="number"
+                  placeholder="Monthly rent"
+                  onChange={setMonthlyRent}
+                />
 
-          <div className="form-footer">
-            <button
-              className="primary-btn"
-              onClick={addTenant}
-            >
-              Save Tenant
-            </button>
-          </div>
-        </div>
+                <FormField
+                  label="Security Deposit"
+                  value={deposit}
+                  type="number"
+                  placeholder="Deposit amount"
+                  onChange={setDeposit}
+                />
+
+                <FormField
+                  label="Emergency Contact"
+                  value={emergencyContact}
+                  type="tel"
+                  placeholder="Emergency contact number"
+                  onChange={setEmergencyContact}
+                />
+              </div>
+
+              {selectedRoom &&
+                availableBeds.length === 0 && (
+                  <div className="error-message">
+                    This room has no available beds.
+                    Please select another room.
+                  </div>
+                )}
+
+              <div className="form-actions">
+                <button
+                  className="primary-btn"
+                  onClick={addTenant}
+                >
+                  Admit Tenant
+                </button>
+              </div>
+            </>
+          )}
+        </section>
       )}
 
       {tenants.length === 0 ? (
-        <div className="panel empty-state">
-          <h3>No tenants added yet</h3>
+        <section className="panel empty-state">
+          <h3>No tenants yet</h3>
           <p>
-            Add your first tenant to start managing
-            admissions.
+            Add your first tenant admission to see
+            them here.
           </p>
-        </div>
+        </section>
       ) : (
         <div className="tenant-list">
           {tenants.map((tenant) => (
-            <div
+            <section
               className="panel tenant-card"
               key={tenant.id}
             >
               <div className="tenant-card-top">
                 <div className="tenant-main">
                   <div className="large-avatar">
-                    {tenant.name
-                      .charAt(0)
-                      .toUpperCase()}
+                    {getInitials(tenant.name)}
                   </div>
 
                   <div>
                     <h3>{tenant.name}</h3>
-                    <span>
+
+                    <p>
                       Room {tenant.roomNumber} •{" "}
                       {tenant.bedName}
-                    </span>
+                    </p>
                   </div>
                 </div>
 
+                <span className="tenant-status">
+                  Active
+                </span>
+              </div>
+
+              <div className="tenant-details">
+                <div>
+                  <span>PHONE</span>
+                  <strong>{tenant.phone}</strong>
+                </div>
+
+                <div>
+                  <span>JOINED</span>
+                  <strong>
+                    {formatDate(tenant.joiningDate)}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>MONTHLY RENT</span>
+                  <strong>
+                    {formatCurrency(tenant.rent)}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>DEPOSIT</span>
+                  <strong>
+                    {formatCurrency(tenant.deposit)}
+                  </strong>
+                </div>
+              </div>
+
+              <div className="tenant-contact">
+                {tenant.email && (
+                  <div>✉ {tenant.email}</div>
+                )}
+
+                {tenant.emergencyContact && (
+                  <div>
+                    ☎ Emergency:{" "}
+                    {tenant.emergencyContact}
+                  </div>
+                )}
+              </div>
+
+              <div className="form-actions">
                 <button
                   className="delete-btn"
                   onClick={() =>
                     removeTenant(tenant)
                   }
                 >
-                  Remove
+                  Remove Tenant
                 </button>
               </div>
-
-              <div className="tenant-details">
-                <div>
-                  <span>Monthly Rent</span>
-                  <strong>
-                    ₹{tenant.rent.toLocaleString(
-                      "en-IN"
-                    )}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Joining Date</span>
-                  <strong>
-                    {tenant.joiningDate}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>Deposit</span>
-                  <strong>
-                    ₹{tenant.deposit.toLocaleString(
-                      "en-IN"
-                    )}
-                  </strong>
-                </div>
-              </div>
-
-              <div className="tenant-contact">
-                <span>📱 {tenant.phone}</span>
-
-                {tenant.email && (
-                  <span>
-                    ✉️ {tenant.email}
-                  </span>
-                )}
-
-                {tenant.emergencyContact && (
-                  <span>
-                    🚨 {tenant.emergencyContact}
-                  </span>
-                )}
-
-                <span className="occupied">
-                  Occupied
-                </span>
-              </div>
-            </div>
+            </section>
           ))}
         </div>
       )}
@@ -1393,604 +1440,569 @@ function Tenants() {
   );
 }
 
-function RentPayments() {
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [showForm, setShowForm] = useState(false);
+/* =========================
+   RENT & PAYMENTS
+========================= */
 
+type RentPaymentsProps = {
+  tenants: Tenant[];
+  payments: Payment[];
+  onPaymentsChange: (payments: Payment[]) => void;
+};
+
+function RentPayments({
+  tenants,
+  payments,
+  onPaymentsChange,
+}: RentPaymentsProps) {
   const [tenantId, setTenantId] = useState("");
   const [amount, setAmount] = useState("");
-  const [paymentDate, setPaymentDate] =
-    useState(
-      new Date()
-        .toISOString()
-        .slice(0, 10)
-    );
+  const [paymentDate, setPaymentDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
   const [paymentMethod, setPaymentMethod] =
     useState<PaymentMethod>("UPI");
+  const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const storedTenants =
-      localStorage.getItem(
-        tenantsStorageKey
-      );
+  const currentMonth = new Date()
+    .toISOString()
+    .slice(0, 7);
 
-    const storedPayments =
-      localStorage.getItem(
-        paymentsStorageKey
-      );
-
-    if (storedTenants) {
-      try {
-        setTenants(
-          JSON.parse(storedTenants)
-        );
-      } catch {
-        setTenants([]);
-      }
-    }
-
-    if (storedPayments) {
-      try {
-        setPayments(
-          JSON.parse(storedPayments)
-        );
-      } catch {
-        setPayments([]);
-      }
-    }
-  }, []);
-
-  const currentMonth =
-    new Date()
-      .toISOString()
-      .slice(0, 7);
-
-  const currentMonthPayments =
-    useMemo(() => {
-      return payments.filter((payment) =>
-        payment.paymentDate.startsWith(
-          currentMonth
-        )
-      );
-    }, [payments, currentMonth]);
-
-  const totalMonthlyRent =
-    tenants.reduce(
-      (sum, tenant) =>
-        sum + tenant.rent,
-      0
+  const currentMonthPayments = useMemo(() => {
+    return payments.filter((payment) =>
+      payment.paymentDate.startsWith(currentMonth)
     );
+  }, [payments, currentMonth]);
 
-  const totalCollected =
-    currentMonthPayments.reduce(
-      (sum, payment) =>
-        sum + payment.amount,
-      0
-    );
-
-  const totalPending = Math.max(
-    totalMonthlyRent -
-      totalCollected,
+  const collected = currentMonthPayments.reduce(
+    (sum, payment) => sum + payment.amount,
     0
   );
 
-  const tenantPaidAmount = (
-    id: number
-  ) => {
-    return currentMonthPayments
-      .filter(
-        (payment) =>
-          payment.tenantId === id
-      )
-      .reduce(
-        (sum, payment) =>
-          sum + payment.amount,
-        0
-      );
-  };
+  const totalRent = tenants.reduce(
+    (sum, tenant) => sum + tenant.rent,
+    0
+  );
 
-  const getTenantStatus = (
-    tenant: Tenant
-  ) => {
-    const paid =
-      tenantPaidAmount(tenant.id);
-
-    if (paid >= tenant.rent) {
-      return "Paid";
-    }
-
-    return "Pending";
-  };
-
-  const selectTenant = (
-    value: string
-  ) => {
-    setTenantId(value);
-
-    const tenant =
-      tenants.find(
-        (item) =>
-          item.id === Number(value)
-      );
-
-    if (tenant) {
-      setAmount(
-        String(tenant.rent)
-      );
-    } else {
-      setAmount("");
-    }
-  };
+  const pending = Math.max(totalRent - collected, 0);
 
   const recordPayment = () => {
-    if (
-      !tenantId ||
-      !amount ||
-      !paymentDate
-    ) {
-      alert(
-        "Please select a tenant, enter amount and payment date."
-      );
+    setError("");
+    setMessage("");
+
+    if (!tenantId) {
+      setError("Please select a tenant.");
       return;
     }
 
-    const tenant =
-      tenants.find(
-        (item) =>
-          item.id === Number(
-            tenantId
-          )
-      );
+    const paymentAmount = Number(amount);
 
-    if (!tenant) {
-      alert("Tenant not found.");
+    if (!paymentAmount || paymentAmount <= 0) {
+      setError("Please enter a valid payment amount.");
       return;
     }
 
-    const paymentAmount =
-      Number(amount);
-
-    if (paymentAmount <= 0) {
-      alert(
-        "Payment amount must be greater than zero."
-      );
+    if (!paymentDate) {
+      setError("Please select a payment date.");
       return;
     }
 
     const newPayment: Payment = {
       id: Date.now(),
-      tenantId: tenant.id,
+      tenantId: Number(tenantId),
       amount: paymentAmount,
       paymentDate,
-      paymentMethod
+      paymentMethod,
     };
 
-    const updatedPayments = [
+    onPaymentsChange([
+      newPayment,
       ...payments,
-      newPayment
-    ];
-
-    localStorage.setItem(
-      paymentsStorageKey,
-      JSON.stringify(
-        updatedPayments
-      )
-    );
-
-    setPayments(
-      updatedPayments
-    );
+    ]);
 
     setTenantId("");
     setAmount("");
     setPaymentDate(
-      new Date()
-        .toISOString()
-        .slice(0, 10)
+      new Date().toISOString().slice(0, 10)
     );
     setPaymentMethod("UPI");
-    setShowForm(false);
+    setMessage("Payment recorded successfully.");
+  };
 
-    alert(
-      "Payment recorded successfully."
-    );
+  const getTenant = (id: number) => {
+    return tenants.find((tenant) => tenant.id === id);
+  };
+
+  const getTenantPaidThisMonth = (id: number) => {
+    return currentMonthPayments
+      .filter((payment) => payment.tenantId === id)
+      .reduce((sum, payment) => sum + payment.amount, 0);
   };
 
   return (
     <div className="rent-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">
-            FINANCE
-          </p>
-
-          <h2>
+          <h1 className="page-title">
             Rent & Payments
-          </h2>
+          </h1>
 
           <p className="page-description">
-            Track monthly rent and
-            record tenant payments.
+            Track monthly rent collection and payments.
           </p>
         </div>
-
-        <button
-          className="primary-btn"
-          onClick={() =>
-            setShowForm(
-              (current) =>
-                !current
-            )
-          }
-        >
-          {showForm
-            ? "Close"
-            : "+ Record Payment"}
-        </button>
       </div>
 
-      <div className="room-summary">
-        <StatCard
-          title="MONTHLY RENT"
-          value={`₹${totalMonthlyRent.toLocaleString(
-            "en-IN"
-          )}`}
-          subtitle="Expected this month"
-          icon="₹"
-        />
+      <div className="rent-summary">
+        <section className="panel rent-stat">
+          <div className="rent-stat-label">
+            MONTHLY RENT
+          </div>
 
-        <StatCard
-          title="COLLECTED"
-          value={`₹${totalCollected.toLocaleString(
-            "en-IN"
-          )}`}
-          subtitle="Payments received"
-          icon="✓"
-        />
+          <div className="rent-stat-value">
+            {formatCurrency(totalRent)}
+          </div>
 
-        <StatCard
-          title="PENDING"
-          value={`₹${totalPending.toLocaleString(
-            "en-IN"
-          )}`}
-          subtitle="Still to collect"
-          icon="!"
-        />
+          <div className="rent-stat-note">
+            Total expected rent
+          </div>
+        </section>
 
-        <StatCard
-          title="TENANTS"
-          value={String(
-            tenants.length
+        <section className="panel rent-stat">
+          <div className="rent-stat-label">
+            COLLECTED
+          </div>
+
+          <div className="rent-stat-value">
+            {formatCurrency(collected)}
+          </div>
+
+          <div className="rent-stat-note">
+            Current month
+          </div>
+        </section>
+
+        <section className="panel rent-stat">
+          <div className="rent-stat-label">
+            PENDING
+          </div>
+
+          <div className="rent-stat-value">
+            {formatCurrency(pending)}
+          </div>
+
+          <div className="rent-stat-note">
+            Current month
+          </div>
+        </section>
+      </div>
+
+      <div className="rent-content">
+        <section className="panel payment-form">
+          <h3>Record Payment</h3>
+
+          {message && (
+            <div className="success-message">
+              {message}
+            </div>
           )}
-          subtitle="Active tenants"
-          icon="👤"
-        />
-      </div>
 
-      {showForm && (
-        <div className="panel room-form">
-          <h3>
-            Record Rent Payment
-          </h3>
+          {error && (
+            <div className="error-message">{error}</div>
+          )}
 
-          <div className="form-grid">
-            <div className="form-field">
-              <label>
-                Tenant
-              </label>
-
-              <select
-                value={tenantId}
-                onChange={(event) =>
-                  selectTenant(
-                    event.target.value
-                  )
-                }
-              >
-                <option value="">
-                  Select tenant
-                </option>
-
-                {tenants.map(
-                  (tenant) => (
-                    <option
-                      key={tenant.id}
-                      value={
-                        tenant.id
-                      }
-                    >
-                      {tenant.name} —
-                      Room{" "}
-                      {
-                        tenant.roomNumber
-                      }
-                    </option>
-                  )
-                )}
-              </select>
+          {tenants.length === 0 ? (
+            <div className="empty-message">
+              Add a tenant before recording a payment.
             </div>
+          ) : (
+            <>
+              <div className="form-grid">
+                <FormField
+                  label="Tenant"
+                  value={tenantId}
+                  type="select"
+                  options={tenants.map(
+                    (tenant) =>
+                      `${tenant.id}|||${tenant.name} - Room ${tenant.roomNumber}`
+                  )}
+                  optionValues={tenants.map((tenant) =>
+                    String(tenant.id)
+                  )}
+                  onChange={(value) => {
+                    setTenantId(value);
 
-            <FormField
-              label="Amount"
-              value={amount}
-              placeholder="Example: 8000"
-              onChange={setAmount}
-              type="number"
-            />
-
-            <FormField
-              label="Payment Date"
-              value={paymentDate}
-              placeholder=""
-              onChange={
-                setPaymentDate
-              }
-              type="date"
-            />
-
-            <div className="form-field">
-              <label>
-                Payment Method
-              </label>
-
-              <select
-                value={
-                  paymentMethod
-                }
-                onChange={(event) =>
-                  setPaymentMethod(
-                    event.target
-                      .value as PaymentMethod
-                  )
-                }
-              >
-                <option value="UPI">
-                  UPI
-                </option>
-
-                <option value="Cash">
-                  Cash
-                </option>
-
-                <option value="Bank Transfer">
-                  Bank Transfer
-                </option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-footer">
-            <button
-              className="primary-btn"
-              onClick={
-                recordPayment
-              }
-            >
-              Save Payment
-            </button>
-          </div>
-        </div>
-      )}
-
-      <div className="panel">
-        <div className="panel-header">
-          <div>
-            <p className="eyebrow">
-              THIS MONTH
-            </p>
-
-            <h3>
-              Rent Collection
-            </h3>
-          </div>
-        </div>
-
-        {tenants.length === 0 ? (
-          <div className="empty-state">
-            <h3>
-              No tenants found
-            </h3>
-
-            <p>
-              Add tenants first,
-              then you can record
-              their rent.
-            </p>
-          </div>
-        ) : (
-          <div className="payment-list">
-            {tenants.map(
-              (tenant) => {
-                const paid =
-                  tenantPaidAmount(
-                    tenant.id
-                  );
-
-                const status =
-                  getTenantStatus(
-                    tenant
-                  );
-
-                return (
-                  <div
-                    className="payment-row"
-                    key={
-                      tenant.id
-                    }
-                  >
-                    <div className="payment-tenant">
-                      <div className="small-avatar">
-                        {tenant.name
-                          .charAt(
-                            0
-                          )
-                          .toUpperCase()}
-                      </div>
-
-                      <div>
-                        <strong>
-                          {
-                            tenant.name
-                          }
-                        </strong>
-
-                        <span>
-                          Room{" "}
-                          {
-                            tenant.roomNumber
-                          }{" "}
-                          •{" "}
-                          {
-                            tenant.bedName
-                          }
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="payment-number">
-                      <span>
-                        Rent
-                      </span>
-
-                      <strong>
-                        ₹
-                        {tenant.rent.toLocaleString(
-                          "en-IN"
-                        )}
-                      </strong>
-                    </div>
-
-                    <div className="payment-number">
-                      <span>
-                        Paid
-                      </span>
-
-                      <strong>
-                        ₹
-                        {paid.toLocaleString(
-                          "en-IN"
-                        )}
-                      </strong>
-                    </div>
-
-                    <div>
-                      <span
-                        className={
-                          status ===
-                          "Paid"
-                            ? "paid"
-                            : "pending"
-                        }
-                      >
-                        {status}
-                      </span>
-                    </div>
-                  </div>
-                );
-              }
-            )}
-          </div>
-        )}
-      </div>
-
-      {payments.length > 0 && (
-        <div className="panel payment-history">
-          <div className="panel-header">
-            <div>
-              <p className="eyebrow">
-                HISTORY
-              </p>
-
-              <h3>
-                Recent Payments
-              </h3>
-            </div>
-          </div>
-
-          <div className="payment-history-list">
-            {payments
-              .slice()
-              .reverse()
-              .slice(0, 10)
-              .map(
-                (payment) => {
-                  const tenant =
-                    tenants.find(
+                    const tenant = tenants.find(
                       (item) =>
-                        item.id ===
-                        payment.tenantId
+                        item.id === Number(value)
                     );
+
+                    if (tenant) {
+                      setAmount(String(tenant.rent));
+                    }
+                  }}
+                />
+
+                <FormField
+                  label="Amount"
+                  value={amount}
+                  type="number"
+                  placeholder="Payment amount"
+                  onChange={setAmount}
+                />
+
+                <FormField
+                  label="Payment Date"
+                  value={paymentDate}
+                  type="date"
+                  onChange={setPaymentDate}
+                />
+
+                <FormField
+                  label="Payment Method"
+                  value={paymentMethod}
+                  type="select"
+                  options={[
+                    "UPI",
+                    "Cash",
+                    "Bank Transfer",
+                  ]}
+                  onChange={(value) =>
+                    setPaymentMethod(
+                      value as PaymentMethod
+                    )
+                  }
+                />
+              </div>
+
+              <div className="form-actions">
+                <button
+                  className="primary-btn"
+                  onClick={recordPayment}
+                >
+                  Record Payment
+                </button>
+              </div>
+            </>
+          )}
+        </section>
+
+        <section className="panel">
+          <div className="panel-header">
+            <h2 className="panel-title">
+              Tenant Rent Status
+            </h2>
+
+            <p className="panel-subtitle">
+              Current month payment status
+            </p>
+          </div>
+
+          {tenants.length === 0 ? (
+            <div className="empty-message">
+              No tenants available.
+            </div>
+          ) : (
+            <>
+              <div className="list-header">
+                <span>Tenant</span>
+                <span>Rent</span>
+                <span>Paid</span>
+                <span>Status</span>
+              </div>
+
+              <div className="payment-list">
+                {tenants.map((tenant) => {
+                  const paid =
+                    getTenantPaidThisMonth(
+                      tenant.id
+                    );
+
+                  const isPaid = paid >= tenant.rent;
 
                   return (
                     <div
-                      className="history-row"
-                      key={
-                        payment.id
-                      }
+                      className="payment-row"
+                      key={tenant.id}
                     >
-                      <div>
-                        <strong>
-                          {tenant?.name ??
-                            "Unknown Tenant"}
-                        </strong>
+                      <div className="payment-tenant">
+                        <div className="payment-tenant-avatar">
+                          {getInitials(tenant.name)}
+                        </div>
 
-                        <span>
-                          {
-                            payment.paymentDate
-                          }{" "}
-                          •{" "}
-                          {
-                            payment.paymentMethod
-                          }
-                        </span>
+                        <div>
+                          <div className="payment-tenant-name">
+                            {tenant.name}
+                          </div>
+
+                          <div className="payment-tenant-room">
+                            Room {tenant.roomNumber} •{" "}
+                            {tenant.bedName}
+                          </div>
+                        </div>
                       </div>
 
-                      <strong className="history-amount">
-                        ₹
-                        {payment.amount.toLocaleString(
-                          "en-IN"
-                        )}
-                      </strong>
+                      <div>
+                        <div className="payment-label">
+                          RENT
+                        </div>
+
+                        <div className="payment-number">
+                          {formatCurrency(
+                            tenant.rent
+                          )}
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="payment-label">
+                          PAID
+                        </div>
+
+                        <div className="payment-number">
+                          {formatCurrency(paid)}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span
+                          className={
+                            isPaid
+                              ? "paid"
+                              : "pending"
+                          }
+                        >
+                          {isPaid
+                            ? "Paid"
+                            : "Pending"}
+                        </span>
+                      </div>
                     </div>
                   );
-                }
-              )}
-          </div>
+                })}
+              </div>
+            </>
+          )}
+        </section>
+      </div>
+
+      <section className="panel payment-history">
+        <div className="panel-header">
+          <h2 className="panel-title">
+            Recent Payment History
+          </h2>
+
+          <p className="panel-subtitle">
+            Latest recorded payments
+          </p>
         </div>
+
+        {payments.length === 0 ? (
+          <div className="empty-message">
+            No payments recorded yet.
+          </div>
+        ) : (
+          <div className="payment-history-list">
+            {[...payments]
+              .sort(
+                (a, b) => b.id - a.id
+              )
+              .slice(0, 10)
+              .map((payment) => {
+                const tenant = getTenant(
+                  payment.tenantId
+                );
+
+                return (
+                  <div
+                    className="history-row"
+                    key={payment.id}
+                  >
+                    <div>
+                      <div className="history-name">
+                        {tenant
+                          ? tenant.name
+                          : "Unknown Tenant"}
+                      </div>
+
+                      <div className="history-date">
+                        {formatDate(
+                          payment.paymentDate
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="history-method">
+                      {payment.paymentMethod}
+                    </div>
+
+                    <div className="history-date">
+                      {tenant
+                        ? `Room ${tenant.roomNumber}`
+                        : "-"}
+                    </div>
+
+                    <div className="history-amount">
+                      +{formatCurrency(
+                        payment.amount
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* =========================
+   INVOICES
+========================= */
+
+function Invoices() {
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1 className="page-title">Invoices</h1>
+
+          <p className="page-description">
+            Create and manage tenant invoices.
+          </p>
+        </div>
+      </div>
+
+      <section className="panel coming-soon">
+        <div className="coming-soon-inner">
+          <div className="coming-soon-icon">
+            🧾
+          </div>
+
+          <h2>Invoices are coming soon</h2>
+
+          <p>
+            Peacely will soon let you generate
+            professional rent invoices, download them
+            and share them with tenants.
+          </p>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/* =========================
+   FORM FIELD
+========================= */
+
+type FormFieldProps = {
+  label: string;
+  value: string;
+  type?: "text" | "number" | "email" | "tel" | "date" | "select";
+  placeholder?: string;
+  options?: string[];
+  optionValues?: string[];
+  onChange: (value: string) => void;
+  full?: boolean;
+  disabled?: boolean;
+};
+
+function FormField({
+  label,
+  value,
+  type = "text",
+  placeholder,
+  options = [],
+  optionValues,
+  onChange,
+  full = false,
+  disabled = false,
+}: FormFieldProps) {
+  return (
+    <div
+      className={`form-field ${
+        full ? "full" : ""
+      }`}
+    >
+      <label>{label}</label>
+
+      {type === "select" ? (
+        <select
+          value={value}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange(event.target.value)
+          }
+        >
+          <option value="">
+            {disabled
+              ? "No available options"
+              : `Select ${label}`}
+          </option>
+
+          {options.map((option, index) => {
+            const parts = option.split("|||");
+
+            const optionValue =
+              optionValues?.[index] ??
+              parts[0] ??
+              option;
+
+            const optionLabel =
+              parts[1] ?? option;
+
+            return (
+              <option
+                key={`${optionValue}-${index}`}
+                value={optionValue}
+              >
+                {optionLabel}
+              </option>
+            );
+          })}
+        </select>
+      ) : (
+        <input
+          type={type}
+          value={value}
+          placeholder={placeholder}
+          disabled={disabled}
+          onChange={(event) =>
+            onChange(event.target.value)
+          }
+        />
       )}
     </div>
   );
 }
 
-function ComingSoon({
-  title
-}: {
-  title: string;
-}) {
+/* =========================
+   STAT CARD
+========================= */
+
+type StatCardProps = {
+  label: string;
+  value: string | number;
+  note: string;
+};
+
+function StatCard({
+  label,
+  value,
+  note,
+}: StatCardProps) {
   return (
-    <div className="coming-soon">
-      <div className="coming-icon">
-        🚧
-      </div>
+    <div className="stat-card">
+      <div className="stat-label">{label}</div>
 
-      <p className="eyebrow">
-        PEACELY
-      </p>
+      <div className="stat-value">{value}</div>
 
-      <h2>{title}</h2>
-
-      <p>
-        This module is coming next.
-        We are building Peacely step
-        by step.
-      </p>
+      <div className="stat-note">{note}</div>
     </div>
   );
 }
 
-ReactDOM.createRoot(
-  document.getElementById("root")!
-).render(
-  <App />
-);
+export default App;
