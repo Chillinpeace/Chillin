@@ -1,78 +1,79 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import "./style.css";
 
-function TestApp() {
+function Peacely() {
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        flexDirection: "column",
-        fontFamily: "Arial, sans-serif",
-        background: "#f5f7ff",
-        padding: "20px",
-        textAlign: "center",
-      }}
-    >
-      <div
-        style={{
-          width: "80px",
-          height: "80px",
-          borderRadius: "20px",
-          background: "#4f46e5",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          fontSize: "42px",
-          fontWeight: "bold",
-          marginBottom: "20px",
-        }}
-      >
-        P
-      </div>
+    <div className="app">
+      <header className="header">
+        <div>
+          <div className="logo">P</div>
+          <div>
+            <h1>Peacely</h1>
+            <p>PG & Rental Management</p>
+          </div>
+        </div>
 
-      <h1
-        style={{
-          margin: "0 0 10px",
-          fontSize: "32px",
-          color: "#111827",
-        }}
-      >
-        Peacely
-      </h1>
+        <button className="profile">Admin</button>
+      </header>
 
-      <p
-        style={{
-          margin: "0 0 20px",
-          fontSize: "18px",
-          color: "#6b7280",
-        }}
-      >
-        React is working successfully.
-      </p>
+      <main className="content">
+        <section className="welcome">
+          <p className="eyebrow">GOOD MORNING 👋</p>
+          <h2>Manage your property peacefully.</h2>
+          <p className="subtitle">
+            Keep tenants, rooms, rent and payments organized in one place.
+          </p>
+        </section>
 
-      <div
-        style={{
-          padding: "12px 20px",
-          borderRadius: "10px",
-          background: "#dcfce7",
-          color: "#166534",
-          fontWeight: "600",
-        }}
-      >
-        ✓ Application is running
-      </div>
+        <section className="stats">
+          <div className="card">
+            <span>Total Tenants</span>
+            <strong>0</strong>
+          </div>
+
+          <div className="card">
+            <span>Occupied Beds</span>
+            <strong>0</strong>
+          </div>
+
+          <div className="card">
+            <span>Rent Collected</span>
+            <strong>₹0</strong>
+          </div>
+
+          <div className="card">
+            <span>Pending Rent</span>
+            <strong>₹0</strong>
+          </div>
+        </section>
+
+        <section className="quick">
+          <h3>Quick actions</h3>
+
+          <div className="actions">
+            <button>＋ Add Tenant</button>
+            <button>＋ Add Property</button>
+            <button>🏠 Manage Rooms</button>
+            <button>💰 Record Payment</button>
+          </div>
+        </section>
+
+        <section className="empty">
+          <div className="empty-icon">🏠</div>
+          <h3>Your Peacely dashboard is ready</h3>
+          <p>
+            Add your first property to start managing rooms, tenants and rent.
+          </p>
+          <button className="primary">Add Your First Property</button>
+        </section>
+      </main>
     </div>
   );
 }
 
-ReactDOM.createRoot(
-  document.getElementById("root")!
-).render(
+ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <TestApp />
+    <Peacely />
   </React.StrictMode>
 );
