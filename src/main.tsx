@@ -2,7 +2,22 @@ import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./style.css";
 
-type Page = "dashboard" | "property" | "rooms" | "tenants" | "rent" | "invoices";
+type Page =
+  | "dashboard"
+  | "property"
+  | "rooms"
+  | "tenants"
+  | "rent"
+  | "invoices";
+
+type PropertyData = {
+  name: string;
+  type: string;
+  address: string;
+  city: string;
+  floors: string;
+  rooms: string;
+};
 
 function App() {
   const [page, setPage] = useState<Page>("dashboard");
@@ -48,10 +63,15 @@ function App() {
 
         <main className="dashboard">
           {page === "dashboard" && <Dashboard setPage={setPage} />}
+
           {page === "property" && <Property />}
+
           {page === "rooms" && <ComingSoon title="Rooms & Beds" />}
+
           {page === "tenants" && <ComingSoon title="Tenants" />}
+
           {page === "rent" && <ComingSoon title="Rent & Payments" />}
+
           {page === "invoices" && <ComingSoon title="Invoices" />}
         </main>
       </div>
@@ -116,34 +136,41 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
               <h3>Recent Tenants</h3>
               <p>Latest admissions</p>
             </div>
+
             <button className="link-btn">View all →</button>
           </div>
 
           <div className="tenant-list">
             <div className="tenant">
               <div className="avatar">RK</div>
+
               <div className="tenant-info">
                 <strong>Rahul Kumar</strong>
                 <span>Room 204 • Bed B</span>
               </div>
+
               <span className="paid">Paid</span>
             </div>
 
             <div className="tenant">
               <div className="avatar">AS</div>
+
               <div className="tenant-info">
                 <strong>Arjun Sharma</strong>
                 <span>Room 105 • Bed A</span>
               </div>
+
               <span className="pending">Pending</span>
             </div>
 
             <div className="tenant">
               <div className="avatar">PS</div>
+
               <div className="tenant-info">
                 <strong>Priya Singh</strong>
                 <span>Room 301 • Bed C</span>
               </div>
+
               <span className="paid">Paid</span>
             </div>
           </div>
@@ -160,6 +187,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
           <div className="quick-actions">
             <button>
               <span>👤</span>
+
               <div>
                 <strong>Add Tenant</strong>
                 <small>Register a new tenant</small>
@@ -168,6 +196,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
             <button>
               <span>🛏️</span>
+
               <div>
                 <strong>Manage Rooms</strong>
                 <small>View rooms and beds</small>
@@ -176,6 +205,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
             <button>
               <span>💰</span>
+
               <div>
                 <strong>Collect Rent</strong>
                 <small>Record a payment</small>
@@ -184,6 +214,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
             <button>
               <span>🧾</span>
+
               <div>
                 <strong>Invoices</strong>
                 <small>View rent invoices</small>
@@ -199,6 +230,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
             <h3>Occupancy</h3>
             <p>Current property capacity</p>
           </div>
+
           <strong className="occupancy-number">72%</strong>
         </div>
 
@@ -217,10 +249,49 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 }
 
 function Property() {
+  const [property, setProperty] = useState<PropertyData>({
+    name: "",
+    type: "",
+    address: "",
+    city: "",
+    floors: "",
+    rooms: "",
+  });
+
+  const [saved, setSaved] = useState(false);
+
+  function handleChange(
+    field: keyof PropertyData,
+    value: string
+  ) {
+    setProperty((current) => ({
+      ...current,
+      [field]: value,
+    }));
+
+    setSaved(false);
+  }
+
+  function saveProperty() {
+    if (!property.name || !property.type || !property.city) {
+      alert("Please enter Property Name, Property Type and City.");
+      return;
+    }
+
+    localStorage.setItem(
+      "peacely_property",
+      JSON.stringify(property)
+    );
+
+    setSaved(true);
+  }
+
   return (
     <section className="property-page">
       <p className="eyebrow">SETUP</p>
+
       <h2>Property Setup</h2>
+
       <p className="subtitle">
         Add and manage the basic information of your PG property.
       </p>
@@ -231,44 +302,98 @@ function Property() {
         <div className="form-grid">
           <label>
             Property Name
-            <input placeholder="Example: Peacely PG" />
+
+            <input
+              value={property.name}
+              onChange={(e) =>
+                handleChange("name", e.target.value)
+              }
+              placeholder="Example: Peacely PG"
+            />
           </label>
 
           <label>
             Property Type
-            <select defaultValue="">
-              <option value="" disabled>
-                Select type
+
+            <select
+              value={property.type}
+              onChange={(e) =>
+                handleChange("type", e.target.value)
+              }
+            >
+              <option value="">Select type</option>
+              <option value="PG">PG</option>
+              <option value="Hostel">Hostel</option>
+              <option value="Co-living">Co-living</option>
+              <option value="Rental Property">
+                Rental Property
               </option>
-              <option>PG</option>
-              <option>Hostel</option>
-              <option>Co-living</option>
-              <option>Rental Property</option>
             </select>
           </label>
 
           <label>
             Address
-            <input placeholder="Enter property address" />
+
+            <input
+              value={property.address}
+              onChange={(e) =>
+                handleChange("address", e.target.value)
+              }
+              placeholder="Enter property address"
+            />
           </label>
 
           <label>
             City
-            <input placeholder="Enter city" />
+
+            <input
+              value={property.city}
+              onChange={(e) =>
+                handleChange("city", e.target.value)
+              }
+              placeholder="Enter city"
+            />
           </label>
 
           <label>
             Total Floors
-            <input type="number" placeholder="Example: 3" />
+
+            <input
+              type="number"
+              value={property.floors}
+              onChange={(e) =>
+                handleChange("floors", e.target.value)
+              }
+              placeholder="Example: 3"
+            />
           </label>
 
           <label>
             Total Rooms
-            <input type="number" placeholder="Example: 25" />
+
+            <input
+              type="number"
+              value={property.rooms}
+              onChange={(e) =>
+                handleChange("rooms", e.target.value)
+              }
+              placeholder="Example: 25"
+            />
           </label>
         </div>
 
-        <button className="primary-btn">Save Property</button>
+        <button
+          className="primary-btn"
+          onClick={saveProperty}
+        >
+          Save Property
+        </button>
+
+        {saved && (
+          <div className="save-message">
+            ✓ Property saved successfully
+          </div>
+        )}
       </div>
     </section>
   );
@@ -278,20 +403,26 @@ function ComingSoon({ title }: { title: string }) {
   return (
     <section className="property-page">
       <p className="eyebrow">PEACELY</p>
+
       <h2>{title}</h2>
+
       <div className="panel coming-soon">
         <div className="coming-icon">🚧</div>
+
         <h3>This section is coming next</h3>
+
         <p>
-          We are building Peacely step by step. This section will become fully
-          functional.
+          We are building Peacely step by step. This section will
+          become fully functional.
         </p>
       </div>
     </section>
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+ReactDOM.createRoot(
+  document.getElementById("root")!
+).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
