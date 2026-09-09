@@ -44,6 +44,7 @@ function App() {
       <header className="topbar">
         <div className="brand">
           <div className="logo">P</div>
+
           <div>
             <h1>Peacely</h1>
             <p>PG Management</p>
@@ -60,7 +61,9 @@ function App() {
           {menu.map((item) => (
             <button
               key={item.id}
-              className={`nav-item ${page === item.id ? "active" : ""}`}
+              className={`nav-item ${
+                page === item.id ? "active" : ""
+              }`}
               onClick={() => setPage(item.id)}
             >
               <span>{item.icon}</span>
@@ -70,25 +73,44 @@ function App() {
         </aside>
 
         <main className="dashboard">
-          {page === "dashboard" && <Dashboard setPage={setPage} />}
+          {page === "dashboard" && (
+            <Dashboard setPage={setPage} />
+          )}
+
           {page === "property" && <Property />}
+
           {page === "rooms" && <Rooms />}
-          {page === "tenants" && <ComingSoon title="Tenants" />}
-          {page === "rent" && <ComingSoon title="Rent & Payments" />}
-          {page === "invoices" && <ComingSoon title="Invoices" />}
+
+          {page === "tenants" && (
+            <ComingSoon title="Tenants" />
+          )}
+
+          {page === "rent" && (
+            <ComingSoon title="Rent & Payments" />
+          )}
+
+          {page === "invoices" && (
+            <ComingSoon title="Invoices" />
+          )}
         </main>
       </div>
     </div>
   );
 }
 
-function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
+function Dashboard({
+  setPage,
+}: {
+  setPage: (page: Page) => void;
+}) {
   return (
     <>
       <section className="welcome">
         <div>
           <p className="eyebrow">OVERVIEW</p>
+
           <h2>Good afternoon 👋</h2>
+
           <p className="subtitle">
             Here's what's happening with your property today.
           </p>
@@ -105,29 +127,41 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
       <section className="stats">
         <div className="stat-card">
           <div className="stat-icon">🏠</div>
+
           <p>Total Beds</p>
+
           <h3>100</h3>
+
           <span>Property capacity</span>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon">👥</div>
+
           <p>Occupied</p>
+
           <h3>72</h3>
+
           <span>72% occupancy</span>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon">🛏️</div>
+
           <p>Available</p>
+
           <h3>28</h3>
+
           <span>Beds available</span>
         </div>
 
         <div className="stat-card">
           <div className="stat-icon">₹</div>
+
           <p>Rent Due</p>
+
           <h3>₹24,500</h3>
+
           <span>Needs attention</span>
         </div>
       </section>
@@ -137,10 +171,13 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
           <div className="panel-heading">
             <div>
               <h3>Recent Tenants</h3>
+
               <p>Latest admissions</p>
             </div>
 
-            <button className="link-btn">View all →</button>
+            <button className="link-btn">
+              View all →
+            </button>
           </div>
 
           <div className="tenant-list">
@@ -149,6 +186,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
               <div className="tenant-info">
                 <strong>Rahul Kumar</strong>
+
                 <span>Room 204 • Bed B</span>
               </div>
 
@@ -160,6 +198,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
               <div className="tenant-info">
                 <strong>Arjun Sharma</strong>
+
                 <span>Room 105 • Bed A</span>
               </div>
 
@@ -171,6 +210,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
               <div className="tenant-info">
                 <strong>Priya Singh</strong>
+
                 <span>Room 301 • Bed C</span>
               </div>
 
@@ -183,6 +223,7 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
           <div className="panel-heading">
             <div>
               <h3>Quick Actions</h3>
+
               <p>Manage your property</p>
             </div>
           </div>
@@ -190,32 +231,42 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
           <div className="quick-actions">
             <button>
               <span>👤</span>
+
               <div>
                 <strong>Add Tenant</strong>
+
                 <small>Register a new tenant</small>
               </div>
             </button>
 
-            <button onClick={() => setPage("rooms")}>
+            <button
+              onClick={() => setPage("rooms")}
+            >
               <span>🛏️</span>
+
               <div>
                 <strong>Manage Rooms</strong>
+
                 <small>View rooms and beds</small>
               </div>
             </button>
 
             <button>
               <span>💰</span>
+
               <div>
                 <strong>Collect Rent</strong>
+
                 <small>Record a payment</small>
               </div>
             </button>
 
             <button>
               <span>🧾</span>
+
               <div>
                 <strong>Invoices</strong>
+
                 <small>View rent invoices</small>
               </div>
             </button>
@@ -227,10 +278,13 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
         <div className="panel-heading">
           <div>
             <h3>Occupancy</h3>
+
             <p>Current property capacity</p>
           </div>
 
-          <strong className="occupancy-number">72%</strong>
+          <strong className="occupancy-number">
+            72%
+          </strong>
         </div>
 
         <div className="progress">
@@ -239,7 +293,9 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 
         <div className="occupancy-details">
           <span>72 occupied</span>
+
           <span>28 available</span>
+
           <span>100 total beds</span>
         </div>
       </section>
@@ -248,20 +304,22 @@ function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
 }
 
 function Property() {
-  const [property, setProperty] = useState<PropertyData>(() => {
-    const saved = localStorage.getItem("peacely_property");
+  const [property, setProperty] =
+    useState<PropertyData>(() => {
+      const saved =
+        localStorage.getItem("peacely_property");
 
-    return saved
-      ? JSON.parse(saved)
-      : {
-          name: "",
-          type: "",
-          address: "",
-          city: "",
-          floors: "",
-          rooms: "",
-        };
-  });
+      return saved
+        ? JSON.parse(saved)
+        : {
+            name: "",
+            type: "",
+            address: "",
+            city: "",
+            floors: "",
+            rooms: "",
+          };
+    });
 
   const [saved, setSaved] = useState(false);
 
@@ -278,8 +336,15 @@ function Property() {
   }
 
   function saveProperty() {
-    if (!property.name || !property.type || !property.city) {
-      alert("Please enter Property Name, Property Type and City.");
+    if (
+      !property.name ||
+      !property.type ||
+      !property.city
+    ) {
+      alert(
+        "Please enter Property Name, Property Type and City."
+      );
+
       return;
     }
 
@@ -298,7 +363,8 @@ function Property() {
       <h2>Property Setup</h2>
 
       <p className="subtitle">
-        Add and manage the basic information of your PG property.
+        Add and manage the basic information of your PG
+        property.
       </p>
 
       <div className="panel property-form">
@@ -307,10 +373,14 @@ function Property() {
         <div className="form-grid">
           <label>
             Property Name
+
             <input
               value={property.name}
               onChange={(e) =>
-                handleChange("name", e.target.value)
+                handleChange(
+                  "name",
+                  e.target.value
+                )
               }
               placeholder="Example: Peacely PG"
             />
@@ -318,16 +388,30 @@ function Property() {
 
           <label>
             Property Type
+
             <select
               value={property.type}
               onChange={(e) =>
-                handleChange("type", e.target.value)
+                handleChange(
+                  "type",
+                  e.target.value
+                )
               }
             >
-              <option value="">Select type</option>
+              <option value="">
+                Select type
+              </option>
+
               <option value="PG">PG</option>
-              <option value="Hostel">Hostel</option>
-              <option value="Co-living">Co-living</option>
+
+              <option value="Hostel">
+                Hostel
+              </option>
+
+              <option value="Co-living">
+                Co-living
+              </option>
+
               <option value="Rental Property">
                 Rental Property
               </option>
@@ -336,10 +420,14 @@ function Property() {
 
           <label>
             Address
+
             <input
               value={property.address}
               onChange={(e) =>
-                handleChange("address", e.target.value)
+                handleChange(
+                  "address",
+                  e.target.value
+                )
               }
               placeholder="Enter property address"
             />
@@ -347,10 +435,14 @@ function Property() {
 
           <label>
             City
+
             <input
               value={property.city}
               onChange={(e) =>
-                handleChange("city", e.target.value)
+                handleChange(
+                  "city",
+                  e.target.value
+                )
               }
               placeholder="Enter city"
             />
@@ -358,11 +450,15 @@ function Property() {
 
           <label>
             Total Floors
+
             <input
               type="number"
               value={property.floors}
               onChange={(e) =>
-                handleChange("floors", e.target.value)
+                handleChange(
+                  "floors",
+                  e.target.value
+                )
               }
               placeholder="Example: 3"
             />
@@ -370,11 +466,15 @@ function Property() {
 
           <label>
             Total Rooms
+
             <input
               type="number"
               value={property.rooms}
               onChange={(e) =>
-                handleChange("rooms", e.target.value)
+                handleChange(
+                  "rooms",
+                  e.target.value
+                )
               }
               placeholder="Example: 25"
             />
@@ -400,20 +500,36 @@ function Property() {
 
 function Rooms() {
   const [rooms, setRooms] = useState<Room[]>(() => {
-    const saved = localStorage.getItem("peacely_rooms");
+    const saved =
+      localStorage.getItem("peacely_rooms");
+
     return saved ? JSON.parse(saved) : [];
   });
 
-  const [showForm, setShowForm] = useState(false);
+  const [showForm, setShowForm] =
+    useState(false);
 
-  const [roomNumber, setRoomNumber] = useState("");
-  const [roomType, setRoomType] = useState("");
-  const [beds, setBeds] = useState("");
-  const [rent, setRent] = useState("");
+  const [roomNumber, setRoomNumber] =
+    useState("");
+
+  const [roomType, setRoomType] =
+    useState("");
+
+  const [beds, setBeds] =
+    useState("");
+
+  const [rent, setRent] =
+    useState("");
 
   function addRoom() {
-    if (!roomNumber || !roomType || !beds || !rent) {
+    if (
+      !roomNumber ||
+      !roomType ||
+      !beds ||
+      !rent
+    ) {
       alert("Please fill all room details.");
+
       return;
     }
 
@@ -425,7 +541,10 @@ function Rooms() {
       rent: Number(rent),
     };
 
-    const updatedRooms = [...rooms, newRoom];
+    const updatedRooms = [
+      ...rooms,
+      newRoom,
+    ];
 
     setRooms(updatedRooms);
 
@@ -438,13 +557,15 @@ function Rooms() {
     setRoomType("");
     setBeds("");
     setRent("");
+
     setShowForm(false);
   }
 
   function deleteRoom(id: number) {
-    const updatedRooms = rooms.filter(
-      (room) => room.id !== id
-    );
+    const updatedRooms =
+      rooms.filter(
+        (room) => room.id !== id
+      );
 
     setRooms(updatedRooms);
 
@@ -455,28 +576,42 @@ function Rooms() {
   }
 
   const totalBeds = rooms.reduce(
-    (total, room) => total + room.beds,
+    (total, room) =>
+      total + room.beds,
     0
   );
+
+  function getBedName(index: number) {
+    return `Bed ${String.fromCharCode(
+      65 + index
+    )}`;
+  }
 
   return (
     <section className="property-page rooms-page">
       <div className="page-header">
         <div>
-          <p className="eyebrow">PROPERTY MANAGEMENT</p>
+          <p className="eyebrow">
+            PROPERTY MANAGEMENT
+          </p>
 
           <h2>Rooms & Beds</h2>
 
           <p className="subtitle">
-            Create rooms and manage the beds available in your property.
+            Create rooms and manage the beds
+            available in your property.
           </p>
         </div>
 
         <button
           className="primary-btn"
-          onClick={() => setShowForm(!showForm)}
+          onClick={() =>
+            setShowForm(!showForm)
+          }
         >
-          {showForm ? "Cancel" : "+ Add Room"}
+          {showForm
+            ? "Cancel"
+            : "+ Add Room"}
         </button>
       </div>
 
@@ -487,10 +622,13 @@ function Rooms() {
           <div className="form-grid">
             <label>
               Room Number
+
               <input
                 value={roomNumber}
                 onChange={(e) =>
-                  setRoomNumber(e.target.value)
+                  setRoomNumber(
+                    e.target.value
+                  )
                 }
                 placeholder="Example: 101"
               />
@@ -498,20 +636,31 @@ function Rooms() {
 
             <label>
               Room Type
+
               <select
                 value={roomType}
                 onChange={(e) =>
-                  setRoomType(e.target.value)
+                  setRoomType(
+                    e.target.value
+                  )
                 }
               >
-                <option value="">Select room type</option>
-                <option value="Single">Single</option>
+                <option value="">
+                  Select room type
+                </option>
+
+                <option value="Single">
+                  Single
+                </option>
+
                 <option value="Double Sharing">
                   Double Sharing
                 </option>
+
                 <option value="Triple Sharing">
                   Triple Sharing
                 </option>
+
                 <option value="Four Sharing">
                   Four Sharing
                 </option>
@@ -520,22 +669,32 @@ function Rooms() {
 
             <label>
               Number of Beds
+
               <input
                 type="number"
                 min="1"
                 value={beds}
-                onChange={(e) => setBeds(e.target.value)}
+                onChange={(e) =>
+                  setBeds(
+                    e.target.value
+                  )
+                }
                 placeholder="Example: 3"
               />
             </label>
 
             <label>
               Monthly Rent / Bed
+
               <input
                 type="number"
                 min="0"
                 value={rent}
-                onChange={(e) => setRent(e.target.value)}
+                onChange={(e) =>
+                  setRent(
+                    e.target.value
+                  )
+                }
                 placeholder="Example: 8000"
               />
             </label>
@@ -552,41 +711,64 @@ function Rooms() {
 
       <div className="room-summary">
         <div className="stat-card">
-          <div className="stat-icon">🚪</div>
+          <div className="stat-icon">
+            🚪
+          </div>
+
           <p>Total Rooms</p>
+
           <h3>{rooms.length}</h3>
+
           <span>Rooms created</span>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">🛏️</div>
+          <div className="stat-icon">
+            🛏️
+          </div>
+
           <p>Total Beds</p>
+
           <h3>{totalBeds}</h3>
+
           <span>Bed capacity</span>
         </div>
       </div>
 
       {rooms.length === 0 ? (
         <div className="panel empty-state">
-          <div className="coming-icon">🛏️</div>
+          <div className="coming-icon">
+            🛏️
+          </div>
+
           <h3>No rooms added yet</h3>
+
           <p>
-            Click “Add Room” to create your first room.
+            Click “Add Room” to create your
+            first room.
           </p>
         </div>
       ) : (
         <div className="room-list">
           {rooms.map((room) => (
-            <div className="panel room-card" key={room.id}>
+            <div
+              className="panel room-card"
+              key={room.id}
+            >
               <div className="room-card-top">
                 <div>
-                  <span className="room-label">ROOM</span>
+                  <span className="room-label">
+                    ROOM
+                  </span>
+
                   <h3>{room.number}</h3>
                 </div>
 
                 <button
                   className="delete-btn"
-                  onClick={() => deleteRoom(room.id)}
+                  onClick={() =>
+                    deleteRoom(room.id)
+                  }
                 >
                   Delete
                 </button>
@@ -595,55 +777,97 @@ function Rooms() {
               <div className="room-details">
                 <div>
                   <span>Type</span>
-                  <strong>{room.type}</strong>
+
+                  <strong>
+                    {room.type}
+                  </strong>
                 </div>
 
                 <div>
                   <span>Beds</span>
-                  <strong>{room.beds}</strong>
+
+                  <strong>
+                    {room.beds}
+                  </strong>
                 </div>
 
                 <div>
                   <span>Rent / Bed</span>
+
                   <strong>
-                    ₹{room.rent.toLocaleString("en-IN")}
+                    ₹
+                    {room.rent.toLocaleString(
+                      "en-IN"
+                    )}
                   </strong>
                 </div>
               </div>
 
               <div className="bed-status">
-  <div className="bed-list">
-    {Array.from({ length: room.beds }, (_, index) => (
-      <div className="bed-item" key={index}>
-        <span className="bed-name">
-          Bed {String.fromCharCode(65 + index)}
-        </span>
+                <div className="bed-list">
+                  {Array.from(
+                    {
+                      length: room.beds,
+                    },
+                    (_, index) => (
+                      <div
+                        className="bed-item"
+                        key={index}
+                      >
+                        <div className="bed-item-left">
+                          <span className="bed-icon">
+                            🛏️
+                          </span>
 
-        <span className="available">
-          Available
-        </span>
-      </div>
-    ))}
-  </div>
-</div>
+                          <strong>
+                            {getBedName(
+                              index
+                            )}
+                          </strong>
+                        </div>
+
+                        <span className="available">
+                          Available
+                        </span>
+                      </div>
+                    )
+                  )}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
 }
 
-function ComingSoon({ title }: { title: string }) {
+function ComingSoon({
+  title,
+}: {
+  title: string;
+}) {
   return (
     <section className="property-page">
-      <p className="eyebrow">PEACELY</p>
+      <p className="eyebrow">
+        PEACELY
+      </p>
 
       <h2>{title}</h2>
 
       <div className="panel coming-soon">
-        <div className="coming-icon">🚧</div>
+        <div className="coming-icon">
+          🚧
+        </div>
 
-        <h3>This section is coming next</h3>
+        <h3>
+          This section is coming next
+        </h3>
 
         <p>
-          We are building Peacely step by step. This section
-          will become fully functional.
+          We are building Peacely step by
+          step. This section will become
+          fully functional.
         </p>
       </div>
     </section>
