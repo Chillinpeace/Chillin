@@ -1,8 +1,21 @@
-import React from "react";
+import React, { useState } from "react";
 import ReactDOM from "react-dom/client";
 import "./style.css";
 
+type Page = "dashboard" | "property" | "rooms" | "tenants" | "rent" | "invoices";
+
 function App() {
+  const [page, setPage] = useState<Page>("dashboard");
+
+  const menu = [
+    { id: "dashboard" as Page, icon: "▦", label: "Dashboard" },
+    { id: "property" as Page, icon: "🏠", label: "Property" },
+    { id: "rooms" as Page, icon: "🛏️", label: "Rooms & Beds" },
+    { id: "tenants" as Page, icon: "👥", label: "Tenants" },
+    { id: "rent" as Page, icon: "₹", label: "Rent & Payments" },
+    { id: "invoices" as Page, icon: "🧾", label: "Invoices" },
+  ];
+
   return (
     <div className="app">
       <header className="topbar">
@@ -17,154 +30,264 @@ function App() {
         <button className="profile">Admin ▾</button>
       </header>
 
-      <main className="dashboard">
-        <section className="welcome">
-          <div>
-            <p className="eyebrow">OVERVIEW</p>
-            <h2>Good afternoon 👋</h2>
-            <p className="subtitle">
-              Here's what's happening with your property today.
-            </p>
-          </div>
+      <div className="app-body">
+        <aside className="sidebar">
+          <div className="sidebar-title">MENU</div>
 
-          <button className="primary-btn">+ New Admission</button>
-        </section>
+          {menu.map((item) => (
+            <button
+              key={item.id}
+              className={`nav-item ${page === item.id ? "active" : ""}`}
+              onClick={() => setPage(item.id)}
+            >
+              <span>{item.icon}</span>
+              {item.label}
+            </button>
+          ))}
+        </aside>
 
-        <section className="stats">
-          <div className="stat-card">
-            <div className="stat-icon">🏠</div>
-            <p>Total Beds</p>
-            <h3>100</h3>
-            <span>Property capacity</span>
-          </div>
+        <main className="dashboard">
+          {page === "dashboard" && <Dashboard setPage={setPage} />}
+          {page === "property" && <Property />}
+          {page === "rooms" && <ComingSoon title="Rooms & Beds" />}
+          {page === "tenants" && <ComingSoon title="Tenants" />}
+          {page === "rent" && <ComingSoon title="Rent & Payments" />}
+          {page === "invoices" && <ComingSoon title="Invoices" />}
+        </main>
+      </div>
+    </div>
+  );
+}
 
-          <div className="stat-card">
-            <div className="stat-icon">👥</div>
-            <p>Occupied</p>
-            <h3>72</h3>
-            <span>72% occupancy</span>
-          </div>
+function Dashboard({ setPage }: { setPage: (page: Page) => void }) {
+  return (
+    <>
+      <section className="welcome">
+        <div>
+          <p className="eyebrow">OVERVIEW</p>
+          <h2>Good afternoon 👋</h2>
+          <p className="subtitle">
+            Here's what's happening with your property today.
+          </p>
+        </div>
 
-          <div className="stat-card">
-            <div className="stat-icon">🛏️</div>
-            <p>Available</p>
-            <h3>28</h3>
-            <span>Beds available</span>
-          </div>
+        <button
+          className="primary-btn"
+          onClick={() => setPage("tenants")}
+        >
+          + New Admission
+        </button>
+      </section>
 
-          <div className="stat-card">
-            <div className="stat-icon">₹</div>
-            <p>Rent Due</p>
-            <h3>₹24,500</h3>
-            <span>Needs attention</span>
-          </div>
-        </section>
+      <section className="stats">
+        <div className="stat-card">
+          <div className="stat-icon">🏠</div>
+          <p>Total Beds</p>
+          <h3>100</h3>
+          <span>Property capacity</span>
+        </div>
 
-        <section className="main-grid">
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Recent Tenants</h3>
-                <p>Latest admissions</p>
-              </div>
-              <button className="link-btn">View all →</button>
-            </div>
+        <div className="stat-card">
+          <div className="stat-icon">👥</div>
+          <p>Occupied</p>
+          <h3>72</h3>
+          <span>72% occupancy</span>
+        </div>
 
-            <div className="tenant-list">
-              <div className="tenant">
-                <div className="avatar">RK</div>
-                <div className="tenant-info">
-                  <strong>Rahul Kumar</strong>
-                  <span>Room 204 • Bed B</span>
-                </div>
-                <span className="paid">Paid</span>
-              </div>
+        <div className="stat-card">
+          <div className="stat-icon">🛏️</div>
+          <p>Available</p>
+          <h3>28</h3>
+          <span>Beds available</span>
+        </div>
 
-              <div className="tenant">
-                <div className="avatar">AS</div>
-                <div className="tenant-info">
-                  <strong>Arjun Sharma</strong>
-                  <span>Room 105 • Bed A</span>
-                </div>
-                <span className="pending">Pending</span>
-              </div>
+        <div className="stat-card">
+          <div className="stat-icon">₹</div>
+          <p>Rent Due</p>
+          <h3>₹24,500</h3>
+          <span>Needs attention</span>
+        </div>
+      </section>
 
-              <div className="tenant">
-                <div className="avatar">PS</div>
-                <div className="tenant-info">
-                  <strong>Priya Singh</strong>
-                  <span>Room 301 • Bed C</span>
-                </div>
-                <span className="paid">Paid</span>
-              </div>
-            </div>
-          </div>
-
-          <div className="panel">
-            <div className="panel-heading">
-              <div>
-                <h3>Quick Actions</h3>
-                <p>Manage your property</p>
-              </div>
-            </div>
-
-            <div className="quick-actions">
-              <button>
-                <span>👤</span>
-                <div>
-                  <strong>Add Tenant</strong>
-                  <small>Register a new tenant</small>
-                </div>
-              </button>
-
-              <button>
-                <span>🛏️</span>
-                <div>
-                  <strong>Manage Rooms</strong>
-                  <small>View rooms and beds</small>
-                </div>
-              </button>
-
-              <button>
-                <span>💰</span>
-                <div>
-                  <strong>Collect Rent</strong>
-                  <small>Record a payment</small>
-                </div>
-              </button>
-
-              <button>
-                <span>🧾</span>
-                <div>
-                  <strong>Invoices</strong>
-                  <small>View rent invoices</small>
-                </div>
-              </button>
-            </div>
-          </div>
-        </section>
-
-        <section className="bottom-panel panel">
+      <section className="main-grid">
+        <div className="panel">
           <div className="panel-heading">
             <div>
-              <h3>Occupancy</h3>
-              <p>Current property capacity</p>
+              <h3>Recent Tenants</h3>
+              <p>Latest admissions</p>
             </div>
-            <strong className="occupancy-number">72%</strong>
+            <button className="link-btn">View all →</button>
           </div>
 
-          <div className="progress">
-            <div className="progress-fill"></div>
+          <div className="tenant-list">
+            <div className="tenant">
+              <div className="avatar">RK</div>
+              <div className="tenant-info">
+                <strong>Rahul Kumar</strong>
+                <span>Room 204 • Bed B</span>
+              </div>
+              <span className="paid">Paid</span>
+            </div>
+
+            <div className="tenant">
+              <div className="avatar">AS</div>
+              <div className="tenant-info">
+                <strong>Arjun Sharma</strong>
+                <span>Room 105 • Bed A</span>
+              </div>
+              <span className="pending">Pending</span>
+            </div>
+
+            <div className="tenant">
+              <div className="avatar">PS</div>
+              <div className="tenant-info">
+                <strong>Priya Singh</strong>
+                <span>Room 301 • Bed C</span>
+              </div>
+              <span className="paid">Paid</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="panel-heading">
+            <div>
+              <h3>Quick Actions</h3>
+              <p>Manage your property</p>
+            </div>
           </div>
 
-          <div className="occupancy-details">
-            <span>72 occupied</span>
-            <span>28 available</span>
-            <span>100 total beds</span>
+          <div className="quick-actions">
+            <button>
+              <span>👤</span>
+              <div>
+                <strong>Add Tenant</strong>
+                <small>Register a new tenant</small>
+              </div>
+            </button>
+
+            <button>
+              <span>🛏️</span>
+              <div>
+                <strong>Manage Rooms</strong>
+                <small>View rooms and beds</small>
+              </div>
+            </button>
+
+            <button>
+              <span>💰</span>
+              <div>
+                <strong>Collect Rent</strong>
+                <small>Record a payment</small>
+              </div>
+            </button>
+
+            <button>
+              <span>🧾</span>
+              <div>
+                <strong>Invoices</strong>
+                <small>View rent invoices</small>
+              </div>
+            </button>
           </div>
-        </section>
-      </main>
-    </div>
+        </div>
+      </section>
+
+      <section className="bottom-panel panel">
+        <div className="panel-heading">
+          <div>
+            <h3>Occupancy</h3>
+            <p>Current property capacity</p>
+          </div>
+          <strong className="occupancy-number">72%</strong>
+        </div>
+
+        <div className="progress">
+          <div className="progress-fill"></div>
+        </div>
+
+        <div className="occupancy-details">
+          <span>72 occupied</span>
+          <span>28 available</span>
+          <span>100 total beds</span>
+        </div>
+      </section>
+    </>
+  );
+}
+
+function Property() {
+  return (
+    <section className="property-page">
+      <p className="eyebrow">SETUP</p>
+      <h2>Property Setup</h2>
+      <p className="subtitle">
+        Add and manage the basic information of your PG property.
+      </p>
+
+      <div className="panel property-form">
+        <h3>Property Information</h3>
+
+        <div className="form-grid">
+          <label>
+            Property Name
+            <input placeholder="Example: Peacely PG" />
+          </label>
+
+          <label>
+            Property Type
+            <select defaultValue="">
+              <option value="" disabled>
+                Select type
+              </option>
+              <option>PG</option>
+              <option>Hostel</option>
+              <option>Co-living</option>
+              <option>Rental Property</option>
+            </select>
+          </label>
+
+          <label>
+            Address
+            <input placeholder="Enter property address" />
+          </label>
+
+          <label>
+            City
+            <input placeholder="Enter city" />
+          </label>
+
+          <label>
+            Total Floors
+            <input type="number" placeholder="Example: 3" />
+          </label>
+
+          <label>
+            Total Rooms
+            <input type="number" placeholder="Example: 25" />
+          </label>
+        </div>
+
+        <button className="primary-btn">Save Property</button>
+      </div>
+    </section>
+  );
+}
+
+function ComingSoon({ title }: { title: string }) {
+  return (
+    <section className="property-page">
+      <p className="eyebrow">PEACELY</p>
+      <h2>{title}</h2>
+      <div className="panel coming-soon">
+        <div className="coming-icon">🚧</div>
+        <h3>This section is coming next</h3>
+        <p>
+          We are building Peacely step by step. This section will become fully
+          functional.
+        </p>
+      </div>
+    </section>
   );
 }
 
