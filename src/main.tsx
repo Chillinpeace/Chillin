@@ -19,24 +19,57 @@ type PropertyData = {
   rooms: string;
 };
 
+type BedStatus = "available" | "occupied";
+
+type RoomBed = {
+  label: string;
+  status: BedStatus;
+};
+
 type Room = {
   id: number;
   number: string;
   type: string;
   beds: number;
   rent: number;
+  bedStatus?: BedStatus[];
 };
 
 function App() {
-  const [page, setPage] = useState<Page>("dashboard");
+  const [page, setPage] =
+    useState<Page>("dashboard");
 
   const menu = [
-    { id: "dashboard" as Page, icon: "▦", label: "Dashboard" },
-    { id: "property" as Page, icon: "🏠", label: "Property" },
-    { id: "rooms" as Page, icon: "🛏️", label: "Rooms & Beds" },
-    { id: "tenants" as Page, icon: "👥", label: "Tenants" },
-    { id: "rent" as Page, icon: "₹", label: "Rent & Payments" },
-    { id: "invoices" as Page, icon: "🧾", label: "Invoices" },
+    {
+      id: "dashboard" as Page,
+      icon: "▦",
+      label: "Dashboard",
+    },
+    {
+      id: "property" as Page,
+      icon: "🏠",
+      label: "Property",
+    },
+    {
+      id: "rooms" as Page,
+      icon: "🛏️",
+      label: "Rooms & Beds",
+    },
+    {
+      id: "tenants" as Page,
+      icon: "👥",
+      label: "Tenants",
+    },
+    {
+      id: "rent" as Page,
+      icon: "₹",
+      label: "Rent & Payments",
+    },
+    {
+      id: "invoices" as Page,
+      icon: "🧾",
+      label: "Invoices",
+    },
   ];
 
   return (
@@ -51,20 +84,28 @@ function App() {
           </div>
         </div>
 
-        <button className="profile">Admin ▾</button>
+        <button className="profile">
+          Admin ▾
+        </button>
       </header>
 
       <div className="app-body">
         <aside className="sidebar">
-          <div className="sidebar-title">MENU</div>
+          <div className="sidebar-title">
+            MENU
+          </div>
 
           {menu.map((item) => (
             <button
               key={item.id}
               className={`nav-item ${
-                page === item.id ? "active" : ""
+                page === item.id
+                  ? "active"
+                  : ""
               }`}
-              onClick={() => setPage(item.id)}
+              onClick={() =>
+                setPage(item.id)
+              }
             >
               <span>{item.icon}</span>
               {item.label}
@@ -74,19 +115,27 @@ function App() {
 
         <main className="dashboard">
           {page === "dashboard" && (
-            <Dashboard setPage={setPage} />
+            <Dashboard
+              setPage={setPage}
+            />
           )}
 
-          {page === "property" && <Property />}
+          {page === "property" && (
+            <Property />
+          )}
 
-          {page === "rooms" && <Rooms />}
+          {page === "rooms" && (
+            <Rooms />
+          )}
 
           {page === "tenants" && (
             <ComingSoon title="Tenants" />
           )}
 
           {page === "rent" && (
-            <ComingSoon title="Rent & Payments" />
+            <ComingSoon
+              title="Rent & Payments"
+            />
           )}
 
           {page === "invoices" && (
@@ -107,18 +156,25 @@ function Dashboard({
     <>
       <section className="welcome">
         <div>
-          <p className="eyebrow">OVERVIEW</p>
+          <p className="eyebrow">
+            OVERVIEW
+          </p>
 
-          <h2>Good afternoon 👋</h2>
+          <h2>
+            Good afternoon 👋
+          </h2>
 
           <p className="subtitle">
-            Here's what's happening with your property today.
+            Here's what's happening with
+            your property today.
           </p>
         </div>
 
         <button
           className="primary-btn"
-          onClick={() => setPage("tenants")}
+          onClick={() =>
+            setPage("tenants")
+          }
         >
           + New Admission
         </button>
@@ -126,43 +182,59 @@ function Dashboard({
 
       <section className="stats">
         <div className="stat-card">
-          <div className="stat-icon">🏠</div>
+          <div className="stat-icon">
+            🏠
+          </div>
 
           <p>Total Beds</p>
 
           <h3>100</h3>
 
-          <span>Property capacity</span>
+          <span>
+            Property capacity
+          </span>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">👥</div>
+          <div className="stat-icon">
+            👥
+          </div>
 
           <p>Occupied</p>
 
           <h3>72</h3>
 
-          <span>72% occupancy</span>
+          <span>
+            72% occupancy
+          </span>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">🛏️</div>
+          <div className="stat-icon">
+            🛏️
+          </div>
 
           <p>Available</p>
 
           <h3>28</h3>
 
-          <span>Beds available</span>
+          <span>
+            Beds available
+          </span>
         </div>
 
         <div className="stat-card">
-          <div className="stat-icon">₹</div>
+          <div className="stat-icon">
+            ₹
+          </div>
 
           <p>Rent Due</p>
 
           <h3>₹24,500</h3>
 
-          <span>Needs attention</span>
+          <span>
+            Needs attention
+          </span>
         </div>
       </section>
 
@@ -170,9 +242,13 @@ function Dashboard({
         <div className="panel">
           <div className="panel-heading">
             <div>
-              <h3>Recent Tenants</h3>
+              <h3>
+                Recent Tenants
+              </h3>
 
-              <p>Latest admissions</p>
+              <p>
+                Latest admissions
+              </p>
             </div>
 
             <button className="link-btn">
@@ -182,39 +258,63 @@ function Dashboard({
 
           <div className="tenant-list">
             <div className="tenant">
-              <div className="avatar">RK</div>
-
-              <div className="tenant-info">
-                <strong>Rahul Kumar</strong>
-
-                <span>Room 204 • Bed B</span>
+              <div className="avatar">
+                RK
               </div>
 
-              <span className="paid">Paid</span>
+              <div className="tenant-info">
+                <strong>
+                  Rahul Kumar
+                </strong>
+
+                <span>
+                  Room 204 • Bed B
+                </span>
+              </div>
+
+              <span className="paid">
+                Paid
+              </span>
             </div>
 
             <div className="tenant">
-              <div className="avatar">AS</div>
-
-              <div className="tenant-info">
-                <strong>Arjun Sharma</strong>
-
-                <span>Room 105 • Bed A</span>
+              <div className="avatar">
+                AS
               </div>
 
-              <span className="pending">Pending</span>
+              <div className="tenant-info">
+                <strong>
+                  Arjun Sharma
+                </strong>
+
+                <span>
+                  Room 105 • Bed A
+                </span>
+              </div>
+
+              <span className="pending">
+                Pending
+              </span>
             </div>
 
             <div className="tenant">
-              <div className="avatar">PS</div>
-
-              <div className="tenant-info">
-                <strong>Priya Singh</strong>
-
-                <span>Room 301 • Bed C</span>
+              <div className="avatar">
+                PS
               </div>
 
-              <span className="paid">Paid</span>
+              <div className="tenant-info">
+                <strong>
+                  Priya Singh
+                </strong>
+
+                <span>
+                  Room 301 • Bed C
+                </span>
+              </div>
+
+              <span className="paid">
+                Paid
+              </span>
             </div>
           </div>
         </div>
@@ -222,9 +322,13 @@ function Dashboard({
         <div className="panel">
           <div className="panel-heading">
             <div>
-              <h3>Quick Actions</h3>
+              <h3>
+                Quick Actions
+              </h3>
 
-              <p>Manage your property</p>
+              <p>
+                Manage your property
+              </p>
             </div>
           </div>
 
@@ -233,21 +337,31 @@ function Dashboard({
               <span>👤</span>
 
               <div>
-                <strong>Add Tenant</strong>
+                <strong>
+                  Add Tenant
+                </strong>
 
-                <small>Register a new tenant</small>
+                <small>
+                  Register a new tenant
+                </small>
               </div>
             </button>
 
             <button
-              onClick={() => setPage("rooms")}
+              onClick={() =>
+                setPage("rooms")
+              }
             >
               <span>🛏️</span>
 
               <div>
-                <strong>Manage Rooms</strong>
+                <strong>
+                  Manage Rooms
+                </strong>
 
-                <small>View rooms and beds</small>
+                <small>
+                  View rooms and beds
+                </small>
               </div>
             </button>
 
@@ -255,9 +369,13 @@ function Dashboard({
               <span>💰</span>
 
               <div>
-                <strong>Collect Rent</strong>
+                <strong>
+                  Collect Rent
+                </strong>
 
-                <small>Record a payment</small>
+                <small>
+                  Record a payment
+                </small>
               </div>
             </button>
 
@@ -265,9 +383,13 @@ function Dashboard({
               <span>🧾</span>
 
               <div>
-                <strong>Invoices</strong>
+                <strong>
+                  Invoices
+                </strong>
 
-                <small>View rent invoices</small>
+                <small>
+                  View rent invoices
+                </small>
               </div>
             </button>
           </div>
@@ -277,9 +399,13 @@ function Dashboard({
       <section className="bottom-panel panel">
         <div className="panel-heading">
           <div>
-            <h3>Occupancy</h3>
+            <h3>
+              Occupancy
+            </h3>
 
-            <p>Current property capacity</p>
+            <p>
+              Current property capacity
+            </p>
           </div>
 
           <strong className="occupancy-number">
@@ -292,11 +418,17 @@ function Dashboard({
         </div>
 
         <div className="occupancy-details">
-          <span>72 occupied</span>
+          <span>
+            72 occupied
+          </span>
 
-          <span>28 available</span>
+          <span>
+            28 available
+          </span>
 
-          <span>100 total beds</span>
+          <span>
+            100 total beds
+          </span>
         </div>
       </section>
     </>
@@ -307,7 +439,9 @@ function Property() {
   const [property, setProperty] =
     useState<PropertyData>(() => {
       const saved =
-        localStorage.getItem("peacely_property");
+        localStorage.getItem(
+          "peacely_property"
+        );
 
       return saved
         ? JSON.parse(saved)
@@ -321,7 +455,8 @@ function Property() {
           };
     });
 
-  const [saved, setSaved] = useState(false);
+  const [saved, setSaved] =
+    useState(false);
 
   function handleChange(
     field: keyof PropertyData,
@@ -358,17 +493,23 @@ function Property() {
 
   return (
     <section className="property-page">
-      <p className="eyebrow">SETUP</p>
+      <p className="eyebrow">
+        SETUP
+      </p>
 
-      <h2>Property Setup</h2>
+      <h2>
+        Property Setup
+      </h2>
 
       <p className="subtitle">
-        Add and manage the basic information of your PG
-        property.
+        Add and manage the basic information
+        of your PG property.
       </p>
 
       <div className="panel property-form">
-        <h3>Property Information</h3>
+        <h3>
+          Property Information
+        </h3>
 
         <div className="form-grid">
           <label>
@@ -402,7 +543,9 @@ function Property() {
                 Select type
               </option>
 
-              <option value="PG">PG</option>
+              <option value="PG">
+                PG
+              </option>
 
               <option value="Hostel">
                 Hostel
@@ -499,12 +642,31 @@ function Property() {
 }
 
 function Rooms() {
-  const [rooms, setRooms] = useState<Room[]>(() => {
-    const saved =
-      localStorage.getItem("peacely_rooms");
+  const [rooms, setRooms] =
+    useState<Room[]>(() => {
+      const saved =
+        localStorage.getItem(
+          "peacely_rooms"
+        );
 
-    return saved ? JSON.parse(saved) : [];
-  });
+      const existingRooms = saved
+        ? JSON.parse(saved)
+        : [];
+
+      return existingRooms.map(
+        (room: Room) => ({
+          ...room,
+          bedStatus:
+            room.bedStatus ||
+            Array.from(
+              {
+                length: room.beds,
+              },
+              () => "available" as BedStatus
+            ),
+        })
+      );
+    });
 
   const [showForm, setShowForm] =
     useState(false);
@@ -528,17 +690,27 @@ function Rooms() {
       !beds ||
       !rent
     ) {
-      alert("Please fill all room details.");
+      alert(
+        "Please fill all room details."
+      );
 
       return;
     }
+
+    const bedCount = Number(beds);
 
     const newRoom: Room = {
       id: Date.now(),
       number: roomNumber,
       type: roomType,
-      beds: Number(beds),
+      beds: bedCount,
       rent: Number(rent),
+      bedStatus: Array.from(
+        {
+          length: bedCount,
+        },
+        () => "available" as BedStatus
+      ),
     };
 
     const updatedRooms = [
@@ -564,8 +736,51 @@ function Rooms() {
   function deleteRoom(id: number) {
     const updatedRooms =
       rooms.filter(
-        (room) => room.id !== id
+        (room) =>
+          room.id !== id
       );
+
+    setRooms(updatedRooms);
+
+    localStorage.setItem(
+      "peacely_rooms",
+      JSON.stringify(updatedRooms)
+    );
+  }
+
+  function toggleBed(
+    roomId: number,
+    bedIndex: number
+  ) {
+    const updatedRooms =
+      rooms.map((room) => {
+        if (room.id !== roomId) {
+          return room;
+        }
+
+        const currentStatus =
+          room.bedStatus ||
+          Array.from(
+            {
+              length: room.beds,
+            },
+            () => "available" as BedStatus
+          );
+
+        const updatedStatus =
+          [...currentStatus];
+
+        updatedStatus[bedIndex] =
+          updatedStatus[bedIndex] ===
+          "occupied"
+            ? "available"
+            : "occupied";
+
+        return {
+          ...room,
+          bedStatus: updatedStatus,
+        };
+      });
 
     setRooms(updatedRooms);
 
@@ -581,7 +796,35 @@ function Rooms() {
     0
   );
 
-  function getBedName(index: number) {
+  const occupiedBeds =
+    rooms.reduce(
+      (total, room) => {
+        const statuses =
+          room.bedStatus ||
+          Array.from(
+            {
+              length: room.beds,
+            },
+            () => "available" as BedStatus
+          );
+
+        return (
+          total +
+          statuses.filter(
+            (status) =>
+              status === "occupied"
+          ).length
+        );
+      },
+      0
+    );
+
+  const availableBeds =
+    totalBeds - occupiedBeds;
+
+  function getBedName(
+    index: number
+  ) {
     return `Bed ${String.fromCharCode(
       65 + index
     )}`;
@@ -595,11 +838,13 @@ function Rooms() {
             PROPERTY MANAGEMENT
           </p>
 
-          <h2>Rooms & Beds</h2>
+          <h2>
+            Rooms & Beds
+          </h2>
 
           <p className="subtitle">
-            Create rooms and manage the beds
-            available in your property.
+            Create rooms and manage the
+            beds available in your property.
           </p>
         </div>
 
@@ -617,7 +862,9 @@ function Rooms() {
 
       {showForm && (
         <div className="panel room-form">
-          <h3>Add New Room</h3>
+          <h3>
+            Add New Room
+          </h3>
 
           <div className="form-grid">
             <label>
@@ -715,11 +962,17 @@ function Rooms() {
             🚪
           </div>
 
-          <p>Total Rooms</p>
+          <p>
+            Total Rooms
+          </p>
 
-          <h3>{rooms.length}</h3>
+          <h3>
+            {rooms.length}
+          </h3>
 
-          <span>Rooms created</span>
+          <span>
+            Rooms created
+          </span>
         </div>
 
         <div className="stat-card">
@@ -727,11 +980,53 @@ function Rooms() {
             🛏️
           </div>
 
-          <p>Total Beds</p>
+          <p>
+            Total Beds
+          </p>
 
-          <h3>{totalBeds}</h3>
+          <h3>
+            {totalBeds}
+          </h3>
 
-          <span>Bed capacity</span>
+          <span>
+            Bed capacity
+          </span>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            👤
+          </div>
+
+          <p>
+            Occupied
+          </p>
+
+          <h3>
+            {occupiedBeds}
+          </h3>
+
+          <span>
+            Beds occupied
+          </span>
+        </div>
+
+        <div className="stat-card">
+          <div className="stat-icon">
+            ✓
+          </div>
+
+          <p>
+            Available
+          </p>
+
+          <h3>
+            {availableBeds}
+          </h3>
+
+          <span>
+            Beds available
+          </span>
         </div>
       </div>
 
@@ -741,101 +1036,160 @@ function Rooms() {
             🛏️
           </div>
 
-          <h3>No rooms added yet</h3>
+          <h3>
+            No rooms added yet
+          </h3>
 
           <p>
-            Click “Add Room” to create your
-            first room.
+            Click “Add Room” to create
+            your first room.
           </p>
         </div>
       ) : (
         <div className="room-list">
-          {rooms.map((room) => (
-            <div
-              className="panel room-card"
-              key={room.id}
-            >
-              <div className="room-card-top">
-                <div>
-                  <span className="room-label">
-                    ROOM
-                  </span>
+          {rooms.map((room) => {
+            const statuses =
+              room.bedStatus ||
+              Array.from(
+                {
+                  length: room.beds,
+                },
+                () =>
+                  "available" as BedStatus
+              );
 
-                  <h3>{room.number}</h3>
+            return (
+              <div
+                className="panel room-card"
+                key={room.id}
+              >
+                <div className="room-card-top">
+                  <div>
+                    <span className="room-label">
+                      ROOM
+                    </span>
+
+                    <h3>
+                      {room.number}
+                    </h3>
+                  </div>
+
+                  <button
+                    className="delete-btn"
+                    onClick={() =>
+                      deleteRoom(
+                        room.id
+                      )
+                    }
+                  >
+                    Delete
+                  </button>
                 </div>
 
-                <button
-                  className="delete-btn"
-                  onClick={() =>
-                    deleteRoom(room.id)
-                  }
-                >
-                  Delete
-                </button>
-              </div>
+                <div className="room-details">
+                  <div>
+                    <span>
+                      Type
+                    </span>
 
-              <div className="room-details">
-                <div>
-                  <span>Type</span>
+                    <strong>
+                      {room.type}
+                    </strong>
+                  </div>
 
-                  <strong>
-                    {room.type}
-                  </strong>
+                  <div>
+                    <span>
+                      Beds
+                    </span>
+
+                    <strong>
+                      {room.beds}
+                    </strong>
+                  </div>
+
+                  <div>
+                    <span>
+                      Rent / Bed
+                    </span>
+
+                    <strong>
+                      ₹
+                      {room.rent.toLocaleString(
+                        "en-IN"
+                      )}
+                    </strong>
+                  </div>
                 </div>
 
-                <div>
-                  <span>Beds</span>
+                <div className="bed-status">
+                  <div className="bed-list">
+                    {Array.from(
+                      {
+                        length:
+                          room.beds,
+                      },
+                      (_, index) => {
+                        const status =
+                          statuses[
+                            index
+                          ] ||
+                          "available";
 
-                  <strong>
-                    {room.beds}
-                  </strong>
-                </div>
+                        return (
+                          <button
+                            className={`bed-item ${
+                              status ===
+                              "occupied"
+                                ? "bed-occupied"
+                                : "bed-available"
+                            }`}
+                            key={index}
+                            onClick={() =>
+                              toggleBed(
+                                room.id,
+                                index
+                              )
+                            }
+                          >
+                            <div className="bed-item-left">
+                              <span className="bed-icon">
+                                🛏️
+                              </span>
 
-                <div>
-                  <span>Rent / Bed</span>
+                              <strong>
+                                {getBedName(
+                                  index
+                                )}
+                              </strong>
+                            </div>
 
-                  <strong>
-                    ₹
-                    {room.rent.toLocaleString(
-                      "en-IN"
+                            <span
+                              className={
+                                status ===
+                                "occupied"
+                                  ? "occupied"
+                                  : "available"
+                              }
+                            >
+                              {status ===
+                              "occupied"
+                                ? "Occupied"
+                                : "Available"}
+                            </span>
+                          </button>
+                        );
+                      }
                     )}
-                  </strong>
+                  </div>
+
+                  <p className="bed-help">
+                    Tap a bed to change
+                    its status
+                  </p>
                 </div>
               </div>
-
-              <div className="bed-status">
-                <div className="bed-list">
-                  {Array.from(
-                    {
-                      length: room.beds,
-                    },
-                    (_, index) => (
-                      <div
-                        className="bed-item"
-                        key={index}
-                      >
-                        <div className="bed-item-left">
-                          <span className="bed-icon">
-                            🛏️
-                          </span>
-
-                          <strong>
-                            {getBedName(
-                              index
-                            )}
-                          </strong>
-                        </div>
-
-                        <span className="available">
-                          Available
-                        </span>
-                      </div>
-                    )
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </section>
@@ -853,7 +1207,9 @@ function ComingSoon({
         PEACELY
       </p>
 
-      <h2>{title}</h2>
+      <h2>
+        {title}
+      </h2>
 
       <div className="panel coming-soon">
         <div className="coming-icon">
@@ -865,9 +1221,9 @@ function ComingSoon({
         </h3>
 
         <p>
-          We are building Peacely step by
-          step. This section will become
-          fully functional.
+          We are building Peacely step
+          by step. This section will
+          become fully functional.
         </p>
       </div>
     </section>
