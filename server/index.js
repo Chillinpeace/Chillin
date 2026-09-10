@@ -1,54 +1,71 @@
 import express from "express";
-import pg from "pg";
 import path from "path";
 import { fileURLToPath } from "url";
-
-const { Pool } = pg;
+import { initializeDatabase } from "./database.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 8080;
 
 app.use(express.json());
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === "production"
-    ? { rejectUnauthorized: false }
-    : false
+/*
+  DATABASE INITIALIZATION
+*/
+let databaseReady = false;
+
+try {
+  await initializeDatabase();
+  databaseReady = true;
+  console.log("✅ Peacely PostgreSQL database is ready");
+} catch (error) {
+  console.error("❌ Database initialization failed:", error);
+}
+
+/*
+  HEALTH CHECK
+*/
+app.get("/api/health", (req, res) => {
+  res.json({
+    success: true,
+    application: "Peacely",
+    database: databaseReady ? "connected" : "failed",
+    message: databaseReady
+      ? "Peacely API and database are working successfully"
+      : "Peacely API is running but database initialization failed",
+  });
 });
 
-// Database connection test
-app.get("/api/health", async (req, res) => {
-  try {
-    const result = await pool.query("SELECT NOW()");
-
-    res.json({
-      success: true,
-      message: "Peacely database connected successfully",
-      databaseTime: result.rows[0].now
-    });
-  } catch (error) {
-    console.error("Database error:", error);
-
-    res.status(500).json({
-      success: false,
-      message: "Database connection failed"
-    });
-  }
+/*
+  API ROOT
+*/
+app.get("/api", (req, res) => {
+  res.json({
+    success: true,
+    message: "Welcome to Peacely API",
+  });
 });
 
-// Serve React production files
+/*
+  SERVE REACT FRONTEND
+*/
 const distPath = path.join(__dirname, "../dist");
 
 app.use(express.static(distPath));
 
+/*
+  REACT ROUTING FALLBACK
+*/
 app.get("*", (req, res) => {
   res.sendFile(path.join(distPath, "index.html"));
 });
 
+/*
+  START SERVER
+*/
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`Peacely server running on port ${PORT}`);
+  console.log(`🚀 Peacely server running on port ${PORT}`);
+  console.log(`🌐 Port: ${PORT}`);
 });
