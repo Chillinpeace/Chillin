@@ -66,155 +66,70 @@ type View =
   | "payments"
   | "invoices";
 
-const initialProperties: Property[] = [
-  {
-    id: 1,
-    name: "My First PG",
-    location: "Electronic City, Bengaluru",
-    rooms: [
-      {
-        id: 101,
-        number: "101",
-        beds: [
-          { id: 1, number: "A", occupied: true, tenantId: 1 },
-          { id: 2, number: "B", occupied: true, tenantId: 2 },
-        ],
-      },
-      {
-        id: 102,
-        number: "102",
-        beds: [
-          { id: 3, number: "A", occupied: true, tenantId: 3 },
-          { id: 4, number: "B", occupied: false },
-        ],
-      },
-      {
-        id: 103,
-        number: "103",
-        beds: [
-          { id: 5, number: "A", occupied: false },
-          { id: 6, number: "B", occupied: false },
-        ],
-      },
-    ],
-  },
-];
-
-const initialTenants: Tenant[] = [
-  {
-    id: 1,
-    name: "Rahul Kumar",
-    phone: "9876543210",
-    email: "rahul@example.com",
-    propertyId: 1,
-    roomId: 101,
-    bedId: 1,
-    rent: 8500,
-    dueDay: 5,
-    moveInDate: "2026-08-01",
-    deposit: 10000,
-    status: "Active",
-  },
-  {
-    id: 2,
-    name: "Arun Raj",
-    phone: "9876543211",
-    email: "arun@example.com",
-    propertyId: 1,
-    roomId: 101,
-    bedId: 2,
-    rent: 8500,
-    dueDay: 5,
-    moveInDate: "2026-08-05",
-    deposit: 10000,
-    status: "Active",
-  },
-  {
-    id: 3,
-    name: "Vikram Singh",
-    phone: "9876543212",
-    email: "vikram@example.com",
-    propertyId: 1,
-    roomId: 102,
-    bedId: 3,
-    rent: 9000,
-    dueDay: 10,
-    moveInDate: "2026-08-10",
-    deposit: 12000,
-    status: "Active",
-  },
-];
-
-const initialPayments: Payment[] = [
-  {
-    id: 1,
-    tenantId: 1,
-    amount: 8500,
-    date: "2026-09-05",
-    month: "September 2026",
-    method: "UPI",
-    note: "Monthly rent",
-  },
-];
-
-const initialInvoices: Invoice[] = [
-  {
-    id: 1,
-    tenantId: 1,
-    invoiceNumber: "INV-0001",
-    amount: 8500,
-    month: "September 2026",
-    dueDate: "2026-09-05",
-    status: "Paid",
-    createdAt: "2026-09-01",
-  },
-  {
-    id: 2,
-    tenantId: 2,
-    invoiceNumber: "INV-0002",
-    amount: 8500,
-    month: "September 2026",
-    dueDate: "2026-09-05",
-    status: "Pending",
-    createdAt: "2026-09-01",
-  },
-];
-
-function loadData<T>(key: string, fallback: T): T {
-  try {
-    const saved = localStorage.getItem(key);
-    return saved ? JSON.parse(saved) : fallback;
-  } catch {
-    return fallback;
-  }
-}
+const API = "/api";
 
 function formatMoney(amount: number) {
-  return `₹${amount.toLocaleString("en-IN")}`;
+  return `₹${Number(amount || 0).toLocaleString("en-IN")}`;
 }
 
 function today() {
   return new Date().toISOString().slice(0, 10);
 }
 
+function monthName(date = new Date()) {
+  return date.toLocaleString("en-US", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function normalizeStatus(status: string): "Active" | "Inactive" {
+  return status?.toLowerCase() === "inactive" ? "Inactive" : "Active";
+}
+
+function normalizeInvoiceStatus(status: string): "Paid" | "Pending" {
+  return status?.toLowerCase() === "paid" ? "Paid" : "Pending";
+}
+
+async function apiRequest<T>(
+  endpoint: string,
+  options?: RequestInit
+): Promise<T> {
+  const response = await fetch(`${API}${endpoint}`, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+    ...options,
+  });
+
+  let data: any = null;
+
+  try {
+    data = await response.json();
+  } catch {
+    data = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      data?.message || `Request failed with status ${response.status}`
+    );
+  }
+
+  return data as T;
+}
+
 function Peacely() {
   const [view, setView] = useState<View>("dashboard");
 
-  const [properties, setProperties] = useState<Property[]>(() =>
-    loadData("peacely_properties", initialProperties)
-  );
+  const [properties, setProperties] = useState<Property[]>([]);
+  const [tenants, setTenants] = useState<Tenant[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
 
-  const [tenants, setTenants] = useState<Tenant[]>(() =>
-    loadData("peacely_tenants", initialTenants)
-  );
-
-  const [payments, setPayments] = useState<Payment[]>(() =>
-    loadData("peacely_payments", initialPayments)
-  );
-
-  const [invoices, setInvoices] = useState<Invoice[]>(() =>
-    loadData("peacely_invoices", initialInvoices)
-  );
+  const [loading, setLoading] = useState(true);
+  const [apiError, setApiError] = useState("");
 
   const [selectedPropertyId, setSelectedPropertyId] = useState<number | null>(
     null
@@ -245,26 +160,169 @@ function Peacely() {
   const [paymentTenantId, setPaymentTenantId] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("UPI");
-  const [paymentMonth, setPaymentMonth] = useState("September 2026");
+  const [paymentMonth, setPaymentMonth] = useState(monthName());
   const [paymentNote, setPaymentNote] = useState("");
 
   const [tenantSearch, setTenantSearch] = useState("");
 
-  useEffect(() => {
-    localStorage.setItem("peacely_properties", JSON.stringify(properties));
-  }, [properties]);
+  /*
+   * =========================
+   * LOAD DATA FROM POSTGRESQL
+   * =========================
+   */
+
+  async function loadAllData() {
+    try {
+      setApiError("");
+
+      const [
+        propertiesResponse,
+        tenantsResponse,
+        paymentsResponse,
+        invoicesResponse,
+      ] = await Promise.all([
+        apiRequest<{ properties: any[] }>("/properties"),
+        apiRequest<{ tenants: any[] }>("/tenants"),
+        apiRequest<{ payments: any[] }>("/payments"),
+        apiRequest<{ invoices: any[] }>("/invoices"),
+      ]);
+
+      const propertyRows = propertiesResponse.properties || [];
+
+      const propertiesWithRooms: Property[] = await Promise.all(
+        propertyRows.map(async (property) => {
+          const roomsResponse = await apiRequest<{ rooms: any[] }>(
+            `/properties/${property.id}/rooms`
+          );
+
+          const rooms: Room[] = await Promise.all(
+            (roomsResponse.rooms || []).map(async (room) => {
+              const bedsResponse = await apiRequest<{ beds: any[] }>(
+                `/rooms/${room.id}/beds`
+              );
+
+              return {
+                id: Number(room.id),
+                number: String(room.room_number),
+                beds: (bedsResponse.beds || []).map((bed) => ({
+                  id: Number(bed.id),
+                  number: String(bed.bed_number),
+                  occupied: Boolean(bed.occupied),
+                  tenantId: undefined,
+                })),
+              };
+            })
+          );
+
+          return {
+            id: Number(property.id),
+            name: property.name,
+            location: property.location || "",
+            rooms,
+          };
+        })
+      );
+
+      const tenantRows = tenantsResponse.tenants || [];
+
+      const normalizedTenants: Tenant[] = tenantRows.map((tenant) => ({
+        id: Number(tenant.id),
+        name: tenant.name,
+        phone: tenant.phone || "",
+        email: tenant.email || "",
+        propertyId: Number(tenant.property_id || 0),
+        roomId: Number(tenant.room_id || 0),
+        bedId: Number(tenant.bed_id || 0),
+        rent: Number(tenant.rent || 0),
+        dueDay: Number(tenant.due_day || 5),
+        moveInDate: tenant.move_in_date
+          ? String(tenant.move_in_date).slice(0, 10)
+          : "",
+        deposit: Number(tenant.deposit || 0),
+        status: normalizeStatus(tenant.status),
+      }));
+
+      /*
+       * Attach tenant IDs to occupied beds.
+       */
+      const updatedProperties = propertiesWithRooms.map((property) => ({
+        ...property,
+        rooms: property.rooms.map((room) => ({
+          ...room,
+          beds: room.beds.map((bed) => {
+            const tenant = normalizedTenants.find(
+              (item) =>
+                item.propertyId === property.id &&
+                item.roomId === room.id &&
+                item.bedId === bed.id
+            );
+
+            return {
+              ...bed,
+              tenantId: tenant?.id,
+              occupied: tenant ? true : bed.occupied,
+            };
+          }),
+        })),
+      }));
+
+      const normalizedPayments: Payment[] = (
+        paymentsResponse.payments || []
+      ).map((payment) => ({
+        id: Number(payment.id),
+        tenantId: Number(payment.tenant_id),
+        amount: Number(payment.amount || 0),
+        date: payment.payment_date
+          ? String(payment.payment_date).slice(0, 10)
+          : "",
+        month: payment.month || "",
+        method: payment.method || "",
+        note: payment.note || "",
+      }));
+
+      const normalizedInvoices: Invoice[] = (
+        invoicesResponse.invoices || []
+      ).map((invoice) => ({
+        id: Number(invoice.id),
+        tenantId: Number(invoice.tenant_id),
+        invoiceNumber: invoice.invoice_number,
+        amount: Number(invoice.amount || 0),
+        month: invoice.month || "",
+        dueDate: invoice.due_date
+          ? String(invoice.due_date).slice(0, 10)
+          : "",
+        status: normalizeInvoiceStatus(invoice.status),
+        createdAt: invoice.created_at
+          ? String(invoice.created_at).slice(0, 10)
+          : "",
+      }));
+
+      setProperties(updatedProperties);
+      setTenants(normalizedTenants);
+      setPayments(normalizedPayments);
+      setInvoices(normalizedInvoices);
+    } catch (error) {
+      console.error("Peacely data loading error:", error);
+
+      setApiError(
+        error instanceof Error
+          ? error.message
+          : "Unable to connect to Peacely database"
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   useEffect(() => {
-    localStorage.setItem("peacely_tenants", JSON.stringify(tenants));
-  }, [tenants]);
+    loadAllData();
+  }, []);
 
-  useEffect(() => {
-    localStorage.setItem("peacely_payments", JSON.stringify(payments));
-  }, [payments]);
-
-  useEffect(() => {
-    localStorage.setItem("peacely_invoices", JSON.stringify(invoices));
-  }, [invoices]);
+  /*
+   * =========================
+   * CALCULATIONS
+   * =========================
+   */
 
   const selectedProperty = properties.find(
     (property) => property.id === selectedPropertyId
@@ -307,8 +365,10 @@ function Peacely() {
     0
   );
 
+  const currentMonth = monthName();
+
   const currentMonthPayments = payments
-    .filter((payment) => payment.month === "September 2026")
+    .filter((payment) => payment.month === currentMonth)
     .reduce((total, payment) => total + payment.amount, 0);
 
   const pendingInvoices = invoices.filter(
@@ -320,14 +380,17 @@ function Peacely() {
     0
   );
 
-  const filteredTenants = tenants.filter((tenant) => {
-    const search = tenantSearch.toLowerCase();
+  const filteredTenants = useMemo(() => {
+    const search = tenantSearch.toLowerCase().trim();
 
-    return (
-      tenant.name.toLowerCase().includes(search) ||
-      tenant.phone.includes(search)
+    if (!search) return tenants;
+
+    return tenants.filter(
+      (tenant) =>
+        tenant.name.toLowerCase().includes(search) ||
+        tenant.phone.includes(search)
     );
-  });
+  }, [tenants, tenantSearch]);
 
   const tenantProperty = properties.find(
     (property) => property.id === Number(tenantPropertyId)
@@ -342,88 +405,135 @@ function Peacely() {
   const availableBeds =
     tenantRoom?.beds.filter((bed) => !bed.occupied) || [];
 
+  /*
+   * =========================
+   * NAVIGATION
+   * =========================
+   */
+
   function navigate(nextView: View) {
     setView(nextView);
     setSelectedPropertyId(null);
   }
 
-  function addProperty() {
+  /*
+   * =========================
+   * ADD PROPERTY
+   * =========================
+   */
+
+  async function addProperty() {
     if (!propertyName.trim() || !propertyLocation.trim()) return;
 
-    const newProperty: Property = {
-      id: Date.now(),
-      name: propertyName.trim(),
-      location: propertyLocation.trim(),
-      rooms: [],
-    };
+    try {
+      await apiRequest("/properties", {
+        method: "POST",
+        body: JSON.stringify({
+          name: propertyName.trim(),
+          location: propertyLocation.trim(),
+        }),
+      });
 
-    setProperties((current) => [...current, newProperty]);
-    setPropertyName("");
-    setPropertyLocation("");
-    setShowPropertyForm(false);
+      setPropertyName("");
+      setPropertyLocation("");
+      setShowPropertyForm(false);
+
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to create property"
+      );
+    }
   }
 
-  function addRoom() {
+  /*
+   * =========================
+   * ADD ROOM + BEDS
+   * =========================
+   */
+
+  async function addRoom() {
     if (!selectedProperty || !roomNumber.trim()) return;
 
-    const count = Math.max(1, Math.min(10, Number(bedCount) || 1));
+    try {
+      const count = Math.max(1, Math.min(10, Number(bedCount) || 1));
 
-    const newRoom: Room = {
-      id: Date.now(),
-      number: roomNumber.trim(),
-      beds: Array.from({ length: count }, (_, index) => ({
-        id: Date.now() + index,
-        number: String.fromCharCode(65 + index),
-        occupied: false,
-      })),
-    };
+      const roomResponse = await apiRequest<{ room: any }>(
+        `/properties/${selectedProperty.id}/rooms`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            room_number: roomNumber.trim(),
+          }),
+        }
+      );
 
-    setProperties((current) =>
-      current.map((property) =>
-        property.id === selectedProperty.id
-          ? { ...property, rooms: [...property.rooms, newRoom] }
-          : property
-      )
-    );
+      const roomId = Number(roomResponse.room.id);
 
-    setRoomNumber("");
-    setBedCount("2");
-    setShowRoomForm(false);
+      for (let index = 0; index < count; index++) {
+        await apiRequest(`/rooms/${roomId}/beds`, {
+          method: "POST",
+          body: JSON.stringify({
+            bed_number: String.fromCharCode(65 + index),
+            occupied: false,
+          }),
+        });
+      }
+
+      setRoomNumber("");
+      setBedCount("2");
+      setShowRoomForm(false);
+
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error ? error.message : "Failed to create room"
+      );
+    }
   }
 
-  function toggleBed(roomId: number, bedId: number) {
-    if (!selectedProperty) return;
+  /*
+   * =========================
+   * BED OCCUPANCY
+   * =========================
+   */
 
-    setProperties((current) =>
-      current.map((property) =>
-        property.id === selectedProperty.id
-          ? {
-              ...property,
-              rooms: property.rooms.map((room) =>
-                room.id === roomId
-                  ? {
-                      ...room,
-                      beds: room.beds.map((bed) =>
-                        bed.id === bedId
-                          ? {
-                              ...bed,
-                              occupied: !bed.occupied,
-                              tenantId: bed.occupied
-                                ? undefined
-                                : bed.tenantId,
-                            }
-                          : bed
-                      ),
-                    }
-                  : room
-              ),
-            }
-          : property
-      )
+  async function toggleBed(roomId: number, bedId: number) {
+    const room = selectedProperty?.rooms.find(
+      (item) => item.id === roomId
     );
+
+    const bed = room?.beds.find((item) => item.id === bedId);
+
+    if (!bed) return;
+
+    try {
+      await apiRequest(`/beds/${bedId}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          occupied: !bed.occupied,
+        }),
+      });
+
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to update bed"
+      );
+    }
   }
 
-  function addTenant() {
+  /*
+   * =========================
+   * ADD TENANT
+   * =========================
+   */
+
+  async function addTenant() {
     if (
       !tenantName.trim() ||
       !tenantPhone.trim() ||
@@ -432,134 +542,184 @@ function Peacely() {
       !tenantBedId ||
       !tenantRent
     ) {
+      alert("Please fill all required tenant details.");
       return;
     }
 
-    const newTenantId = Date.now();
+    try {
+      await apiRequest("/tenants", {
+        method: "POST",
+        body: JSON.stringify({
+          name: tenantName.trim(),
+          phone: tenantPhone.trim(),
+          email: tenantEmail.trim() || null,
+          property_id: Number(tenantPropertyId),
+          room_id: Number(tenantRoomId),
+          bed_id: Number(tenantBedId),
+          rent: Number(tenantRent),
+          due_day: Number(tenantDueDay) || 5,
+          move_in_date: tenantMoveIn,
+          deposit: Number(tenantDeposit) || 0,
+          status: "active",
+        }),
+      });
 
-    const newTenant: Tenant = {
-      id: newTenantId,
-      name: tenantName.trim(),
-      phone: tenantPhone.trim(),
-      email: tenantEmail.trim(),
-      propertyId: Number(tenantPropertyId),
-      roomId: Number(tenantRoomId),
-      bedId: Number(tenantBedId),
-      rent: Number(tenantRent),
-      dueDay: Number(tenantDueDay) || 5,
-      moveInDate: tenantMoveIn,
-      deposit: Number(tenantDeposit) || 0,
-      status: "Active",
-    };
+      setTenantName("");
+      setTenantPhone("");
+      setTenantEmail("");
+      setTenantRent("");
+      setTenantDueDay("5");
+      setTenantMoveIn(today());
+      setTenantDeposit("");
+      setTenantPropertyId("");
+      setTenantRoomId("");
+      setTenantBedId("");
+      setShowTenantForm(false);
 
-    setTenants((current) => [...current, newTenant]);
-
-    setProperties((current) =>
-      current.map((property) =>
-        property.id === Number(tenantPropertyId)
-          ? {
-              ...property,
-              rooms: property.rooms.map((room) =>
-                room.id === Number(tenantRoomId)
-                  ? {
-                      ...room,
-                      beds: room.beds.map((bed) =>
-                        bed.id === Number(tenantBedId)
-                          ? {
-                              ...bed,
-                              occupied: true,
-                              tenantId: newTenantId,
-                            }
-                          : bed
-                      ),
-                    }
-                  : room
-              ),
-            }
-          : property
-      )
-    );
-
-    setTenantName("");
-    setTenantPhone("");
-    setTenantEmail("");
-    setTenantRent("");
-    setTenantDueDay("5");
-    setTenantMoveIn(today());
-    setTenantDeposit("");
-    setTenantPropertyId("");
-    setTenantRoomId("");
-    setTenantBedId("");
-    setShowTenantForm(false);
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to create tenant"
+      );
+    }
   }
 
-  function recordPayment() {
-    if (!paymentTenantId || !paymentAmount) return;
+  /*
+   * =========================
+   * RECORD PAYMENT
+   * =========================
+   */
+
+  async function recordPayment() {
+    if (!paymentTenantId || !paymentAmount) {
+      alert("Please select a tenant and enter an amount.");
+      return;
+    }
 
     const tenantId = Number(paymentTenantId);
     const amount = Number(paymentAmount);
 
-    const payment: Payment = {
-      id: Date.now(),
-      tenantId,
-      amount,
-      date: today(),
-      month: paymentMonth,
-      method: paymentMethod,
-      note: paymentNote.trim() || "Monthly rent",
-    };
+    try {
+      await apiRequest("/payments", {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: tenantId,
+          amount,
+          payment_date: today(),
+          month: paymentMonth,
+          method: paymentMethod,
+          note: paymentNote.trim() || "Monthly rent",
+        }),
+      });
 
-    setPayments((current) => [payment, ...current]);
+      /*
+       * Mark matching invoice as paid.
+       */
+      const matchingInvoice = invoices.find(
+        (invoice) =>
+          invoice.tenantId === tenantId &&
+          invoice.month === paymentMonth &&
+          invoice.status === "Pending"
+      );
 
-    setInvoices((current) =>
-      current.map((invoice) =>
-        invoice.tenantId === tenantId && invoice.month === paymentMonth
-          ? { ...invoice, status: "Paid" }
-          : invoice
-      )
-    );
+      if (matchingInvoice) {
+        await apiRequest(`/invoices/${matchingInvoice.id}`, {
+          method: "PUT",
+          body: JSON.stringify({
+            status: "paid",
+          }),
+        });
+      }
 
-    setPaymentTenantId("");
-    setPaymentAmount("");
-    setPaymentMethod("UPI");
-    setPaymentNote("");
-    setShowPaymentForm(false);
+      setPaymentTenantId("");
+      setPaymentAmount("");
+      setPaymentMethod("UPI");
+      setPaymentMonth(monthName());
+      setPaymentNote("");
+      setShowPaymentForm(false);
+
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to record payment"
+      );
+    }
   }
 
-  function createInvoice(tenant: Tenant) {
+  /*
+   * =========================
+   * CREATE INVOICE
+   * =========================
+   */
+
+  async function createInvoice(tenant: Tenant) {
+    const invoiceMonth = monthName();
+
     const alreadyExists = invoices.some(
       (invoice) =>
         invoice.tenantId === tenant.id &&
-        invoice.month === "September 2026"
+        invoice.month === invoiceMonth
     );
 
     if (alreadyExists) return;
 
-    const invoice: Invoice = {
-      id: Date.now(),
-      tenantId: tenant.id,
-      invoiceNumber: `INV-${String(invoices.length + 1).padStart(4, "0")}`,
-      amount: tenant.rent,
-      month: "September 2026",
-      dueDate: `2026-09-${String(tenant.dueDay).padStart(2, "0")}`,
-      status: "Pending",
-      createdAt: today(),
-    };
+    try {
+      const invoiceNumber = `INV-${Date.now()}`;
 
-    setInvoices((current) => [invoice, ...current]);
+      const dueDate = `${today().slice(0, 8)}${String(
+        tenant.dueDay
+      ).padStart(2, "0")}`;
+
+      await apiRequest("/invoices", {
+        method: "POST",
+        body: JSON.stringify({
+          tenant_id: tenant.id,
+          invoice_number: invoiceNumber,
+          amount: tenant.rent,
+          month: invoiceMonth,
+          due_date: dueDate,
+          status: "pending",
+        }),
+      });
+
+      await loadAllData();
+    } catch (error) {
+      alert(
+        error instanceof Error
+          ? error.message
+          : "Failed to create invoice"
+      );
+    }
   }
 
+  /*
+   * =========================
+   * HELPER FUNCTIONS
+   * =========================
+   */
+
   function tenantNameById(id: number) {
-    return tenants.find((tenant) => tenant.id === id)?.name || "Unknown";
+    return (
+      tenants.find((tenant) => tenant.id === id)?.name || "Unknown"
+    );
   }
 
   function propertyNameById(id: number) {
-    return properties.find((property) => property.id === id)?.name || "-";
+    return (
+      properties.find((property) => property.id === id)?.name || "-"
+    );
   }
 
   function roomNameById(propertyId: number, roomId: number) {
     const property = properties.find((item) => item.id === propertyId);
-    return property?.rooms.find((room) => room.id === roomId)?.number || "-";
+
+    return (
+      property?.rooms.find((room) => room.id === roomId)?.number || "-"
+    );
   }
 
   function bedNameById(
@@ -569,8 +729,15 @@ function Peacely() {
   ) {
     const property = properties.find((item) => item.id === propertyId);
     const room = property?.rooms.find((item) => item.id === roomId);
+
     return room?.beds.find((bed) => bed.id === bedId)?.number || "-";
   }
+
+  /*
+   * =========================
+   * DASHBOARD
+   * =========================
+   */
 
   function renderDashboard() {
     return (
@@ -583,6 +750,7 @@ function Peacely() {
               Everything important about your PG, in one peaceful place.
             </p>
           </div>
+
           <button
             className="primary"
             onClick={() => setShowTenantForm(true)}
@@ -596,14 +764,17 @@ function Peacely() {
             <span>Properties</span>
             <strong>{properties.length}</strong>
           </div>
+
           <div className="card">
             <span>Occupied Beds</span>
             <strong>{occupiedBeds}</strong>
           </div>
+
           <div className="card">
             <span>Vacant Beds</span>
             <strong>{vacantBeds}</strong>
           </div>
+
           <div className="card">
             <span>Active Tenants</span>
             <strong>{activeTenants.length}</strong>
@@ -617,7 +788,8 @@ function Peacely() {
                 <h3>Rent Overview</h3>
                 <p>This month's collection</p>
               </div>
-              <span className="success-pill">September 2026</span>
+
+              <span className="success-pill">{currentMonth}</span>
             </div>
 
             <div className="money-row">
@@ -625,10 +797,12 @@ function Peacely() {
                 <span>Expected</span>
                 <strong>{formatMoney(monthlyExpectedRent)}</strong>
               </div>
+
               <div>
                 <span>Collected</span>
                 <strong>{formatMoney(currentMonthPayments)}</strong>
               </div>
+
               <div>
                 <span>Pending</span>
                 <strong>{formatMoney(pendingAmount)}</strong>
@@ -645,14 +819,19 @@ function Peacely() {
             </div>
 
             <div className="occupancy-number">
-              {totalBeds ? Math.round((occupiedBeds / totalBeds) * 100) : 0}%
+              {totalBeds
+                ? Math.round((occupiedBeds / totalBeds) * 100)
+                : 0}
+              %
             </div>
 
             <div className="progress">
               <div
                 style={{
                   width: `${
-                    totalBeds ? (occupiedBeds / totalBeds) * 100 : 0
+                    totalBeds
+                      ? (occupiedBeds / totalBeds) * 100
+                      : 0
                   }%`,
                 }}
               />
@@ -711,6 +890,12 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * PROPERTIES
+   * =========================
+   */
+
   function renderProperties() {
     return (
       <>
@@ -764,14 +949,17 @@ function Peacely() {
             <span>Properties</span>
             <strong>{properties.length}</strong>
           </div>
+
           <div className="card">
             <span>Total Rooms</span>
             <strong>{totalRooms}</strong>
           </div>
+
           <div className="card">
             <span>Occupied Beds</span>
             <strong>{occupiedBeds}</strong>
           </div>
+
           <div className="card">
             <span>Vacant Beds</span>
             <strong>{vacantBeds}</strong>
@@ -849,6 +1037,12 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * PROPERTY DETAILS
+   * =========================
+   */
+
   function renderProperty() {
     if (!selectedProperty) return null;
 
@@ -876,7 +1070,9 @@ function Peacely() {
           <div>
             <p className="eyebrow">PROPERTY</p>
             <h2>{selectedProperty.name}</h2>
-            <p className="subtitle">📍 {selectedProperty.location}</p>
+            <p className="subtitle">
+              📍 {selectedProperty.location}
+            </p>
           </div>
 
           <button
@@ -918,7 +1114,9 @@ function Peacely() {
                 type="text"
                 placeholder="Room number e.g. 104"
                 value={roomNumber}
-                onChange={(event) => setRoomNumber(event.target.value)}
+                onChange={(event) =>
+                  setRoomNumber(event.target.value)
+                }
               />
 
               <input
@@ -927,7 +1125,9 @@ function Peacely() {
                 max="10"
                 placeholder="Number of beds"
                 value={bedCount}
-                onChange={(event) => setBedCount(event.target.value)}
+                onChange={(event) =>
+                  setBedCount(event.target.value)
+                }
               />
 
               <button className="primary" onClick={addRoom}>
@@ -946,7 +1146,9 @@ function Peacely() {
           {selectedProperty.rooms.length === 0 ? (
             <div className="empty">
               <div className="empty-icon">🚪</div>
+
               <h3>No rooms yet</h3>
+
               <p>Add your first room to start managing beds.</p>
 
               <button
@@ -987,7 +1189,9 @@ function Peacely() {
                           }
                           onClick={() => {
                             if (!bed.occupied) {
-                              setTenantPropertyId(selectedProperty.id.toString());
+                              setTenantPropertyId(
+                                selectedProperty.id.toString()
+                              );
                               setTenantRoomId(room.id.toString());
                               setTenantBedId(bed.id.toString());
                               setShowTenantForm(true);
@@ -1020,6 +1224,12 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * TENANTS
+   * =========================
+   */
+
   function renderTenants() {
     return (
       <>
@@ -1027,6 +1237,7 @@ function Peacely() {
           <div>
             <p className="eyebrow">TENANT MANAGEMENT</p>
             <h2>Tenants</h2>
+
             <p className="subtitle">
               Keep your residents, assignments and rent details organized.
             </p>
@@ -1042,10 +1253,13 @@ function Peacely() {
 
         <div className="search-box">
           🔎
+
           <input
             placeholder="Search tenant by name or phone..."
             value={tenantSearch}
-            onChange={(event) => setTenantSearch(event.target.value)}
+            onChange={(event) =>
+              setTenantSearch(event.target.value)
+            }
           />
         </div>
 
@@ -1053,7 +1267,9 @@ function Peacely() {
           {filteredTenants.length === 0 ? (
             <div className="empty">
               <div className="empty-icon">👤</div>
+
               <h3>No tenants found</h3>
+
               <p>Add a tenant or change your search.</p>
             </div>
           ) : (
@@ -1066,7 +1282,10 @@ function Peacely() {
                 <div className="tenant-main">
                   <div className="tenant-name-row">
                     <h3>{tenant.name}</h3>
-                    <span className="status-pill">Active</span>
+
+                    <span className="status-pill">
+                      {tenant.status}
+                    </span>
                   </div>
 
                   <p>📱 {tenant.phone}</p>
@@ -1074,7 +1293,11 @@ function Peacely() {
                   <div className="tenant-location">
                     🏠 {propertyNameById(tenant.propertyId)}
                     {" · "}
-                    Room {roomNameById(tenant.propertyId, tenant.roomId)}
+                    Room{" "}
+                    {roomNameById(
+                      tenant.propertyId,
+                      tenant.roomId
+                    )}
                     {" · "}
                     Bed{" "}
                     {bedNameById(
@@ -1087,7 +1310,9 @@ function Peacely() {
 
                 <div className="tenant-rent">
                   <span>Monthly Rent</span>
+
                   <strong>{formatMoney(tenant.rent)}</strong>
+
                   <small>Due on {tenant.dueDay}th</small>
                 </div>
               </div>
@@ -1098,13 +1323,21 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * PAYMENTS
+   * =========================
+   */
+
   function renderPayments() {
     return (
       <>
         <section className="page-heading">
           <div>
             <p className="eyebrow">FINANCE</p>
+
             <h2>Rent & Payments</h2>
+
             <p className="subtitle">
               Record rent payments and keep your collection history.
             </p>
@@ -1121,12 +1354,16 @@ function Peacely() {
         <section className="stats">
           <div className="card">
             <span>Expected Rent</span>
-            <strong>{formatMoney(monthlyExpectedRent)}</strong>
+            <strong>
+              {formatMoney(monthlyExpectedRent)}
+            </strong>
           </div>
 
           <div className="card">
             <span>Collected</span>
-            <strong>{formatMoney(currentMonthPayments)}</strong>
+            <strong>
+              {formatMoney(currentMonthPayments)}
+            </strong>
           </div>
 
           <div className="card">
@@ -1166,12 +1403,20 @@ function Peacely() {
                   <tbody>
                     {payments.map((payment) => (
                       <tr key={payment.id}>
-                        <td>{tenantNameById(payment.tenantId)}</td>
-                        <td>{payment.month}</td>
                         <td>
-                          <strong>{formatMoney(payment.amount)}</strong>
+                          {tenantNameById(payment.tenantId)}
                         </td>
+
+                        <td>{payment.month}</td>
+
+                        <td>
+                          <strong>
+                            {formatMoney(payment.amount)}
+                          </strong>
+                        </td>
+
                         <td>{payment.date}</td>
+
                         <td>
                           <span className="method-pill">
                             {payment.method}
@@ -1189,13 +1434,23 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * INVOICES
+   * =========================
+   */
+
   function renderInvoices() {
+    const invoiceMonth = monthName();
+
     return (
       <>
         <section className="page-heading">
           <div>
             <p className="eyebrow">FINANCE</p>
+
             <h2>Invoices</h2>
+
             <p className="subtitle">
               Create monthly rent invoices and track payment status.
             </p>
@@ -1207,7 +1462,7 @@ function Peacely() {
             const invoice = invoices.find(
               (item) =>
                 item.tenantId === tenant.id &&
-                item.month === "September 2026"
+                item.month === invoiceMonth
             );
 
             return (
@@ -1215,6 +1470,7 @@ function Peacely() {
                 <div className="invoice-top">
                   <div>
                     <span>MONTHLY RENT</span>
+
                     <h3>{tenant.name}</h3>
                   </div>
 
@@ -1229,20 +1485,29 @@ function Peacely() {
                       {invoice.status}
                     </span>
                   ) : (
-                    <span className="pending-pill">Not Created</span>
+                    <span className="pending-pill">
+                      Not Created
+                    </span>
                   )}
                 </div>
 
                 <div className="invoice-info">
                   <div>
                     <span>Amount</span>
-                    <strong>{formatMoney(tenant.rent)}</strong>
+
+                    <strong>
+                      {formatMoney(tenant.rent)}
+                    </strong>
                   </div>
 
                   <div>
                     <span>Due Date</span>
+
                     <strong>
-                      September {String(tenant.dueDay).padStart(2, "0")}
+                      {invoice?.dueDate ||
+                        `${invoiceMonth.split(" ")[0]} ${String(
+                          tenant.dueDay
+                        ).padStart(2, "0")}`}
                     </strong>
                   </div>
                 </div>
@@ -1256,7 +1521,7 @@ function Peacely() {
                     className="manage-button"
                     onClick={() => createInvoice(tenant)}
                   >
-                    Create September Invoice
+                    Create {invoiceMonth} Invoice
                   </button>
                 )}
               </div>
@@ -1266,6 +1531,12 @@ function Peacely() {
       </>
     );
   }
+
+  /*
+   * =========================
+   * TENANT FORM
+   * =========================
+   */
 
   function renderTenantForm() {
     if (!showTenantForm) return null;
@@ -1282,6 +1553,7 @@ function Peacely() {
           <div className="modal-header">
             <div>
               <p className="eyebrow">TENANT</p>
+
               <h2>Add Tenant</h2>
             </div>
 
@@ -1296,27 +1568,36 @@ function Peacely() {
           <div className="modal-form">
             <label>
               Full Name
+
               <input
                 value={tenantName}
-                onChange={(event) => setTenantName(event.target.value)}
+                onChange={(event) =>
+                  setTenantName(event.target.value)
+                }
                 placeholder="Tenant name"
               />
             </label>
 
             <label>
               Phone Number
+
               <input
                 value={tenantPhone}
-                onChange={(event) => setTenantPhone(event.target.value)}
+                onChange={(event) =>
+                  setTenantPhone(event.target.value)
+                }
                 placeholder="10 digit phone number"
               />
             </label>
 
             <label>
               Email
+
               <input
                 value={tenantEmail}
-                onChange={(event) => setTenantEmail(event.target.value)}
+                onChange={(event) =>
+                  setTenantEmail(event.target.value)
+                }
                 placeholder="Optional email"
               />
             </label>
@@ -1324,6 +1605,7 @@ function Peacely() {
             <div className="two-column">
               <label>
                 Property
+
                 <select
                   value={tenantPropertyId}
                   onChange={(event) => {
@@ -1332,9 +1614,15 @@ function Peacely() {
                     setTenantBedId("");
                   }}
                 >
-                  <option value="">Select property</option>
+                  <option value="">
+                    Select property
+                  </option>
+
                   {properties.map((property) => (
-                    <option key={property.id} value={property.id}>
+                    <option
+                      key={property.id}
+                      value={property.id}
+                    >
                       {property.name}
                     </option>
                   ))}
@@ -1343,6 +1631,7 @@ function Peacely() {
 
               <label>
                 Room
+
                 <select
                   value={tenantRoomId}
                   onChange={(event) => {
@@ -1351,9 +1640,15 @@ function Peacely() {
                   }}
                   disabled={!tenantPropertyId}
                 >
-                  <option value="">Select room</option>
+                  <option value="">
+                    Select room
+                  </option>
+
                   {availableRooms.map((room) => (
-                    <option key={room.id} value={room.id}>
+                    <option
+                      key={room.id}
+                      value={room.id}
+                    >
                       Room {room.number}
                     </option>
                   ))}
@@ -1363,14 +1658,23 @@ function Peacely() {
 
             <label>
               Bed
+
               <select
                 value={tenantBedId}
-                onChange={(event) => setTenantBedId(event.target.value)}
+                onChange={(event) =>
+                  setTenantBedId(event.target.value)
+                }
                 disabled={!tenantRoomId}
               >
-                <option value="">Select vacant bed</option>
+                <option value="">
+                  Select vacant bed
+                </option>
+
                 {availableBeds.map((bed) => (
-                  <option key={bed.id} value={bed.id}>
+                  <option
+                    key={bed.id}
+                    value={bed.id}
+                  >
                     Bed {bed.number}
                   </option>
                 ))}
@@ -1380,16 +1684,20 @@ function Peacely() {
             <div className="two-column">
               <label>
                 Monthly Rent
+
                 <input
                   type="number"
                   value={tenantRent}
-                  onChange={(event) => setTenantRent(event.target.value)}
+                  onChange={(event) =>
+                    setTenantRent(event.target.value)
+                  }
                   placeholder="₹8500"
                 />
               </label>
 
               <label>
                 Rent Due Day
+
                 <input
                   type="number"
                   min="1"
@@ -1405,6 +1713,7 @@ function Peacely() {
             <div className="two-column">
               <label>
                 Move-in Date
+
                 <input
                   type="date"
                   value={tenantMoveIn}
@@ -1416,6 +1725,7 @@ function Peacely() {
 
               <label>
                 Security Deposit
+
                 <input
                   type="number"
                   value={tenantDeposit}
@@ -1427,7 +1737,10 @@ function Peacely() {
               </label>
             </div>
 
-            <button className="primary full-button" onClick={addTenant}>
+            <button
+              className="primary full-button"
+              onClick={addTenant}
+            >
               Save Tenant
             </button>
           </div>
@@ -1435,6 +1748,12 @@ function Peacely() {
       </div>
     );
   }
+
+  /*
+   * =========================
+   * PAYMENT FORM
+   * =========================
+   */
 
   function renderPaymentForm() {
     if (!showPaymentForm) return null;
@@ -1451,6 +1770,7 @@ function Peacely() {
           <div className="modal-header">
             <div>
               <p className="eyebrow">PAYMENT</p>
+
               <h2>Record Payment</h2>
             </div>
 
@@ -1465,10 +1785,12 @@ function Peacely() {
           <div className="modal-form">
             <label>
               Tenant
+
               <select
                 value={paymentTenantId}
                 onChange={(event) => {
                   const id = event.target.value;
+
                   setPaymentTenantId(id);
 
                   const tenant = tenants.find(
@@ -1480,10 +1802,17 @@ function Peacely() {
                   }
                 }}
               >
-                <option value="">Select tenant</option>
+                <option value="">
+                  Select tenant
+                </option>
+
                 {activeTenants.map((tenant) => (
-                  <option key={tenant.id} value={tenant.id}>
-                    {tenant.name} — {formatMoney(tenant.rent)}
+                  <option
+                    key={tenant.id}
+                    value={tenant.id}
+                  >
+                    {tenant.name} —{" "}
+                    {formatMoney(tenant.rent)}
                   </option>
                 ))}
               </select>
@@ -1491,6 +1820,7 @@ function Peacely() {
 
             <label>
               Amount
+
               <input
                 type="number"
                 value={paymentAmount}
@@ -1503,9 +1833,12 @@ function Peacely() {
 
             <label>
               Month
+
               <select
                 value={paymentMonth}
-                onChange={(event) => setPaymentMonth(event.target.value)}
+                onChange={(event) =>
+                  setPaymentMonth(event.target.value)
+                }
               >
                 <option>September 2026</option>
                 <option>October 2026</option>
@@ -1515,6 +1848,7 @@ function Peacely() {
 
             <label>
               Payment Method
+
               <select
                 value={paymentMethod}
                 onChange={(event) =>
@@ -1530,9 +1864,12 @@ function Peacely() {
 
             <label>
               Note
+
               <input
                 value={paymentNote}
-                onChange={(event) => setPaymentNote(event.target.value)}
+                onChange={(event) =>
+                  setPaymentNote(event.target.value)
+                }
                 placeholder="Optional note"
               />
             </label>
@@ -1549,6 +1886,52 @@ function Peacely() {
     );
   }
 
+  /*
+   * =========================
+   * LOADING SCREEN
+   * =========================
+   */
+
+  if (loading) {
+    return (
+      <div className="app">
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "30px",
+            textAlign: "center",
+          }}
+        >
+          <div>
+            <div
+              style={{
+                fontSize: "48px",
+                marginBottom: "15px",
+              }}
+            >
+              ☮️
+            </div>
+
+            <h2>Loading Peacely...</h2>
+
+            <p className="muted">
+              Connecting to your PostgreSQL database.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * =========================
+   * MAIN APP
+   * =========================
+   */
+
   return (
     <div className="app">
       <header className="header">
@@ -1564,11 +1947,31 @@ function Peacely() {
         <button className="profile">Admin</button>
       </header>
 
+      {apiError && (
+        <div
+          style={{
+            margin: "12px 20px 0",
+            padding: "12px 16px",
+            borderRadius: "12px",
+            background: "#fff4f4",
+            border: "1px solid #ffd6d6",
+            color: "#b42318",
+            fontSize: "14px",
+          }}
+        >
+          Database connection problem: {apiError}
+        </div>
+      )}
+
       <div className="app-layout">
         <aside className="sidebar">
           <nav>
             <button
-              className={view === "dashboard" ? "nav-item active" : "nav-item"}
+              className={
+                view === "dashboard"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
               onClick={() => navigate("dashboard")}
             >
               <span>📊</span>
@@ -1577,7 +1980,8 @@ function Peacely() {
 
             <button
               className={
-                view === "properties" || view === "property"
+                view === "properties" ||
+                view === "property"
                   ? "nav-item active"
                   : "nav-item"
               }
@@ -1588,7 +1992,11 @@ function Peacely() {
             </button>
 
             <button
-              className={view === "tenants" ? "nav-item active" : "nav-item"}
+              className={
+                view === "tenants"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
               onClick={() => navigate("tenants")}
             >
               <span>👤</span>
@@ -1596,7 +2004,11 @@ function Peacely() {
             </button>
 
             <button
-              className={view === "payments" ? "nav-item active" : "nav-item"}
+              className={
+                view === "payments"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
               onClick={() => navigate("payments")}
             >
               <span>💰</span>
@@ -1604,7 +2016,11 @@ function Peacely() {
             </button>
 
             <button
-              className={view === "invoices" ? "nav-item active" : "nav-item"}
+              className={
+                view === "invoices"
+                  ? "nav-item active"
+                  : "nav-item"
+              }
               onClick={() => navigate("invoices")}
             >
               <span>🧾</span>
@@ -1614,27 +2030,39 @@ function Peacely() {
 
           <div className="sidebar-footer">
             <div className="peace-mark">☮</div>
+
             <strong>Manage peacefully.</strong>
+
             <span>Everything in one place.</span>
           </div>
         </aside>
 
         <main className="content">
           {view === "dashboard" && renderDashboard()}
+
           {view === "properties" && renderProperties()}
+
           {view === "property" && renderProperty()}
+
           {view === "tenants" && renderTenants()}
+
           {view === "payments" && renderPayments()}
+
           {view === "invoices" && renderInvoices()}
         </main>
       </div>
 
       {renderTenantForm()}
+
       {renderPaymentForm()}
 
       <div className="mobile-nav">
         <button
-          className={view === "dashboard" ? "mobile-active" : ""}
+          className={
+            view === "dashboard"
+              ? "mobile-active"
+              : ""
+          }
           onClick={() => navigate("dashboard")}
         >
           <span>📊</span>
@@ -1643,7 +2071,8 @@ function Peacely() {
 
         <button
           className={
-            view === "properties" || view === "property"
+            view === "properties" ||
+            view === "property"
               ? "mobile-active"
               : ""
           }
@@ -1654,7 +2083,11 @@ function Peacely() {
         </button>
 
         <button
-          className={view === "tenants" ? "mobile-active" : ""}
+          className={
+            view === "tenants"
+              ? "mobile-active"
+              : ""
+          }
           onClick={() => navigate("tenants")}
         >
           <span>👤</span>
@@ -1662,7 +2095,11 @@ function Peacely() {
         </button>
 
         <button
-          className={view === "payments" ? "mobile-active" : ""}
+          className={
+            view === "payments"
+              ? "mobile-active"
+              : ""
+          }
           onClick={() => navigate("payments")}
         >
           <span>💰</span>
@@ -1670,7 +2107,11 @@ function Peacely() {
         </button>
 
         <button
-          className={view === "invoices" ? "mobile-active" : ""}
+          className={
+            view === "invoices"
+              ? "mobile-active"
+              : ""
+          }
           onClick={() => navigate("invoices")}
         >
           <span>🧾</span>
@@ -1681,7 +2122,9 @@ function Peacely() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById("root")!).render(
+ReactDOM.createRoot(
+  document.getElementById("root")!
+).render(
   <React.StrictMode>
     <Peacely />
   </React.StrictMode>
