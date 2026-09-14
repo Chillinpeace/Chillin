@@ -1048,13 +1048,12 @@ function App() {
        * safely saved in the database.
        */
       try {
-        await loadAllData();
-      } catch (refreshError) {
-        console.error(
-          'Payment saved but refresh failed:',
-          refreshError,
-        );
-      }
+        loadAllData().catch((refreshError) => {
+  console.error(
+    'Payment saved but refresh failed:',
+    refreshError,
+  );
+});
     } catch (err) {
       console.error(
         'Payment recording failed:',
