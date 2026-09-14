@@ -149,6 +149,154 @@ function asyncHandler(handler) {
 }
 
 // =====================================================
+// FINANCE HELPERS
+// =====================================================
+
+/*
+ * Recalculate one invoice from its linked payments.
+ *
+ * Status rules:
+ *
+ * Paid amount >= invoice amount
+ *     -> Paid
+ *
+ * Paid amount > 0
+ *     -> Partially Paid
+ *
+ * Paid amount = 0 and due date passed
+ *     -> Overdue
+ *
+ * Otherwise
+ *     -> Pending
+ *
+ * Cancelled invoices remain Cancelled.
+ */
+async function refreshInvoiceStatus(invoiceId) {
+  const invoiceResult = await safeQuery(
+    `
+      SELECT
+        id,
+        amount,
+        due_date,
+        status
+      FROM invoices
+      WHERE id = $1
+      LIMIT 1
+    `,
+    [invoiceId],
+  );
+
+  if (invoiceResult.rows.length === 0) {
+    return null;
+  }
+
+  const invoice = invoiceResult.rows[0];
+
+  if (
+    cleanString(invoice.status).toLowerCase() ===
+    'cancelled'
+  ) {
+    return invoice;
+  }
+
+  const paymentResult = await safeQuery(
+    `
+      SELECT
+        COALESCE(SUM(amount), 0) AS paid_amount
+      FROM payments
+      WHERE invoice_id = $1
+    `,
+    [invoiceId],
+  );
+
+  const paidAmount = Number(
+    paymentResult.rows[0]?.paid_amount || 0,
+  );
+
+  const invoiceAmount = Number(
+    invoice.amount || 0,
+  );
+
+  let status = 'Pending';
+
+  if (
+    paidAmount >= invoiceAmount &&
+    invoiceAmount > 0
+  ) {
+    status = 'Paid';
+  } else if (paidAmount > 0) {
+    status = 'Partially Paid';
+  } else {
+    const dueDate = new Date(
+      `${invoice.due_date}T23:59:59`,
+    );
+
+    const today = new Date();
+
+    if (
+      !Number.isNaN(dueDate.getTime()) &&
+      dueDate < today
+    ) {
+      status = 'Overdue';
+    }
+  }
+
+  await safeQuery(
+    `
+      UPDATE invoices
+      SET
+        paid_amount = $1,
+        status = $2,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = $3
+    `,
+    [
+      paidAmount,
+      status,
+      invoiceId,
+    ],
+  );
+
+  return {
+    ...invoice,
+    paid_amount: paidAmount,
+    status,
+  };
+}
+
+/*
+ * Refresh all non-cancelled invoices before displaying
+ * them. This makes overdue status automatic without
+ * requiring a background cron job.
+ */
+async function refreshAllInvoiceStatuses(ownerId) {
+  const result = await safeQuery(
+    `
+      SELECT i.id
+      FROM invoices i
+      INNER JOIN tenants t
+        ON t.id = i.tenant_id
+      INNER JOIN properties p
+        ON p.id = t.property_id
+      WHERE p.owner_id = $1
+        AND LOWER(COALESCE(i.status, '')) <> 'cancelled'
+    `,
+    [ownerId],
+  );
+
+  for (const row of result.rows) {
+    try {
+      await refreshInvoiceStatus(row.id);
+    } catch (error) {
+      console.error(
+        `Failed to refresh invoice ${row.id}:`,
+        error,
+      );
+    }
+  }
+}
+
+// =====================================================
 // AUTH
 // =====================================================
 
@@ -367,7 +515,6 @@ app.post(
 
     const owner = result.rows[0];
 
-    // First owner receives any old unassigned properties.
     const countResult = await safeQuery(
       `
         SELECT COUNT(*)::INTEGER AS count
@@ -732,17 +879,6 @@ app.post(
       0,
     );
 
-    console.log(
-      'CREATE ROOM:',
-      {
-        owner: req.owner.id,
-        propertyId,
-        roomNumber,
-        sharingType,
-        rentAmount,
-      },
-    );
-
     if (
       !Number.isInteger(propertyId) ||
       propertyId <= 0
@@ -784,7 +920,6 @@ app.post(
       );
     }
 
-    // Prevent duplicate room numbers gracefully.
     const duplicate = await safeQuery(
       `
         SELECT id
@@ -830,10 +965,6 @@ app.post(
         sharingType,
         rentAmount,
       ],
-    );
-
-    console.log(
-      `Room ${roomNumber} created successfully.`,
     );
 
     return res.status(201).json({
@@ -1335,6 +1466,8 @@ app.get(
           pay.payment_method,
           pay.payment_month,
           pay.notes,
+          pay.invoice_id,
+          i.invoice_number,
           p.name AS property_name,
           r.room_number
 
@@ -1348,6 +1481,9 @@ app.get(
 
         LEFT JOIN rooms r
           ON r.id = t.room_id
+
+        LEFT JOIN invoices i
+          ON i.id = pay.invoice_id
 
         WHERE p.owner_id = $1
 
@@ -1369,6 +1505,18 @@ app.get(
   }),
 );
 
+/*
+ * Record a payment.
+ *
+ * invoice_id is OPTIONAL so all old payment functionality
+ * continues to work.
+ *
+ * If invoice_id is supplied:
+ *   1. Validate invoice ownership.
+ *   2. Check remaining balance.
+ *   3. Insert payment.
+ *   4. Recalculate invoice.
+ */
 app.post(
   '/api/payments',
   requireAuth,
@@ -1400,6 +1548,13 @@ app.post(
       req.body?.notes,
     );
 
+    const invoiceId =
+      req.body?.invoice_id === null ||
+      req.body?.invoice_id === undefined ||
+      req.body?.invoice_id === ''
+        ? null
+        : Number(req.body.invoice_id);
+
     if (
       !Number.isInteger(tenantId) ||
       tenantId <= 0
@@ -1429,7 +1584,9 @@ app.post(
 
     const tenant = await safeQuery(
       `
-        SELECT t.id
+        SELECT
+          t.id,
+          t.name
         FROM tenants t
         INNER JOIN properties p
           ON p.id = t.property_id
@@ -1451,6 +1608,113 @@ app.post(
       );
     }
 
+    // -----------------------------------------------
+    // INVOICE VALIDATION
+    // -----------------------------------------------
+
+    let invoice = null;
+
+    if (invoiceId !== null) {
+      const invoiceResult = await safeQuery(
+        `
+          SELECT
+            i.id,
+            i.invoice_number,
+            i.tenant_id,
+            i.amount,
+            i.paid_amount,
+            i.status,
+            i.due_date
+          FROM invoices i
+          INNER JOIN tenants t
+            ON t.id = i.tenant_id
+          INNER JOIN properties p
+            ON p.id = t.property_id
+          WHERE i.id = $1
+            AND i.tenant_id = $2
+            AND p.owner_id = $3
+          LIMIT 1
+        `,
+        [
+          invoiceId,
+          tenantId,
+          req.owner.id,
+        ],
+      );
+
+      if (invoiceResult.rows.length === 0) {
+        return sendError(
+          res,
+          404,
+          'Invoice not found.',
+        );
+      }
+
+      invoice = invoiceResult.rows[0];
+
+      if (
+        cleanString(invoice.status).toLowerCase() ===
+        'cancelled'
+      ) {
+        return sendError(
+          res,
+          400,
+          'Cancelled invoices cannot receive payments.',
+        );
+      }
+
+      // Recalculate current invoice balance.
+      await refreshInvoiceStatus(invoice.id);
+
+      const freshInvoice = await safeQuery(
+        `
+          SELECT
+            amount,
+            paid_amount,
+            status
+          FROM invoices
+          WHERE id = $1
+          LIMIT 1
+        `,
+        [invoice.id],
+      );
+
+      invoice = freshInvoice.rows[0];
+
+      const invoiceAmount = Number(
+        invoice.amount || 0,
+      );
+
+      const paidAmount = Number(
+        invoice.paid_amount || 0,
+      );
+
+      const balance =
+        invoiceAmount - paidAmount;
+
+      if (balance <= 0) {
+        return sendError(
+          res,
+          400,
+          'This invoice is already fully paid.',
+        );
+      }
+
+      if (amount > balance) {
+        return sendError(
+          res,
+          400,
+          `Payment cannot exceed the remaining balance of ₹${balance.toFixed(
+            2,
+          )}.`,
+        );
+      }
+    }
+
+    // -----------------------------------------------
+    // INSERT PAYMENT
+    // -----------------------------------------------
+
     let result;
 
     if (paymentDate) {
@@ -1462,9 +1726,10 @@ app.post(
             payment_date,
             payment_method,
             payment_month,
-            notes
+            notes,
+            invoice_id
           )
-          VALUES ($1,$2,$3,$4,$5,$6)
+          VALUES ($1,$2,$3,$4,$5,$6,$7)
           RETURNING *
         `,
         [
@@ -1474,6 +1739,7 @@ app.post(
           paymentMethod,
           paymentMonth,
           notes,
+          invoiceId,
         ],
       );
     } else {
@@ -1484,9 +1750,10 @@ app.post(
             amount,
             payment_method,
             payment_month,
-            notes
+            notes,
+            invoice_id
           )
-          VALUES ($1,$2,$3,$4,$5)
+          VALUES ($1,$2,$3,$4,$5,$6)
           RETURNING *
         `,
         [
@@ -1495,25 +1762,45 @@ app.post(
           paymentMethod,
           paymentMonth,
           notes,
+          invoiceId,
         ],
       );
     }
 
+    // -----------------------------------------------
+    // REFRESH INVOICE
+    // -----------------------------------------------
+
+    let updatedInvoice = null;
+
+    if (invoiceId !== null) {
+      updatedInvoice =
+        await refreshInvoiceStatus(
+          invoiceId,
+        );
+    }
+
     return res.status(201).json({
       success: true,
-      ...result.rows[0],
+      payment: result.rows[0],
+      invoice: updatedInvoice,
     });
   }),
 );
 
 // =====================================================
-// INVOICES
+// INVOICES - LIST
 // =====================================================
 
 app.get(
   '/api/invoices',
   requireAuth,
   asyncHandler(async (req, res) => {
+    // Automatically update overdue/paid status.
+    await refreshAllInvoiceStatuses(
+      req.owner.id,
+    );
+
     const result = await safeQuery(
       `
         SELECT
@@ -1524,7 +1811,27 @@ app.get(
           i.amount,
           i.month,
           i.due_date,
-          i.status
+          i.status,
+          i.paid_amount,
+          i.delivery_status,
+          i.created_at,
+          i.updated_at,
+
+          GREATEST(
+            i.amount - COALESCE(i.paid_amount, 0),
+            0
+          )::NUMERIC(10,2) AS balance_amount,
+
+          CASE
+            WHEN i.amount > 0
+            THEN ROUND(
+              (
+                COALESCE(i.paid_amount, 0)
+                / i.amount
+              ) * 100
+            )
+            ELSE 0
+          END::INTEGER AS payment_percentage
 
         FROM invoices i
 
@@ -1544,13 +1851,30 @@ app.get(
     return res.json(
       result.rows.map((invoice) => ({
         ...invoice,
+
         amount: Number(
           invoice.amount || 0,
+        ),
+
+        paid_amount: Number(
+          invoice.paid_amount || 0,
+        ),
+
+        balance_amount: Number(
+          invoice.balance_amount || 0,
+        ),
+
+        payment_percentage: Number(
+          invoice.payment_percentage || 0,
         ),
       })),
     );
   }),
 );
+
+// =====================================================
+// INVOICES - CREATE
+// =====================================================
 
 app.post(
   '/api/invoices',
@@ -1573,9 +1897,25 @@ app.post(
       req.body?.due_date,
     );
 
-    const status =
+    /*
+     * Only allow legitimate invoice statuses when
+     * importing/creating. New invoices normally start
+     * as Pending.
+     */
+    const requestedStatus =
       cleanString(req.body?.status) ||
       'Pending';
+
+    const allowedStatuses = [
+      'Pending',
+      'Cancelled',
+    ];
+
+    const status = allowedStatuses.includes(
+      requestedStatus,
+    )
+      ? requestedStatus
+      : 'Pending';
 
     if (
       !Number.isInteger(tenantId) ||
@@ -1606,7 +1946,9 @@ app.post(
 
     const tenant = await safeQuery(
       `
-        SELECT t.id
+        SELECT
+          t.id,
+          t.name
         FROM tenants t
         INNER JOIN properties p
           ON p.id = t.property_id
@@ -1628,7 +1970,6 @@ app.post(
       );
     }
 
-    // Automatically generate invoice number.
     const invoiceNumber =
       `INV-${Date.now()}-${crypto
         .randomBytes(3)
@@ -1643,9 +1984,20 @@ app.post(
           amount,
           month,
           due_date,
-          status
+          status,
+          paid_amount,
+          delivery_status
         )
-        VALUES ($1,$2,$3,$4,$5,$6)
+        VALUES (
+          $1,
+          $2,
+          $3,
+          $4,
+          $5,
+          $6,
+          0,
+          'Not Sent'
+        )
         RETURNING *
       `,
       [
@@ -1658,9 +2010,443 @@ app.post(
       ],
     );
 
+    const invoice = result.rows[0];
+
     return res.status(201).json({
       success: true,
-      ...result.rows[0],
+      ...invoice,
+      amount: Number(
+        invoice.amount || 0,
+      ),
+      paid_amount: 0,
+      balance_amount: Number(
+        invoice.amount || 0,
+      ),
+      payment_percentage: 0,
+    });
+  }),
+);
+
+// =====================================================
+// INVOICES - SINGLE INVOICE
+// =====================================================
+
+app.get(
+  '/api/invoices/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const invoiceId = Number(
+      req.params.id,
+    );
+
+    if (
+      !Number.isInteger(invoiceId) ||
+      invoiceId <= 0
+    ) {
+      return sendError(
+        res,
+        400,
+        'Invalid invoice ID.',
+      );
+    }
+
+    const invoiceOwner = await safeQuery(
+      `
+        SELECT i.id
+        FROM invoices i
+        INNER JOIN tenants t
+          ON t.id = i.tenant_id
+        INNER JOIN properties p
+          ON p.id = t.property_id
+        WHERE i.id = $1
+          AND p.owner_id = $2
+        LIMIT 1
+      `,
+      [
+        invoiceId,
+        req.owner.id,
+      ],
+    );
+
+    if (invoiceOwner.rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        'Invoice not found.',
+      );
+    }
+
+    await refreshInvoiceStatus(
+      invoiceId,
+    );
+
+    const result = await safeQuery(
+      `
+        SELECT
+          i.id,
+          i.invoice_number,
+          i.tenant_id,
+          t.name AS tenant_name,
+          t.phone AS tenant_phone,
+          i.amount,
+          i.month,
+          i.due_date,
+          i.status,
+          i.paid_amount,
+          i.delivery_status,
+          i.created_at,
+          i.updated_at,
+
+          GREATEST(
+            i.amount - COALESCE(i.paid_amount, 0),
+            0
+          )::NUMERIC(10,2) AS balance_amount
+
+        FROM invoices i
+
+        INNER JOIN tenants t
+          ON t.id = i.tenant_id
+
+        INNER JOIN properties p
+          ON p.id = t.property_id
+
+        WHERE i.id = $1
+          AND p.owner_id = $2
+        LIMIT 1
+      `,
+      [
+        invoiceId,
+        req.owner.id,
+      ],
+    );
+
+    const invoice = result.rows[0];
+
+    const payments = await safeQuery(
+      `
+        SELECT
+          pay.id,
+          pay.amount,
+          pay.payment_date,
+          pay.payment_method,
+          pay.payment_month,
+          pay.notes
+
+        FROM payments pay
+
+        INNER JOIN tenants t
+          ON t.id = pay.tenant_id
+
+        INNER JOIN properties p
+          ON p.id = t.property_id
+
+        WHERE pay.invoice_id = $1
+          AND p.owner_id = $2
+
+        ORDER BY
+          pay.payment_date DESC,
+          pay.id DESC
+      `,
+      [
+        invoiceId,
+        req.owner.id,
+      ],
+    );
+
+    return res.json({
+      ...invoice,
+
+      amount: Number(
+        invoice.amount || 0,
+      ),
+
+      paid_amount: Number(
+        invoice.paid_amount || 0,
+      ),
+
+      balance_amount: Number(
+        invoice.balance_amount || 0,
+      ),
+
+      payments: payments.rows.map(
+        (payment) => ({
+          ...payment,
+          amount: Number(
+            payment.amount || 0,
+          ),
+        }),
+      ),
+    });
+  }),
+);
+
+// =====================================================
+// INVOICES - MARK CANCELLED
+// =====================================================
+
+app.patch(
+  '/api/invoices/:id/cancel',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const invoiceId = Number(
+      req.params.id,
+    );
+
+    if (
+      !Number.isInteger(invoiceId) ||
+      invoiceId <= 0
+    ) {
+      return sendError(
+        res,
+        400,
+        'Invalid invoice ID.',
+      );
+    }
+
+    const result = await safeQuery(
+      `
+        UPDATE invoices i
+        SET
+          status = 'Cancelled',
+          updated_at = CURRENT_TIMESTAMP
+
+        FROM tenants t
+        INNER JOIN properties p
+          ON p.id = t.property_id
+
+        WHERE i.id = $1
+          AND i.tenant_id = t.id
+          AND p.owner_id = $2
+
+        RETURNING
+          i.*
+      `,
+      [
+        invoiceId,
+        req.owner.id,
+      ],
+    );
+
+    if (result.rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        'Invoice not found.',
+      );
+    }
+
+    return res.json({
+      success: true,
+      invoice: result.rows[0],
+    });
+  }),
+);
+
+// =====================================================
+// INVOICES - MARK SENT
+// =====================================================
+
+app.patch(
+  '/api/invoices/:id/sent',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const invoiceId = Number(
+      req.params.id,
+    );
+
+    if (
+      !Number.isInteger(invoiceId) ||
+      invoiceId <= 0
+    ) {
+      return sendError(
+        res,
+        400,
+        'Invalid invoice ID.',
+      );
+    }
+
+    const result = await safeQuery(
+      `
+        UPDATE invoices i
+        SET
+          delivery_status = 'Sent',
+          updated_at = CURRENT_TIMESTAMP
+
+        FROM tenants t
+        INNER JOIN properties p
+          ON p.id = t.property_id
+
+        WHERE i.id = $1
+          AND i.tenant_id = t.id
+          AND p.owner_id = $2
+
+        RETURNING
+          i.*
+      `,
+      [
+        invoiceId,
+        req.owner.id,
+      ],
+    );
+
+    if (result.rows.length === 0) {
+      return sendError(
+        res,
+        404,
+        'Invoice not found.',
+      );
+    }
+
+    return res.json({
+      success: true,
+      invoice: result.rows[0],
+    });
+  }),
+);
+
+// =====================================================
+// FINANCE SUMMARY
+// =====================================================
+
+app.get(
+  '/api/finance/summary',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    await refreshAllInvoiceStatuses(
+      req.owner.id,
+    );
+
+    const result = await safeQuery(
+      `
+        SELECT
+          COALESCE(
+            SUM(i.amount),
+            0
+          ) AS expected,
+
+          COALESCE(
+            SUM(
+              COALESCE(i.paid_amount, 0)
+            ),
+            0
+          ) AS collected,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN LOWER(
+                  COALESCE(i.status, '')
+                ) IN (
+                  'pending',
+                  'partially paid'
+                )
+                THEN GREATEST(
+                  i.amount -
+                  COALESCE(i.paid_amount, 0),
+                  0
+                )
+                ELSE 0
+              END
+            ),
+            0
+          ) AS pending,
+
+          COALESCE(
+            SUM(
+              CASE
+                WHEN LOWER(
+                  COALESCE(i.status, '')
+                ) = 'overdue'
+                THEN GREATEST(
+                  i.amount -
+                  COALESCE(i.paid_amount, 0),
+                  0
+                )
+                ELSE 0
+              END
+            ),
+            0
+          ) AS overdue,
+
+          COUNT(*)::INTEGER AS invoice_count,
+
+          COUNT(
+            CASE
+              WHEN LOWER(
+                COALESCE(i.status, '')
+              ) = 'paid'
+              THEN 1
+            END
+          )::INTEGER AS paid_invoice_count,
+
+          COUNT(
+            CASE
+              WHEN LOWER(
+                COALESCE(i.status, '')
+              ) = 'overdue'
+              THEN 1
+            END
+          )::INTEGER AS overdue_invoice_count
+
+        FROM invoices i
+
+        INNER JOIN tenants t
+          ON t.id = i.tenant_id
+
+        INNER JOIN properties p
+          ON p.id = t.property_id
+
+        WHERE p.owner_id = $1
+          AND LOWER(
+            COALESCE(i.status, '')
+          ) <> 'cancelled'
+      `,
+      [req.owner.id],
+    );
+
+    const row = result.rows[0];
+
+    const expected = Number(
+      row.expected || 0,
+    );
+
+    const collected = Number(
+      row.collected || 0,
+    );
+
+    return res.json({
+      success: true,
+
+      expected,
+      collected,
+
+      pending: Number(
+        row.pending || 0,
+      ),
+
+      overdue: Number(
+        row.overdue || 0,
+      ),
+
+      invoice_count: Number(
+        row.invoice_count || 0,
+      ),
+
+      paid_invoice_count: Number(
+        row.paid_invoice_count || 0,
+      ),
+
+      overdue_invoice_count: Number(
+        row.overdue_invoice_count || 0,
+      ),
+
+      collection_rate:
+        expected > 0
+          ? Math.round(
+              (collected / expected) *
+                100,
+            )
+          : 0,
     });
   }),
 );
