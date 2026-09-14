@@ -168,6 +168,8 @@ function asyncHandler(handler) {
  * Cancelled invoices remain Cancelled.
  */
 async function refreshInvoiceStatus(invoiceId) {
+  const normalizedInvoiceId = Number(invoiceId);
+
   const invoiceResult = await safeQuery(
     `
       SELECT
@@ -177,10 +179,10 @@ async function refreshInvoiceStatus(invoiceId) {
         status,
         paid_at
       FROM invoices
-      WHERE id = $1
+      WHERE id = $1::integer
       LIMIT 1
     `,
-    [invoiceId],
+    [normalizedInvoiceId],
   );
 
   if (invoiceResult.rows.length === 0) {
@@ -201,9 +203,9 @@ async function refreshInvoiceStatus(invoiceId) {
       SELECT
         COALESCE(SUM(amount), 0) AS paid_amount
       FROM payments
-      WHERE invoice_id = $1
+      WHERE invoice_id = $1::integer
     `,
-    [invoiceId],
+    [normalizedInvoiceId],
   );
 
   const paidAmount = Number(
@@ -222,6 +224,7 @@ async function refreshInvoiceStatus(invoiceId) {
     invoiceAmount > 0
   ) {
     status = 'Paid';
+
     paidAt =
       invoice.paid_at ||
       new Date();
@@ -240,20 +243,23 @@ async function refreshInvoiceStatus(invoiceId) {
     `
       UPDATE invoices
       SET
-        paid_amount = $1,
-        status = $2,
+        paid_amount = $1::numeric,
+        status = $2::varchar,
         paid_at = CASE
-          WHEN $2 = 'Paid'
-            THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
+          WHEN $2::varchar = 'Paid'
+            THEN COALESCE(
+              paid_at,
+              CURRENT_TIMESTAMP
+            )
           ELSE NULL
         END,
         updated_at = CURRENT_TIMESTAMP
-      WHERE id = $3
+      WHERE id = $3::integer
     `,
     [
       paidAmount,
       status,
-      invoiceId,
+      normalizedInvoiceId,
     ],
   );
 
