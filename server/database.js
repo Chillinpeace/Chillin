@@ -14,9 +14,66 @@ export const pool = new Pool({
       : false,
 });
 
-export const query = (text, params) => {
-  return pool.query(text, params);
-};
+export const query = (text, params) => pool.query(text, params);
+
+async function columnExists(client, table, column) {
+  const result = await client.query(
+    `
+      SELECT 1
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = $1
+        AND column_name = $2
+      LIMIT 1
+    `,
+    [table, column],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function constraintExists(client, constraintName) {
+  const result = await client.query(
+    `
+      SELECT 1
+      FROM pg_constraint
+      WHERE conname = $1
+      LIMIT 1
+    `,
+    [constraintName],
+  );
+
+  return result.rows.length > 0;
+}
+
+async function dropForeignKeysForColumn(
+  client,
+  tableName,
+  columnName,
+) {
+  const result = await client.query(
+    `
+      SELECT con.conname
+      FROM pg_constraint con
+      JOIN pg_class rel
+        ON rel.oid = con.conrelid
+      JOIN pg_attribute att
+        ON att.attrelid = rel.oid
+       AND att.attnum = ANY(con.conkey)
+      WHERE rel.relname = $1
+        AND con.contype = 'f'
+        AND att.attname = $2
+    `,
+    [tableName, columnName],
+  );
+
+  for (const row of result.rows) {
+    await client.query(`
+      ALTER TABLE "${tableName}"
+      DROP CONSTRAINT IF EXISTS "${row.conname}"
+    `);
+  }
+}
 
 export async function initializeDatabase() {
   const client = await pool.connect();
@@ -39,8 +96,17 @@ export async function initializeDatabase() {
       );
     `);
 
+    await client.query(`
+      ALTER TABLE owners
+      ADD COLUMN IF NOT EXISTS phone VARCHAR(30) DEFAULT '';
+
+      ALTER TABLE owners
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
     // =====================================================
-    // 2. CORE PEACELY TABLES
+    // 2. PROPERTIES
     // =====================================================
 
     await client.query(`
@@ -50,26 +116,139 @@ export async function initializeDatabase() {
         address TEXT DEFAULT '',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    await client.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
+
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+    `);
+
+    // Remove any old users.id relationship.
+    await dropForeignKeysForColumn(
+      client,
+      'properties',
+      'owner_id',
+    );
+
+    // Existing invalid owner IDs become NULL.
+    await client.query(`
+      UPDATE properties
+      SET owner_id = NULL
+      WHERE owner_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM owners
+          WHERE owners.id = properties.owner_id
+        );
+    `);
+
+    // =====================================================
+    // 3. ROOMS
+    // =====================================================
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS rooms (
         id SERIAL PRIMARY KEY,
         property_id INTEGER NOT NULL,
         room_number VARCHAR(50) NOT NULL,
         sharing_type VARCHAR(50) DEFAULT 'Single',
-        rent_amount NUMERIC(10, 2) DEFAULT 0,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(property_id, room_number)
+        rent_amount NUMERIC(10,2) DEFAULT 0,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // Repair an old rooms table instead of recreating it.
+    await client.query(`
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS property_id INTEGER;
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS room_number VARCHAR(50);
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS sharing_type VARCHAR(50)
+        DEFAULT 'Single';
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS rent_amount NUMERIC(10,2)
+        DEFAULT 0;
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    await client.query(`
+      UPDATE rooms
+      SET sharing_type = 'Single'
+      WHERE sharing_type IS NULL;
+
+      UPDATE rooms
+      SET rent_amount = 0
+      WHERE rent_amount IS NULL;
+
+      UPDATE rooms
+      SET created_at = CURRENT_TIMESTAMP
+      WHERE created_at IS NULL;
+    `);
+
+    // =====================================================
+    // 4. BEDS
+    // =====================================================
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS beds (
         id SERIAL PRIMARY KEY,
         room_id INTEGER NOT NULL,
         bed_number VARCHAR(50) NOT NULL,
         is_occupied BOOLEAN DEFAULT FALSE,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        UNIQUE(room_id, bed_number)
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    await client.query(`
+      ALTER TABLE beds
+      ADD COLUMN IF NOT EXISTS room_id INTEGER;
+
+      ALTER TABLE beds
+      ADD COLUMN IF NOT EXISTS bed_number VARCHAR(50);
+
+      ALTER TABLE beds
+      ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN
+        DEFAULT FALSE;
+
+      ALTER TABLE beds
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Support older "occupied" column if it exists.
+    const hasOldOccupied = await columnExists(
+      client,
+      'beds',
+      'occupied',
+    );
+
+    if (hasOldOccupied) {
+      await client.query(`
+        UPDATE beds
+        SET is_occupied = COALESCE(occupied, FALSE)
+        WHERE is_occupied IS NULL;
+      `);
+    }
+
+    // =====================================================
+    // 5. TENANTS
+    // =====================================================
+
+    await client.query(`
       CREATE TABLE IF NOT EXISTS tenants (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -78,65 +257,23 @@ export async function initializeDatabase() {
         property_id INTEGER NOT NULL,
         room_id INTEGER,
         bed_id INTEGER,
-        monthly_rent NUMERIC(10, 2) DEFAULT 0,
+        monthly_rent NUMERIC(10,2) DEFAULT 0,
         due_date INTEGER DEFAULT 5,
-        deposit_amount NUMERIC(10, 2) DEFAULT 0,
+        deposit_amount NUMERIC(10,2) DEFAULT 0,
         move_in_date DATE,
         move_out_date DATE,
         status VARCHAR(20) DEFAULT 'Active',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
-
-      CREATE TABLE IF NOT EXISTS payments (
-        id SERIAL PRIMARY KEY,
-        tenant_id INTEGER NOT NULL,
-        amount NUMERIC(10, 2) NOT NULL,
-        payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
-        payment_method VARCHAR(50) DEFAULT 'UPI',
-        payment_month VARCHAR(50) DEFAULT '',
-        notes TEXT DEFAULT '',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS invoices (
-        id SERIAL PRIMARY KEY,
-        invoice_number VARCHAR(50) UNIQUE NOT NULL,
-        tenant_id INTEGER NOT NULL,
-        amount NUMERIC(10, 2) NOT NULL,
-        month VARCHAR(50),
-        due_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'Pending',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
     `);
 
-    // =====================================================
-    // 3. EXISTING TABLE MIGRATIONS
-    // =====================================================
-
     await client.query(`
-      ALTER TABLE properties
-      ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
-
-      ALTER TABLE rooms
-      ADD COLUMN IF NOT EXISTS sharing_type VARCHAR(50)
-        DEFAULT 'Single';
-
-      ALTER TABLE rooms
-      ADD COLUMN IF NOT EXISTS rent_amount NUMERIC(10, 2)
-        DEFAULT 0;
-
-      ALTER TABLE rooms
-      ADD COLUMN IF NOT EXISTS created_at
-        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-
-      ALTER TABLE beds
-      ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN
-        DEFAULT FALSE;
-
       ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS email VARCHAR(255)
         DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS property_id INTEGER;
 
       ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS room_id INTEGER;
@@ -145,7 +282,7 @@ export async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS bed_id INTEGER;
 
       ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS monthly_rent NUMERIC(10, 2)
+      ADD COLUMN IF NOT EXISTS monthly_rent NUMERIC(10,2)
         DEFAULT 0;
 
       ALTER TABLE tenants
@@ -153,7 +290,7 @@ export async function initializeDatabase() {
         DEFAULT 5;
 
       ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10, 2)
+      ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10,2)
         DEFAULT 0;
 
       ALTER TABLE tenants
@@ -169,6 +306,32 @@ export async function initializeDatabase() {
       ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // =====================================================
+    // 6. PAYMENTS
+    // =====================================================
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS payments (
+        id SERIAL PRIMARY KEY,
+        tenant_id INTEGER NOT NULL,
+        amount NUMERIC(10,2) NOT NULL,
+        payment_date DATE DEFAULT CURRENT_DATE,
+        payment_method VARCHAR(50) DEFAULT 'UPI',
+        payment_month VARCHAR(50) DEFAULT '',
+        notes TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS tenant_id INTEGER;
+
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2)
+        DEFAULT 0;
 
       ALTER TABLE payments
       ADD COLUMN IF NOT EXISTS payment_date DATE
@@ -189,9 +352,41 @@ export async function initializeDatabase() {
       ALTER TABLE payments
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // =====================================================
+    // 7. INVOICES
+    // =====================================================
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS invoices (
+        id SERIAL PRIMARY KEY,
+        invoice_number VARCHAR(50) UNIQUE NOT NULL,
+        tenant_id INTEGER NOT NULL,
+        amount NUMERIC(10,2) NOT NULL,
+        month VARCHAR(50),
+        due_date DATE NOT NULL,
+        status VARCHAR(20) DEFAULT 'Pending',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS invoice_number VARCHAR(50);
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS tenant_id INTEGER;
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2)
+        DEFAULT 0;
 
       ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS month VARCHAR(50);
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS due_date DATE;
 
       ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS status VARCHAR(20)
@@ -203,97 +398,16 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 4. OLD BED COLUMN SUPPORT
+    // 8. SESSIONS
     // =====================================================
 
-    const occupiedColumn = await client.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'beds'
-        AND column_name = 'occupied';
-    `);
+    /*
+      Sessions are disposable login records.
 
-    if (occupiedColumn.rows.length > 0) {
-      await client.query(`
-        UPDATE beds
-        SET is_occupied = COALESCE(occupied, FALSE)
-        WHERE is_occupied IS NULL;
-      `);
-    }
-
-    // =====================================================
-    // 5. PROPERTIES -> OWNERS
-    // =====================================================
-
-    await client.query(`
-      ALTER TABLE properties
-      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
-    `);
-
-    // Remove ALL old foreign keys attached to properties.owner_id.
-    // This handles the previous users.id relationship safely.
-
-    await client.query(`
-      DO $$
-      DECLARE
-        fk RECORD;
-      BEGIN
-        FOR fk IN
-          SELECT con.conname
-          FROM pg_constraint con
-          JOIN pg_class rel
-            ON rel.oid = con.conrelid
-          JOIN pg_attribute att
-            ON att.attrelid = rel.oid
-           AND att.attnum = ANY(con.conkey)
-          WHERE rel.relname = 'properties'
-            AND con.contype = 'f'
-            AND att.attname = 'owner_id'
-        LOOP
-          EXECUTE format(
-            'ALTER TABLE properties DROP CONSTRAINT IF EXISTS %I',
-            fk.conname
-          );
-        END LOOP;
-      END
-      $$;
-    `);
-
-    // Any owner_id left from an old/failed migration that
-    // doesn't exist in owners becomes NULL.
-    // The property itself is NOT deleted.
-
-    await client.query(`
-      UPDATE properties
-      SET owner_id = NULL
-      WHERE owner_id IS NOT NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM owners
-          WHERE owners.id = properties.owner_id
-        );
-    `);
-
-    // =====================================================
-    // 6. RECREATE SESSIONS TABLE SAFELY
-    // =====================================================
-    //
-    // IMPORTANT:
-    //
-    // The existing sessions table came from an older
-    // version of Peacely and has incompatible columns/indexes.
-    //
-    // Sessions contain ONLY login sessions.
-    // Recreating this table does NOT affect:
-    // properties
-    // rooms
-    // beds
-    // tenants
-    // payments
-    // invoices
-    //
-    // =====================================================
+      Older Peacely versions created this table with
+      incompatible columns. Recreating ONLY this table
+      is safe because it contains no PG/tenant/business data.
+    */
 
     await client.query(`
       DROP TABLE IF EXISTS sessions CASCADE;
@@ -310,16 +424,251 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 7. CORRECT AUTH FOREIGN KEYS
+    // 9. FOREIGN KEYS
     // =====================================================
 
+    await dropForeignKeysForColumn(
+      client,
+      'properties',
+      'owner_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'rooms',
+      'property_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'beds',
+      'room_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'tenants',
+      'property_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'tenants',
+      'room_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'tenants',
+      'bed_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'payments',
+      'tenant_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'invoices',
+      'tenant_id',
+    );
+
+    // Remove orphan references before adding constraints.
     await client.query(`
-      ALTER TABLE properties
-      ADD CONSTRAINT properties_owner_id_fkey
-      FOREIGN KEY (owner_id)
-      REFERENCES owners(id)
-      ON DELETE CASCADE;
+      UPDATE properties p
+      SET owner_id = NULL
+      WHERE owner_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM owners o
+          WHERE o.id = p.owner_id
+        );
+
+      UPDATE rooms r
+      SET property_id = NULL
+      WHERE property_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM properties p
+          WHERE p.id = r.property_id
+        );
+
+      UPDATE beds b
+      SET room_id = NULL
+      WHERE room_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM rooms r
+          WHERE r.id = b.room_id
+        );
+
+      UPDATE tenants t
+      SET property_id = NULL
+      WHERE property_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM properties p
+          WHERE p.id = t.property_id
+        );
+
+      UPDATE tenants t
+      SET room_id = NULL
+      WHERE room_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM rooms r
+          WHERE r.id = t.room_id
+        );
+
+      UPDATE tenants t
+      SET bed_id = NULL
+      WHERE bed_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM beds b
+          WHERE b.id = t.bed_id
+        );
+
+      DELETE FROM payments pay
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM tenants t
+        WHERE t.id = pay.tenant_id
+      );
+
+      DELETE FROM invoices i
+      WHERE NOT EXISTS (
+        SELECT 1
+        FROM tenants t
+        WHERE t.id = i.tenant_id
+      );
     `);
+
+    // =====================================================
+    // 10. FOREIGN KEY CREATION
+    // =====================================================
+
+    if (
+      !(await constraintExists(
+        client,
+        'properties_owner_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE properties
+        ADD CONSTRAINT properties_owner_id_fkey
+        FOREIGN KEY (owner_id)
+        REFERENCES owners(id)
+        ON DELETE CASCADE;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'rooms_property_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE rooms
+        ADD CONSTRAINT rooms_property_id_fkey
+        FOREIGN KEY (property_id)
+        REFERENCES properties(id)
+        ON DELETE CASCADE;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'beds_room_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE beds
+        ADD CONSTRAINT beds_room_id_fkey
+        FOREIGN KEY (room_id)
+        REFERENCES rooms(id)
+        ON DELETE CASCADE;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'tenants_property_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE tenants
+        ADD CONSTRAINT tenants_property_id_fkey
+        FOREIGN KEY (property_id)
+        REFERENCES properties(id)
+        ON DELETE CASCADE;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'tenants_room_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE tenants
+        ADD CONSTRAINT tenants_room_id_fkey
+        FOREIGN KEY (room_id)
+        REFERENCES rooms(id)
+        ON DELETE SET NULL;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'tenants_bed_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE tenants
+        ADD CONSTRAINT tenants_bed_id_fkey
+        FOREIGN KEY (bed_id)
+        REFERENCES beds(id)
+        ON DELETE SET NULL;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'payments_tenant_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE payments
+        ADD CONSTRAINT payments_tenant_id_fkey
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(id)
+        ON DELETE CASCADE;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
+        'invoices_tenant_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE invoices
+        ADD CONSTRAINT invoices_tenant_id_fkey
+        FOREIGN KEY (tenant_id)
+        REFERENCES tenants(id)
+        ON DELETE CASCADE;
+      `);
+    }
 
     await client.query(`
       ALTER TABLE sessions
@@ -330,125 +679,12 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 8. CORE FOREIGN KEYS
-    // =====================================================
-
-    // Remove old versions first where necessary.
-
-    await client.query(`
-      DO $$
-      DECLARE
-        fk RECORD;
-      BEGIN
-
-        -- rooms -> properties
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'rooms_property_id_fkey'
-        ) THEN
-          ALTER TABLE rooms
-          ADD CONSTRAINT rooms_property_id_fkey
-          FOREIGN KEY (property_id)
-          REFERENCES properties(id)
-          ON DELETE CASCADE;
-        END IF;
-
-        -- beds -> rooms
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'beds_room_id_fkey'
-        ) THEN
-          ALTER TABLE beds
-          ADD CONSTRAINT beds_room_id_fkey
-          FOREIGN KEY (room_id)
-          REFERENCES rooms(id)
-          ON DELETE CASCADE;
-        END IF;
-
-        -- tenants -> properties
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'tenants_property_id_fkey'
-        ) THEN
-          ALTER TABLE tenants
-          ADD CONSTRAINT tenants_property_id_fkey
-          FOREIGN KEY (property_id)
-          REFERENCES properties(id)
-          ON DELETE CASCADE;
-        END IF;
-
-        -- tenants -> rooms
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'tenants_room_id_fkey'
-        ) THEN
-          ALTER TABLE tenants
-          ADD CONSTRAINT tenants_room_id_fkey
-          FOREIGN KEY (room_id)
-          REFERENCES rooms(id)
-          ON DELETE SET NULL;
-        END IF;
-
-        -- tenants -> beds
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'tenants_bed_id_fkey'
-        ) THEN
-          ALTER TABLE tenants
-          ADD CONSTRAINT tenants_bed_id_fkey
-          FOREIGN KEY (bed_id)
-          REFERENCES beds(id)
-          ON DELETE SET NULL;
-        END IF;
-
-        -- payments -> tenants
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'payments_tenant_id_fkey'
-        ) THEN
-          ALTER TABLE payments
-          ADD CONSTRAINT payments_tenant_id_fkey
-          FOREIGN KEY (tenant_id)
-          REFERENCES tenants(id)
-          ON DELETE CASCADE;
-        END IF;
-
-        -- invoices -> tenants
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'invoices_tenant_id_fkey'
-        ) THEN
-          ALTER TABLE invoices
-          ADD CONSTRAINT invoices_tenant_id_fkey
-          FOREIGN KEY (tenant_id)
-          REFERENCES tenants(id)
-          ON DELETE CASCADE;
-        END IF;
-
-      END
-      $$;
-    `);
-
-    // =====================================================
-    // 9. INDEXES
+    // 11. INDEXES
     // =====================================================
 
     await client.query(`
       CREATE INDEX IF NOT EXISTS idx_properties_owner_id
         ON properties(owner_id);
-
-      CREATE INDEX IF NOT EXISTS idx_sessions_owner_id
-        ON sessions(owner_id);
-
-      CREATE INDEX IF NOT EXISTS idx_sessions_token_hash
-        ON sessions(token_hash);
 
       CREATE INDEX IF NOT EXISTS idx_rooms_property_id
         ON rooms(property_id);
@@ -470,80 +706,61 @@ export async function initializeDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id
         ON invoices(tenant_id);
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_owner_id
+        ON sessions(owner_id);
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_token_hash
+        ON sessions(token_hash);
     `);
 
     // =====================================================
-    // 10. ASSIGN EXISTING PROPERTIES
+    // 12. FIRST OWNER DATA MIGRATION
     // =====================================================
-    //
-    // If exactly one owner exists, all currently unassigned
-    // properties belong to that first owner.
-    //
-    // Existing property records are preserved.
-    //
 
-    const ownerCountResult = await client.query(`
-      SELECT COUNT(*)::INTEGER AS count
-      FROM owners;
+    const ownerResult = await client.query(`
+      SELECT id
+      FROM owners
+      ORDER BY id ASC;
     `);
 
-    const ownerCount =
-      ownerCountResult.rows[0]?.count || 0;
+    if (ownerResult.rows.length === 1) {
+      const ownerId = ownerResult.rows[0].id;
 
-    if (ownerCount === 1) {
-      const firstOwnerResult = await client.query(`
-        SELECT id
-        FROM owners
-        ORDER BY id ASC
-        LIMIT 1;
-      `);
+      await client.query(
+        `
+          UPDATE properties
+          SET owner_id = $1
+          WHERE owner_id IS NULL;
+        `,
+        [ownerId],
+      );
 
-      if (firstOwnerResult.rows.length > 0) {
-        const firstOwnerId =
-          firstOwnerResult.rows[0].id;
-
-        await client.query(
-          `
-            UPDATE properties
-            SET owner_id = $1
-            WHERE owner_id IS NULL;
-          `,
-          [firstOwnerId]
-        );
-
-        console.log(
-          `Existing properties assigned to owner ${firstOwnerId}.`
-        );
-      }
+      console.log(
+        `Existing unassigned properties linked to owner ${ownerId}.`,
+      );
     }
 
     // =====================================================
-    // 11. CLEAN EXPIRED SESSIONS
+    // 13. CLEAN EXPIRED SESSIONS
     // =====================================================
-    //
-    // This is safe because sessions only contain login
-    // information.
 
     await client.query(`
       DELETE FROM sessions
       WHERE expires_at < CURRENT_TIMESTAMP;
     `);
 
-    // =====================================================
-    // 12. COMMIT
-    // =====================================================
-
     await client.query('COMMIT');
 
     console.log(
-      'PostgreSQL database initialized and migrated successfully.'
+      'Peacely PostgreSQL database initialized successfully.',
     );
   } catch (error) {
     await client.query('ROLLBACK');
 
     console.error(
       'Database initialization failed:',
-      error
+      error,
     );
 
     throw error;
