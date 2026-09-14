@@ -1,12 +1,14 @@
-const { Pool } = require('pg');
+import pg from 'pg';
+const { Pool } = pg;
 
-const pool = new Pool({
+export const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
 });
 
-// Initialize Database Tables
-const initDb = async () => {
+export const query = (text, params) => pool.query(text, params);
+
+export const initializeDatabase = async () => {
   const queryText = `
     CREATE TABLE IF NOT EXISTS properties (
       id SERIAL PRIMARY KEY,
@@ -38,7 +40,7 @@ const initDb = async () => {
       email VARCHAR(255),
       property_id INT REFERENCES properties(id) ON DELETE CASCADE,
       room_id INT REFERENCES rooms(id) ON DELETE SET NULL,
-      monthly_rent NUMERIC(10, 2) NOT NULL,
+      monthly_rent NUMERIC(10, 2) DEFAULT 0,
       due_date INT DEFAULT 5,
       deposit_amount NUMERIC(10, 2) DEFAULT 0,
       status VARCHAR(20) DEFAULT 'Active',
@@ -69,14 +71,8 @@ const initDb = async () => {
 
   try {
     await pool.query(queryText);
-    console.log('PostgreSQL schema initialized successfully.');
+    console.log('PostgreSQL database initialized successfully.');
   } catch (err) {
-    console.error('Error initializing PostgreSQL schema:', err);
+    console.error('Error initializing PostgreSQL database:', err);
   }
-};
-
-initDb();
-
-module.exports = {
-  query: (text, params) => pool.query(text, params),
 };
