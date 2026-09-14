@@ -23,28 +23,20 @@
     const url = getRequestUrl(request);
     const method = (
       options.method ||
-      (typeof Request !== 'undefined' && request instanceof Request
-        ? request.method
-        : 'GET') ||
+      (typeof Request !== 'undefined' && request instanceof Request ? request.method : 'GET') ||
       'GET'
     ).toUpperCase();
 
-    if (method !== 'POST' || !url.split('?')[0].endsWith('/api/payments')) {
-      return args;
-    }
+    if (method !== 'POST' || !url.split('?')[0].endsWith('/api/payments')) return args;
 
     let body;
     try {
-      body = typeof options.body === 'string'
-        ? JSON.parse(options.body)
-        : null;
+      body = typeof options.body === 'string' ? JSON.parse(options.body) : null;
     } catch {
       return args;
     }
 
-    if (!body || !body.tenant_id || body.invoice_id) {
-      return args;
-    }
+    if (!body || !body.tenant_id || body.invoice_id) return args;
 
     try {
       const invoiceResponse = await originalFetch('/api/invoices', {
@@ -52,51 +44,108 @@
         credentials: 'include',
         headers: { Accept: 'application/json' },
       });
-
       if (!invoiceResponse.ok) return args;
 
       const invoicePayload = await invoiceResponse.json().catch(() => null);
       const invoiceList = Array.isArray(invoicePayload)
         ? invoicePayload
-        : Array.isArray(invoicePayload?.invoices)
-          ? invoicePayload.invoices
-          : [];
-
+        : Array.isArray(invoicePayload?.invoices) ? invoicePayload.invoices : [];
       const tenantId = Number(body.tenant_id);
-      const availableInvoice = invoiceList
-        .filter((invoice) => {
-          const balance = Number(
-            invoice.balance_amount ??
-              Number(invoice.amount || 0) - Number(invoice.paid_amount || 0),
-          );
-
-          return (
-            Number(invoice.tenant_id) === tenantId &&
-            String(invoice.status || '').toLowerCase() !== 'cancelled' &&
-            balance > 0
-          );
-        })
-        .sort((a, b) => Number(a.id) - Number(b.id))[0];
+      const availableInvoice = invoiceList.filter((invoice) => {
+        const balance = Number(invoice.balance_amount ?? Number(invoice.amount || 0) - Number(invoice.paid_amount || 0));
+        return Number(invoice.tenant_id) === tenantId && String(invoice.status || '').toLowerCase() !== 'cancelled' && balance > 0;
+      }).sort((a, b) => Number(a.id) - Number(b.id))[0];
 
       if (!availableInvoice) return args;
-
-      const patchedBody = {
-        ...body,
-        invoice_id: Number(availableInvoice.id),
-      };
-
-      return [
-        request,
-        {
-          ...options,
-          body: JSON.stringify(patchedBody),
-        },
-      ];
+      return [request, { ...options, body: JSON.stringify({ ...body, invoice_id: Number(availableInvoice.id) }) }];
     } catch (error) {
       console.error('[Peacely] Unable to auto-link payment invoice:', error);
       return args;
     }
   };
+
+  // Production fallback: guarantee that the Record Payment form has a real
+  // submit action even if React's synthetic submit handler is not firing.
+  const savePaymentDirectly = async (form) => {
+    const selects = Array.from(form.querySelectorAll('select'));
+    const inputs = Array.from(form.querySelectorAll('input'));
+    const tenantId = selects[0]?.value || '';
+    const invoiceId = selects[1]?.value || '';
+    const amount = inputs.find((input) => input.type === 'number')?.value || '';
+    const date = inputs.find((input) => input.type === 'date')?.value || '';
+    const month = inputs.filter((input) => input.type !== 'number' && input.type !== 'date').at(-1)?.value || '';
+    const paymentMethod = selects[2]?.value || 'UPI';
+
+    if (!tenantId) throw new Error('Please select a tenant.');
+    if (!amount || Number(amount) <= 0) throw new Error('Please enter a valid payment amount.');
+    if (!date) throw new Error('Please select a payment date.');
+    if (!month.trim()) throw new Error('Please enter the payment month.');
+
+    let resolvedInvoiceId = invoiceId;
+    if (!resolvedInvoiceId) {
+      const invoiceResponse = await originalFetch('/api/invoices', {
+        method: 'GET', credentials: 'include', headers: { Accept: 'application/json' },
+      });
+      const invoicePayload = await invoiceResponse.json().catch(() => null);
+      const invoiceList = Array.isArray(invoicePayload)
+        ? invoicePayload
+        : Array.isArray(invoicePayload?.invoices) ? invoicePayload.invoices : [];
+      const availableInvoice = invoiceList.filter((invoice) => {
+        const balance = Number(invoice.balance_amount ?? Number(invoice.amount || 0) - Number(invoice.paid_amount || 0));
+        return Number(invoice.tenant_id) === Number(tenantId) && String(invoice.status || '').toLowerCase() !== 'cancelled' && balance > 0;
+      }).sort((a, b) => Number(a.id) - Number(b.id))[0];
+      if (!availableInvoice) throw new Error('No pending invoice was found for this tenant.');
+      resolvedInvoiceId = String(availableInvoice.id);
+    }
+
+    const response = await originalFetch('/api/payments', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({
+        tenant_id: Number(tenantId),
+        amount: Number(amount),
+        payment_date: date,
+        payment_method: paymentMethod,
+        payment_month: month.trim(),
+        invoice_id: Number(resolvedInvoiceId),
+      }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw new Error(payload?.error || `Payment failed: ${response.status}`);
+    return payload;
+  };
+
+  document.addEventListener('submit', async (event) => {
+    const form = event.target;
+    if (!(form instanceof HTMLFormElement)) return;
+    if (!String(form.textContent || '').toLowerCase().includes('record payment')) return;
+    if (form.dataset.peacelyPaymentSaving === 'true') return;
+
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    form.dataset.peacelyPaymentSaving = 'true';
+
+    const button = form.querySelector('button[type="submit"]');
+    const originalText = button?.textContent || 'Save';
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Saving...';
+    }
+
+    try {
+      await savePaymentDirectly(form);
+      window.location.reload();
+    } catch (error) {
+      console.error('[Peacely] Payment save failed:', error);
+      form.dataset.peacelyPaymentSaving = 'false';
+      if (button) {
+        button.disabled = false;
+        button.textContent = originalText;
+      }
+      window.alert(error instanceof Error ? error.message : 'Failed to record payment.');
+    }
+  }, true);
 
   window.fetch = async (...inputArgs) => {
     const preparedArgs = await preparePaymentRequest(inputArgs);
@@ -104,9 +153,7 @@
     const options = preparedArgs[1] || {};
     const method = (
       options.method ||
-      (typeof Request !== 'undefined' && request instanceof Request
-        ? request.method
-        : 'GET') ||
+      (typeof Request !== 'undefined' && request instanceof Request ? request.method : 'GET') ||
       'GET'
     ).toUpperCase();
 
@@ -125,7 +172,6 @@
     const url = getRequestUrl(request);
     const pathname = url.split('?')[0];
     const key = collectionKeys[pathname];
-
     if (!key || !response.ok) return response;
 
     const payload = await response.clone().json().catch(() => null);
@@ -134,7 +180,6 @@
     const headers = new Headers(response.headers);
     headers.set('Content-Type', 'application/json');
     headers.delete('Content-Length');
-
     return new Response(JSON.stringify(payload[key]), {
       status: response.status,
       statusText: response.statusText,
