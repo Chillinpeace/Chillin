@@ -1,4 +1,3 @@
-```tsx
 import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './style.css';
@@ -11,7 +10,7 @@ interface Property {
   bed_count?: number;
   occupied_bed_count?: number;
   tenant_count: number;
-  occupancy_rate: number;
+  occupancy_rate?: number;
   monthly_revenue: number;
 }
 
@@ -43,27 +42,28 @@ interface Tenant {
   name: string;
   phone: string;
   email?: string;
+  property_id: number;
+  property_name?: string;
+  room_id?: number;
   room_number?: string;
+  bed_id?: number;
   bed_number?: string;
   monthly_rent: number;
-  status: string;
-  property_name?: string;
-  property_id: number;
-  room_id?: number;
-  bed_id?: number;
   due_date: number;
   deposit_amount?: number;
   move_in_date?: string;
+  move_out_date?: string;
+  status: string;
 }
 
 interface Payment {
   id: number;
   tenant_id: number;
-  tenant_name: string;
+  tenant_name?: string;
   amount: number;
+  payment_date: string;
   payment_method: string;
   payment_month: string;
-  payment_date: string;
   notes?: string;
   property_name?: string;
   room_number?: string;
@@ -73,7 +73,7 @@ interface Invoice {
   id: number;
   invoice_number: string;
   tenant_id: number;
-  tenant_name: string;
+  tenant_name?: string;
   amount: number;
   month?: string;
   due_date: string;
@@ -104,6 +104,12 @@ const money = (value: number) =>
   `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
 const today = () => new Date().toISOString().slice(0, 10);
+
+const currentMonthName = () =>
+  new Date().toLocaleString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard');
@@ -152,20 +158,14 @@ function App() {
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('UPI');
   const [paymentMonth, setPaymentMonth] = useState(
-    new Date().toLocaleString('en-IN', {
-      month: 'long',
-      year: 'numeric',
-    }),
+    currentMonthName(),
   );
   const [paymentDate, setPaymentDate] = useState(today());
 
   const [invoiceTenantId, setInvoiceTenantId] = useState('');
   const [invoiceAmount, setInvoiceAmount] = useState('');
   const [invoiceMonth, setInvoiceMonth] = useState(
-    new Date().toLocaleString('en-IN', {
-      month: 'long',
-      year: 'numeric',
-    }),
+    currentMonthName(),
   );
   const [invoiceDueDate, setInvoiceDueDate] = useState(today());
 
@@ -174,17 +174,19 @@ function App() {
     options?: RequestInit,
   ): Promise<T> => {
     const response = await fetch(`${API}${endpoint}`, {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...(options?.headers || {}),
       },
-      ...options,
     });
 
     const data = await response.json().catch(() => null);
 
     if (!response.ok) {
-      throw new Error(data?.error || `Request failed: ${response.status}`);
+      throw new Error(
+        data?.error || `Request failed: ${response.status}`,
+      );
     }
 
     return data as T;
@@ -232,13 +234,6 @@ function App() {
     loadAllData();
   }, []);
 
-  const closeModal = () => {
-    if (!saving) {
-      setActiveModal('none');
-      setError('');
-    }
-  };
-
   const resetForms = () => {
     setPropName('');
     setPropAddress('');
@@ -265,19 +260,31 @@ function App() {
     setPaymentTenantId('');
     setPaymentAmount('');
     setPaymentMethod('UPI');
+    setPaymentMonth(currentMonthName());
     setPaymentDate(today());
 
     setInvoiceTenantId('');
     setInvoiceAmount('');
+    setInvoiceMonth(currentMonthName());
     setInvoiceDueDate(today());
   };
 
-  const handleCreateProperty = async (
-    e: React.FormEvent,
-  ) => {
-    e.preventDefault();
+  const closeModal = () => {
+    if (!saving) {
+      setActiveModal('none');
+      setError('');
+    }
+  };
 
-    if (!propName.trim()) return;
+  const handleCreateProperty = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!propName.trim()) {
+      setError('Property name is required.');
+      return;
+    }
 
     setSaving(true);
     setError('');
@@ -306,12 +313,14 @@ function App() {
   };
 
   const handleCreateRoom = async (
-    e: React.FormEvent,
+    event: React.FormEvent,
   ) => {
-    e.preventDefault();
+    event.preventDefault();
 
     if (!roomPropertyId || !roomNumber.trim()) {
-      setError('Select a property and enter a room number.');
+      setError(
+        'Select a property and enter a room number.',
+      );
       return;
     }
 
@@ -344,12 +353,14 @@ function App() {
   };
 
   const handleCreateBed = async (
-    e: React.FormEvent,
+    event: React.FormEvent,
   ) => {
-    e.preventDefault();
+    event.preventDefault();
 
     if (!bedRoomId || !bedNumber.trim()) {
-      setError('Select a room and enter a bed number.');
+      setError(
+        'Select a room and enter a bed number.',
+      );
       return;
     }
 
@@ -380,9 +391,9 @@ function App() {
   };
 
   const handleCreateTenant = async (
-    e: React.FormEvent,
+    event: React.FormEvent,
   ) => {
-    e.preventDefault();
+    event.preventDefault();
 
     if (
       !tenantName.trim() ||
@@ -415,8 +426,7 @@ function App() {
           monthly_rent: Number(tenantRent) || 0,
           due_date: Number(tenantDueDate) || 5,
           deposit_amount: Number(tenantDeposit) || 0,
-          move_in_date:
-            tenantMoveInDate || null,
+          move_in_date: tenantMoveInDate || null,
         }),
       });
 
@@ -435,16 +445,18 @@ function App() {
   };
 
   const handleRecordPayment = async (
-    e: React.FormEvent,
+    event: React.FormEvent,
   ) => {
-    e.preventDefault();
+    event.preventDefault();
 
     if (
       !paymentTenantId ||
       !paymentAmount ||
       Number(paymentAmount) <= 0
     ) {
-      setError('Select a tenant and enter a valid amount.');
+      setError(
+        'Select a tenant and enter a valid amount.',
+      );
       return;
     }
 
@@ -452,24 +464,20 @@ function App() {
     setError('');
 
     try {
-      const payment = await apiRequest<Payment>(
-        '/payments',
-        {
-          method: 'POST',
-          body: JSON.stringify({
-            tenant_id: Number(paymentTenantId),
-            amount: Number(paymentAmount),
-            payment_date: paymentDate,
-            payment_method: paymentMethod,
-            payment_month: paymentMonth,
-          }),
-        },
-      );
+      await apiRequest('/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(paymentTenantId),
+          amount: Number(paymentAmount),
+          payment_date: paymentDate,
+          payment_method: paymentMethod,
+          payment_month: paymentMonth,
+        }),
+      });
 
       resetForms();
       setActiveModal('none');
       await loadAllData();
-      printReceipt(payment);
     } catch (err) {
       setError(
         err instanceof Error
@@ -482,16 +490,18 @@ function App() {
   };
 
   const handleCreateInvoice = async (
-    e: React.FormEvent,
+    event: React.FormEvent,
   ) => {
-    e.preventDefault();
+    event.preventDefault();
 
     if (
       !invoiceTenantId ||
       !invoiceAmount ||
       Number(invoiceAmount) <= 0
     ) {
-      setError('Select a tenant and enter a valid amount.');
+      setError(
+        'Select a tenant and enter a valid amount.',
+      );
       return;
     }
 
@@ -524,15 +534,49 @@ function App() {
     }
   };
 
+  const getTenantPaymentStatus = (
+    tenant: Tenant,
+  ): 'Paid' | 'Pending' | 'Overdue' => {
+    const monthPayments = payments
+      .filter(
+        (payment) =>
+          payment.tenant_id === tenant.id &&
+          payment.payment_month === currentMonthName(),
+      )
+      .reduce(
+        (sum, payment) =>
+          sum + Number(payment.amount || 0),
+        0,
+      );
+
+    if (
+      monthPayments >= Number(tenant.monthly_rent || 0) &&
+      Number(tenant.monthly_rent || 0) > 0
+    ) {
+      return 'Paid';
+    }
+
+    const currentDay = new Date().getDate();
+
+    if (currentDay > Number(tenant.due_date || 5)) {
+      return 'Overdue';
+    }
+
+    return 'Pending';
+  };
+
   const sendWhatsAppReminder = (tenant: Tenant) => {
-    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const cleanPhone = tenant.phone.replace(
+      /[^0-9]/g,
+      '',
+    );
 
     const message = encodeURIComponent(
       `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent payment of ${money(
         tenant.monthly_rent,
-      )} for Room ${tenant.room_number || 'N/A'} (${
-        tenant.property_name || 'Peacely Property'
-      }), which is due on the ${tenant.due_date}th.\n\nPlease let us know once paid.`,
+      )} for Room ${tenant.room_number || 'N/A'} at ${
+        tenant.property_name || 'your property'
+      }.\n\nYour rent is due on the ${tenant.due_date}th.\n\nThank you.`,
     );
 
     window.open(
@@ -541,127 +585,158 @@ function App() {
     );
   };
 
-  const printReceipt = (payment: Payment) => {
+  const printReceipt = (
+    payment: Payment,
+  ) => {
+    const tenant = tenants.find(
+      (item) => item.id === payment.tenant_id,
+    );
+
     const win = window.open('', '_blank');
 
-    if (!win) return;
+    if (!win) {
+      return;
+    }
 
     win.document.write(`
       <html>
         <head>
-          <title>Rent Receipt #${payment.id}</title>
+          <title>Peacely Payment Receipt</title>
           <style>
             body {
-              font-family: -apple-system, sans-serif;
+              font-family: Arial, sans-serif;
               padding: 40px;
-              background: #fafafa;
+              background: #f5f5f5;
               color: #111;
             }
+
             .card {
               max-width: 440px;
-              margin: 0 auto;
-              background: #fff;
+              margin: auto;
+              background: white;
               padding: 32px;
-              border-radius: 16px;
-              border: 1px solid #eee;
+              border-radius: 18px;
+              border: 1px solid #ddd;
             }
+
             .brand {
-              font-size: 22px;
+              font-size: 28px;
               font-weight: 800;
               color: #10b981;
-              margin-bottom: 4px;
             }
+
             .subtitle {
+              color: #777;
               font-size: 12px;
-              color: #666;
               margin-bottom: 24px;
-              text-transform: uppercase;
-              letter-spacing: 1px;
             }
+
             .row {
               display: flex;
               justify-content: space-between;
               gap: 20px;
               padding: 10px 0;
-              border-bottom: 1px solid #f0f0f0;
-              font-size: 14px;
+              border-bottom: 1px solid #eee;
             }
-            .label { color: #666; }
+
+            .label {
+              color: #777;
+            }
+
             .value {
               font-weight: 600;
               text-align: right;
             }
-            .amount-box {
-              margin: 20px 0;
-              padding: 16px;
+
+            .amount {
+              margin-top: 24px;
+              padding: 20px;
               background: #ecfdf5;
-              border-radius: 12px;
+              border-radius: 14px;
               text-align: center;
             }
-            .amount-title {
-              font-size: 12px;
+
+            .amount-label {
               color: #047857;
-              text-transform: uppercase;
+              font-size: 12px;
             }
-            .amount-val {
-              font-size: 28px;
-              font-weight: 800;
+
+            .amount-value {
               color: #065f46;
-              margin-top: 4px;
+              font-size: 30px;
+              font-weight: 800;
+              margin-top: 6px;
             }
+
             .footer {
               text-align: center;
-              margin-top: 24px;
-              font-size: 11px;
+              margin-top: 25px;
               color: #888;
+              font-size: 11px;
             }
           </style>
         </head>
+
         <body>
           <div class="card">
             <div class="brand">Peacely</div>
-            <div class="subtitle">Official Payment Receipt</div>
+            <div class="subtitle">
+              OFFICIAL RENT PAYMENT RECEIPT
+            </div>
 
             <div class="row">
               <span class="label">Receipt ID</span>
-              <span class="value">#REC-${payment.id}</span>
+              <span class="value">
+                #REC-${payment.id}
+              </span>
+            </div>
+
+            <div class="row">
+              <span class="label">Tenant</span>
+              <span class="value">
+                ${tenant?.name || payment.tenant_name || 'Tenant'}
+              </span>
             </div>
 
             <div class="row">
               <span class="label">Date</span>
-              <span class="value">${payment.payment_date}</span>
+              <span class="value">
+                ${payment.payment_date}
+              </span>
             </div>
 
             <div class="row">
-              <span class="label">Tenant Name</span>
-              <span class="value">${payment.tenant_name}</span>
+              <span class="label">Month</span>
+              <span class="value">
+                ${payment.payment_month}
+              </span>
             </div>
 
             <div class="row">
-              <span class="label">Billing Period</span>
-              <span class="value">${payment.payment_month}</span>
+              <span class="label">Method</span>
+              <span class="value">
+                ${payment.payment_method}
+              </span>
             </div>
 
-            <div class="row">
-              <span class="label">Payment Method</span>
-              <span class="value">${payment.payment_method}</span>
-            </div>
+            <div class="amount">
+              <div class="amount-label">
+                AMOUNT RECEIVED
+              </div>
 
-            <div class="amount-box">
-              <div class="amount-title">Amount Received</div>
-              <div class="amount-val">
+              <div class="amount-value">
                 ${money(payment.amount)}
               </div>
             </div>
 
             <div class="footer">
-              Thank you for your payment!
-              Keep this receipt for your records.
+              Thank you for your payment.<br />
+              Generated by Peacely.
             </div>
           </div>
 
           <script>
-            window.onload = () => {
+            window.onload = function () {
               window.print();
             };
           </script>
@@ -676,15 +751,18 @@ function App() {
     () =>
       properties.reduce(
         (sum, property) =>
-          sum + Number(property.monthly_revenue || 0),
+          sum +
+          Number(property.monthly_revenue || 0),
         0,
       ),
     [properties],
   );
 
-  const totalTenants = tenants.filter(
+  const activeTenants = tenants.filter(
     (tenant) => tenant.status === 'Active',
-  ).length;
+  );
+
+  const totalTenants = activeTenants.length;
 
   const totalBeds = properties.reduce(
     (sum, property) =>
@@ -694,30 +772,25 @@ function App() {
 
   const occupiedBeds = properties.reduce(
     (sum, property) =>
-      sum + Number(property.occupied_bed_count || 0),
+      sum +
+      Number(property.occupied_bed_count || 0),
     0,
   );
 
   const totalOccupancy =
     totalBeds > 0
-      ? Math.round((occupiedBeds / totalBeds) * 100)
+      ? Math.round(
+          (occupiedBeds / totalBeds) * 100,
+        )
       : 0;
 
-  const expectedRent = tenants
-    .filter((tenant) => tenant.status === 'Active')
-    .reduce(
-      (sum, tenant) =>
-        sum + Number(tenant.monthly_rent || 0),
-      0,
-    );
-
-  const currentMonth = new Date().toLocaleString(
-    'en-IN',
-    {
-      month: 'long',
-      year: 'numeric',
-    },
+  const expectedRent = activeTenants.reduce(
+    (sum, tenant) =>
+      sum + Number(tenant.monthly_rent || 0),
+    0,
   );
+
+  const currentMonth = currentMonthName();
 
   const collectedThisMonth = payments
     .filter(
@@ -739,33 +812,46 @@ function App() {
     expectedRent > 0
       ? Math.min(
           Math.round(
-            (collectedThisMonth / expectedRent) * 100,
+            (collectedThisMonth / expectedRent) *
+              100,
           ),
           100,
         )
       : 0;
 
-  const filteredTenants = tenants.filter((tenant) => {
-    const query = searchQuery.toLowerCase();
+  const filteredTenants = tenants.filter(
+    (tenant) => {
+      const query =
+        searchQuery.trim().toLowerCase();
 
-    const matchesSearch =
-      tenant.name
-        .toLowerCase()
-        .includes(query) ||
-      String(tenant.room_number || '')
-        .toLowerCase()
-        .includes(query) ||
-      String(tenant.property_name || '')
-        .toLowerCase()
-        .includes(query);
+      const matchesSearch =
+        tenant.name
+          .toLowerCase()
+          .includes(query) ||
+        String(
+          tenant.room_number || '',
+        )
+          .toLowerCase()
+          .includes(query) ||
+        String(
+          tenant.property_name || '',
+        )
+          .toLowerCase()
+          .includes(query);
 
-    const matchesStatus =
-      statusFilter === 'All'
-        ? true
-        : tenant.status === statusFilter;
+      const paymentStatus =
+        getTenantPaymentStatus(tenant);
 
-    return matchesSearch && matchesStatus;
-  });
+      const matchesStatus =
+        statusFilter === 'All' ||
+        paymentStatus === statusFilter;
+
+      return (
+        matchesSearch &&
+        matchesStatus
+      );
+    },
+  );
 
   const tenantRooms = rooms.filter(
     (room) =>
@@ -777,23 +863,45 @@ function App() {
   const tenantBeds = beds.filter(
     (bed) =>
       !tenantRoomId ||
-      Number(bed.room_id) === Number(tenantRoomId),
+      Number(bed.room_id) ===
+        Number(tenantRoomId),
   );
 
-  const availableBeds = tenantBeds.filter(
-    (bed) => !bed.is_occupied,
+  const availableBeds =
+    tenantBeds.filter(
+      (bed) => !bed.is_occupied,
+    );
+
+  const selectedTenant = tenants.find(
+    (tenant) =>
+      tenant.id === Number(paymentTenantId),
   );
 
-  const dashboardProperties = properties.slice(0, 5);
+  useEffect(() => {
+    if (
+      selectedTenant &&
+      !paymentAmount
+    ) {
+      setPaymentAmount(
+        String(selectedTenant.monthly_rent || ''),
+      );
+    }
+  }, [selectedTenant]);
 
   if (loading) {
     return (
       <div className="mobile-shell">
         <header className="app-header">
           <div className="brand-wrap">
-            <div className="brand-logo">P</div>
+            <div className="brand-logo">
+              P
+            </div>
+
             <div>
-              <h1 className="brand-title">Peacely</h1>
+              <h1 className="brand-title">
+                Peacely
+              </h1>
+
               <p className="brand-subtitle">
                 Asset Intelligence Platform
               </p>
@@ -807,13 +915,16 @@ function App() {
               <span className="tag-light">
                 Connecting to Peacely
               </span>
+
               <span className="live-indicator">
                 <span className="pulse-dot"></span>
                 Live
               </span>
             </div>
 
-            <div className="hero-value">Loading...</div>
+            <div className="hero-value">
+              Loading...
+            </div>
 
             <div className="hero-meta">
               Loading your PostgreSQL data
@@ -828,10 +939,15 @@ function App() {
     <div className="mobile-shell">
       <header className="app-header">
         <div className="brand-wrap">
-          <div className="brand-logo">P</div>
+          <div className="brand-logo">
+            P
+          </div>
 
           <div>
-            <h1 className="brand-title">Peacely</h1>
+            <h1 className="brand-title">
+              Peacely
+            </h1>
+
             <p className="brand-subtitle">
               Asset Intelligence Platform
             </p>
@@ -841,18 +957,26 @@ function App() {
         <button
           className="avatar-btn"
           onClick={() =>
-            setActiveModal('recordPayment')
+            setActiveModal(
+              'recordPayment',
+            )
           }
         >
-          <span className="plus-icon">+</span> Record
+          <span className="plus-icon">
+            +
+          </span>
+
+          Record
         </button>
       </header>
 
       {error && (
         <div
           style={{
-            background: 'rgba(244,63,94,0.12)',
-            border: '1px solid rgba(244,63,94,0.3)',
+            background:
+              'rgba(244,63,94,0.12)',
+            border:
+              '1px solid rgba(244,63,94,0.3)',
             color: '#fda4af',
             padding: '12px 14px',
             borderRadius: '12px',
@@ -884,10 +1008,18 @@ function App() {
               </div>
 
               <div className="hero-meta">
-                <span>{totalOccupancy}% Occupancy</span>
-                <span className="divider">•</span>
                 <span>
-                  {totalTenants} Active Lease Agreements
+                  {totalOccupancy}%
+                  Occupancy
+                </span>
+
+                <span className="divider">
+                  •
+                </span>
+
+                <span>
+                  {totalTenants} Active
+                  Tenants
                 </span>
               </div>
 
@@ -900,215 +1032,425 @@ function App() {
                       100,
                     )}%`,
                   }}
-                ></div>
+                />
               </div>
             </div>
 
             <div className="metrics-grid">
               <div className="metric-tile">
-                <div className="tile-icon">📊</div>
+                <div className="tile-icon">
+                  📊
+                </div>
+
                 <div className="tile-value">
                   {collectionRate}%
                 </div>
+
                 <div className="tile-label">
-                  Rent Collection Rate
+                  Rent Collection
                 </div>
               </div>
 
               <div className="metric-tile">
-                <div className="tile-icon">⏳</div>
+                <div className="tile-icon">
+                  ⏳
+                </div>
+
                 <div className="tile-value">
                   {money(pendingDues)}
                 </div>
+
                 <div className="tile-label">
                   Pending Dues
                 </div>
               </div>
+
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  🏠
+                </div>
+
+                <div className="tile-value">
+                  {properties.length}
+                </div>
+
+                <div className="tile-label">
+                  Properties
+                </div>
+              </div>
+
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  👥
+                </div>
+
+                <div className="tile-value">
+                  {totalTenants}
+                </div>
+
+                <div className="tile-label">
+                  Active Tenants
+                </div>
+              </div>
             </div>
 
-            <div className="section-title-wrap">
-              <h2>Quick Actions</h2>
-            </div>
-
-            <div className="actions-dock">
-              <button
-                className="dock-btn"
-                onClick={() =>
-                  setActiveModal('addTenant')
-                }
-              >
-                <span className="dock-icon">👤</span>
-                <span>Add Tenant</span>
-              </button>
-
-              <button
-                className="dock-btn"
-                onClick={() =>
-                  setActiveModal('addProperty')
-                }
-              >
-                <span className="dock-icon">🏢</span>
-                <span>Add Property</span>
-              </button>
-
-              <button
-                className="dock-btn"
-                onClick={() =>
-                  setActiveModal('recordPayment')
-                }
-              >
-                <span className="dock-icon">💳</span>
-                <span>Collect Rent</span>
-              </button>
-            </div>
-
-            <div className="section-title-wrap">
-              <h2>
-                Property Portfolio ({properties.length})
-              </h2>
-
-              <button
-                className="text-btn"
-                onClick={() =>
-                  setActiveTab('properties')
-                }
-              >
-                View all
-              </button>
-            </div>
-
-            {dashboardProperties.length === 0 && (
-              <div className="glass-card">
-                <p className="card-subtext">
-                  No properties yet. Add your first
-                  property to get started.
+            <div className="section-heading">
+              <div>
+                <h2>Quick Actions</h2>
+                <p>
+                  Manage your rental business
                 </p>
               </div>
-            )}
+            </div>
 
-            {dashboardProperties.map((property) => (
-              <div
-                className="glass-card"
-                key={property.id}
+            <div className="metrics-grid">
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'addProperty',
+                  )
+                }
               >
-                <div className="glass-header">
-                  <div>
-                    <h3 className="card-heading">
-                      {property.name}
-                    </h3>
+                <div className="tile-icon">
+                  🏠
+                </div>
 
-                    <p className="card-subtext">
-                      {property.address ||
-                        'No address added'}
-                    </p>
+                <div className="tile-label">
+                  Add Property
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'addRoom',
+                  )
+                }
+              >
+                <div className="tile-icon">
+                  🚪
+                </div>
+
+                <div className="tile-label">
+                  Add Room
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'addTenant',
+                  )
+                }
+              >
+                <div className="tile-icon">
+                  👤
+                </div>
+
+                <div className="tile-label">
+                  Add Tenant
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'addInvoice',
+                  )
+                }
+              >
+                <div className="tile-icon">
+                  🧾
+                </div>
+
+                <div className="tile-label">
+                  Create Invoice
+                </div>
+              </button>
+            </div>
+
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Properties
+                </h2>
+
+                <p>
+                  Your rental portfolio
+                </p>
+              </div>
+
+              <button
+                className="text-button"
+                onClick={() =>
+                  setActiveTab(
+                    'properties',
+                  )
+                }
+              >
+                View All
+              </button>
+            </div>
+
+            {properties.length === 0 ? (
+              <div className="glass-card">
+                <div className="empty-state">
+                  <div className="empty-icon">
+                    🏠
                   </div>
 
-                  <span className="badge badge-emerald">
-                    {property.occupancy_rate}% Full
-                  </span>
-                </div>
+                  <h3>
+                    No properties yet
+                  </h3>
 
-                <div className="glass-footer">
-                  <span>
-                    {property.room_count} Rooms
-                  </span>
+                  <p>
+                    Add your first property
+                    to start using Peacely.
+                  </p>
 
-                  <span className="accent-text">
-                    {money(property.monthly_revenue)} / mo
-                  </span>
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      setActiveModal(
+                        'addProperty',
+                      )
+                    }
+                  >
+                    Add Property
+                  </button>
                 </div>
               </div>
-            ))}
+            ) : (
+              properties
+                .slice(0, 5)
+                .map((property) => (
+                  <div
+                    className="glass-card"
+                    key={property.id}
+                  >
+                    <div className="glass-header">
+                      <div>
+                        <h3>
+                          {property.name}
+                        </h3>
+
+                        <p>
+                          {property.address ||
+                            'No address added'}
+                        </p>
+                      </div>
+
+                      <span className="badge">
+                        {Number(
+                          property.bed_count ||
+                            0,
+                        )}{' '}
+                        Beds
+                      </span>
+                    </div>
+
+                    <div className="metrics-row">
+                      <div>
+                        <span>
+                          Occupancy
+                        </span>
+
+                        <strong>
+                          {Number(
+                            property.bed_count ||
+                              0,
+                          ) > 0
+                            ? Math.round(
+                                (Number(
+                                  property.occupied_bed_count ||
+                                    0,
+                                ) /
+                                  Number(
+                                    property.bed_count ||
+                                      0,
+                                  )) *
+                                  100,
+                              )
+                            : 0}
+                          %
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Monthly
+                        </span>
+
+                        <strong>
+                          {money(
+                            property.monthly_revenue,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Tenants
+                        </span>
+
+                        <strong>
+                          {
+                            property.tenant_count
+                          }
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+                ))
+            )}
           </div>
         )}
 
         {activeTab === 'properties' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Properties</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Properties
+                </h2>
+
+                <p>
+                  Manage all your properties
+                </p>
+              </div>
 
               <button
-                className="btn-primary-sm"
+                className="btn-primary"
                 onClick={() =>
-                  setActiveModal('addProperty')
+                  setActiveModal(
+                    'addProperty',
+                  )
                 }
               >
                 + Property
               </button>
             </div>
 
-            {properties.length === 0 && (
-              <div className="glass-card">
-                <p className="card-subtext">
-                  No properties added yet.
-                </p>
-              </div>
+            <button
+              className="btn-secondary"
+              style={{
+                width: '100%',
+                marginBottom: '14px',
+              }}
+              onClick={() =>
+                setActiveTab('rooms')
+              }
+            >
+              🚪 Manage Rooms & Beds
+            </button>
+
+            {properties.map(
+              (property) => (
+                <div
+                  className="glass-card"
+                  key={property.id}
+                >
+                  <div className="glass-header">
+                    <div>
+                      <h3>
+                        {property.name}
+                      </h3>
+
+                      <p>
+                        {property.address}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="metrics-row">
+                    <div>
+                      <span>
+                        Rooms
+                      </span>
+
+                      <strong>
+                        {property.room_count}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Beds
+                      </span>
+
+                      <strong>
+                        {property.bed_count ||
+                          0}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Occupied
+                      </span>
+
+                      <strong>
+                        {property.occupied_bed_count ||
+                          0}
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div className="glass-footer">
+                    <span>
+                      Monthly Revenue
+                    </span>
+
+                    <strong>
+                      {money(
+                        property.monthly_revenue,
+                      )}
+                    </strong>
+                  </div>
+                </div>
+              ),
             )}
 
-            {properties.map((property) => (
-              <div
-                className="glass-card"
-                key={property.id}
-              >
-                <div className="glass-header">
-                  <div>
-                    <h3 className="card-heading">
-                      {property.name}
-                    </h3>
+            {properties.length === 0 && (
+              <div className="glass-card">
+                <div className="empty-state">
+                  <h3>
+                    No properties
+                  </h3>
 
-                    <p className="card-subtext">
-                      {property.address ||
-                        'No address added'}
-                    </p>
-                  </div>
-
-                  <span className="badge badge-emerald">
-                    {property.occupancy_rate}% Full
-                  </span>
-                </div>
-
-                <div className="metrics-row">
-                  <div>
-                    <div className="mini-label">
-                      Rooms
-                    </div>
-                    <div className="mini-val">
-                      {property.room_count}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mini-label">
-                      Tenants
-                    </div>
-                    <div className="mini-val">
-                      {property.tenant_count}
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="mini-label">
-                      Est. Revenue
-                    </div>
-                    <div className="mini-val">
-                      {money(property.monthly_revenue)}
-                    </div>
-                  </div>
+                  <p>
+                    Add your first property.
+                  </p>
                 </div>
               </div>
-            ))}
+            )}
           </div>
         )}
 
         {activeTab === 'rooms' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Rooms & Beds</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Rooms & Beds
+                </h2>
+
+                <p>
+                  Manage rooms and available
+                  beds
+                </p>
+              </div>
 
               <button
-                className="btn-primary-sm"
+                className="btn-primary"
                 onClick={() =>
-                  setActiveModal('addRoom')
+                  setActiveModal(
+                    'addRoom',
+                  )
                 }
               >
                 + Room
@@ -1116,60 +1458,158 @@ function App() {
             </div>
 
             <button
-              className="btn-primary-sm"
-              style={{ marginBottom: '12px' }}
+              className="btn-secondary"
+              style={{
+                width: '100%',
+                marginBottom: '14px',
+              }}
               onClick={() =>
-                setActiveModal('addBed')
+                setActiveModal(
+                  'addBed',
+                )
               }
             >
-              + Bed
+              + Add Bed
             </button>
 
-            {rooms.map((room) => (
-              <div
-                className="glass-card"
-                key={room.id}
-              >
-                <div className="glass-header">
-                  <div>
-                    <h3 className="card-heading">
-                      Room {room.room_number}
-                    </h3>
+            {rooms.map((room) => {
+              const roomBeds =
+                beds.filter(
+                  (bed) =>
+                    Number(
+                      bed.room_id,
+                    ) ===
+                    Number(room.id),
+                );
 
-                    <p className="card-subtext">
-                      {room.property_name} •{' '}
-                      {room.sharing_type}
-                    </p>
+              return (
+                <div
+                  className="glass-card"
+                  key={room.id}
+                >
+                  <div className="glass-header">
+                    <div>
+                      <h3>
+                        Room{' '}
+                        {room.room_number}
+                      </h3>
+
+                      <p>
+                        {room.property_name ||
+                          'Property'}
+                        {' • '}
+                        {room.sharing_type}
+                      </p>
+                    </div>
+
+                    <span className="badge">
+                      {roomBeds.length}{' '}
+                      Beds
+                    </span>
                   </div>
 
-                  <span className="badge badge-emerald">
-                    {room.occupied_bed_count || 0}/
-                    {room.bed_count || 0} Occupied
-                  </span>
-                </div>
+                  <div className="metrics-row">
+                    <div>
+                      <span>
+                        Rent
+                      </span>
 
-                <div className="glass-footer">
-                  <span>
-                    Rent {money(room.rent_amount)}
-                  </span>
+                      <strong>
+                        {money(
+                          room.rent_amount,
+                        )}
+                      </strong>
+                    </div>
 
-                  <span className="accent-text">
-                    {beds.filter(
-                      (bed) =>
-                        bed.room_id === room.id,
-                    ).length}{' '}
-                    Beds
-                  </span>
+                    <div>
+                      <span>
+                        Occupied
+                      </span>
+
+                      <strong>
+                        {
+                          roomBeds.filter(
+                            (bed) =>
+                              bed.is_occupied,
+                          ).length
+                        }
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Available
+                      </span>
+
+                      <strong>
+                        {
+                          roomBeds.filter(
+                            (bed) =>
+                              !bed.is_occupied,
+                          ).length
+                        }
+                      </strong>
+                    </div>
+                  </div>
+
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                      marginTop: '14px',
+                    }}
+                  >
+                    {roomBeds.map(
+                      (bed) => (
+                        <span
+                          key={bed.id}
+                          className="badge"
+                          style={{
+                            opacity:
+                              bed.is_occupied
+                                ? 0.55
+                                : 1,
+                          }}
+                        >
+                          Bed{' '}
+                          {
+                            bed.bed_number
+                          }{' '}
+                          {bed.is_occupied
+                            ? '• Occupied'
+                            : '• Available'}
+                        </span>
+                      ),
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             {rooms.length === 0 && (
               <div className="glass-card">
-                <p className="card-subtext">
-                  No rooms yet. Add a room to begin
-                  managing beds.
-                </p>
+                <div className="empty-state">
+                  <h3>
+                    No rooms yet
+                  </h3>
+
+                  <p>
+                    Add a room to start
+                    creating beds.
+                  </p>
+
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      setActiveModal(
+                        'addRoom',
+                      )
+                    }
+                  >
+                    Add Room
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1177,13 +1617,23 @@ function App() {
 
         {activeTab === 'tenants' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Tenants Directory</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Tenants
+                </h2>
+
+                <p>
+                  Manage residents and rent
+                </p>
+              </div>
 
               <button
-                className="btn-primary-sm"
+                className="btn-primary"
                 onClick={() =>
-                  setActiveModal('addTenant')
+                  setActiveModal(
+                    'addTenant',
+                  )
                 }
               >
                 + Tenant
@@ -1192,118 +1642,203 @@ function App() {
 
             <div className="filter-block">
               <input
-                type="text"
-                placeholder="Search tenant or room..."
                 className="search-input"
+                placeholder="Search tenant, room or property..."
                 value={searchQuery}
-                onChange={(e) =>
-                  setSearchQuery(e.target.value)
+                onChange={(event) =>
+                  setSearchQuery(
+                    event.target.value,
+                  )
                 }
               />
 
-              <div className="pills-row">
-                {(
-                  [
-                    'All',
-                    'Paid',
-                    'Pending',
-                    'Overdue',
-                  ] as const
-                ).map((filter) => (
+              <div
+                style={{
+                  display: 'flex',
+                  gap: '8px',
+                  marginTop: '10px',
+                  overflowX: 'auto',
+                }}
+              >
+                {[
+                  'All',
+                  'Paid',
+                  'Pending',
+                  'Overdue',
+                ].map((status) => (
                   <button
-                    key={filter}
-                    className={`filter-pill ${
-                      statusFilter === filter
-                        ? 'active'
-                        : ''
-                    }`}
+                    key={status}
+                    className="filter-pill"
+                    style={{
+                      opacity:
+                        statusFilter ===
+                        status
+                          ? 1
+                          : 0.55,
+                    }}
                     onClick={() =>
-                      setStatusFilter(filter)
+                      setStatusFilter(
+                        status as
+                          | 'All'
+                          | 'Paid'
+                          | 'Pending'
+                          | 'Overdue',
+                      )
                     }
                   >
-                    {filter}
+                    {status}
                   </button>
                 ))}
               </div>
             </div>
 
-            {filteredTenants.map((tenant) => (
-              <div
-                className="glass-card"
-                key={tenant.id}
-              >
-                <div className="glass-header">
-                  <div className="avatar-title-wrap">
-                    <div className="user-avatar">
-                      {tenant.name.charAt(0)}
-                    </div>
+            {filteredTenants.map(
+              (tenant) => {
+                const paymentStatus =
+                  getTenantPaymentStatus(
+                    tenant,
+                  );
 
-                    <div>
-                      <h3 className="card-heading">
-                        {tenant.name}
-                      </h3>
-
-                      <p className="card-subtext">
-                        Room{' '}
-                        {tenant.room_number ||
-                          'Unassigned'}{' '}
-                        •{' '}
-                        {tenant.property_name ||
-                          'No property'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <span
-                    className={`badge ${
-                      tenant.status === 'Paid'
-                        ? 'badge-emerald'
-                        : tenant.status === 'Pending'
-                          ? 'badge-amber'
-                          : 'badge-rose'
-                    }`}
+                return (
+                  <div
+                    className="glass-card"
+                    key={tenant.id}
                   >
-                    {tenant.status}
-                  </span>
-                </div>
+                    <div className="avatar-title-wrap">
+                      <div className="user-avatar">
+                        {tenant.name
+                          .charAt(0)
+                          .toUpperCase()}
+                      </div>
 
-                <div className="glass-footer">
-                  <div>
-                    <span className="card-subtext">
-                      {tenant.phone}
-                    </span>
+                      <div>
+                        <h3>
+                          {tenant.name}
+                        </h3>
 
-                    <div className="accent-text">
-                      {money(
-                        tenant.monthly_rent,
-                      )}{' '}
-                      / mo
+                        <p>
+                          {tenant.property_name ||
+                            'Property'}
+                          {' • '}
+                          Room{' '}
+                          {tenant.room_number ||
+                            'N/A'}
+                        </p>
+                      </div>
+
+                      <span
+                        className="badge"
+                        style={{
+                          marginLeft:
+                            'auto',
+                        }}
+                      >
+                        {
+                          paymentStatus
+                        }
+                      </span>
+                    </div>
+
+                    <div className="metrics-row">
+                      <div>
+                        <span>
+                          Monthly Rent
+                        </span>
+
+                        <strong>
+                          {money(
+                            tenant.monthly_rent,
+                          )}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Due Day
+                        </span>
+
+                        <strong>
+                          {tenant.due_date}
+                        </strong>
+                      </div>
+
+                      <div>
+                        <span>
+                          Deposit
+                        </span>
+
+                        <strong>
+                          {money(
+                            tenant.deposit_amount ||
+                              0,
+                          )}
+                        </strong>
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        display: 'flex',
+                        gap: '8px',
+                        marginTop: '14px',
+                      }}
+                    >
+                      <button
+                        className="btn-secondary"
+                        style={{
+                          flex: 1,
+                        }}
+                        onClick={() =>
+                          sendWhatsAppReminder(
+                            tenant,
+                          )
+                        }
+                      >
+                        WhatsApp
+                      </button>
+
+                      <button
+                        className="btn-primary"
+                        style={{
+                          flex: 1,
+                        }}
+                        onClick={() => {
+                          setPaymentTenantId(
+                            String(
+                              tenant.id,
+                            ),
+                          );
+                          setPaymentAmount(
+                            String(
+                              tenant.monthly_rent ||
+                                '',
+                            ),
+                          );
+                          setActiveModal(
+                            'recordPayment',
+                          );
+                        }}
+                      >
+                        Record Rent
+                      </button>
                     </div>
                   </div>
-
-                  {tenant.status !== 'Paid' && (
-                    <button
-                      className="btn-primary-sm"
-                      style={{
-                        background: '#25D366',
-                        color: '#ffffff',
-                      }}
-                      onClick={() =>
-                        sendWhatsAppReminder(tenant)
-                      }
-                    >
-                      💬 Remind
-                    </button>
-                  )}
-                </div>
-              </div>
-            ))}
+                );
+              },
+            )}
 
             {filteredTenants.length === 0 && (
               <div className="glass-card">
-                <p className="card-subtext">
-                  No tenants found.
-                </p>
+                <div className="empty-state">
+                  <h3>
+                    No tenants found
+                  </h3>
+
+                  <p>
+                    Try another search or add
+                    a new tenant.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1311,63 +1846,130 @@ function App() {
 
         {activeTab === 'payments' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Financial Activity</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Payments
+                </h2>
+
+                <p>
+                  Rent collection history
+                </p>
+              </div>
 
               <button
-                className="btn-primary-sm"
+                className="btn-primary"
                 onClick={() =>
-                  setActiveModal('recordPayment')
+                  setActiveModal(
+                    'recordPayment',
+                  )
                 }
               >
-                + Record
+                + Payment
               </button>
             </div>
 
-            {payments.map((payment) => (
-              <div
-                className="glass-card"
-                key={payment.id}
-              >
-                <div className="glass-header">
-                  <div>
-                    <h3 className="card-heading">
-                      {payment.tenant_name}
-                    </h3>
-
-                    <p className="card-subtext">
-                      {payment.payment_method} •{' '}
-                      {payment.payment_date}
-                    </p>
-                  </div>
-
-                  <div className="amount-tag">
-                    +{money(payment.amount)}
-                  </div>
-                </div>
-
-                <div className="glass-footer">
-                  <span className="card-subtext">
-                    {payment.payment_month}
-                  </span>
-
-                  <button
-                    className="text-btn"
-                    onClick={() =>
-                      printReceipt(payment)
-                    }
-                  >
-                    📄 Receipt
-                  </button>
-                </div>
+            <div className="hero-card">
+              <div className="hero-header">
+                <span className="tag-light">
+                  Collected This Month
+                </span>
               </div>
-            ))}
+
+              <div className="hero-value">
+                {money(
+                  collectedThisMonth,
+                )}
+              </div>
+
+              <div className="hero-meta">
+                {payments.filter(
+                  (payment) =>
+                    payment.payment_month ===
+                    currentMonth,
+                ).length}{' '}
+                payments
+              </div>
+            </div>
+
+            {payments.map(
+              (payment) => (
+                <div
+                  className="glass-card"
+                  key={payment.id}
+                >
+                  <div className="avatar-title-wrap">
+                    <div className="user-avatar">
+                      ₹
+                    </div>
+
+                    <div>
+                      <h3>
+                        {payment.tenant_name ||
+                          tenants.find(
+                            (tenant) =>
+                              tenant.id ===
+                              payment.tenant_id,
+                          )?.name ||
+                          'Tenant'}
+                      </h3>
+
+                      <p>
+                        {
+                          payment.payment_month
+                        }{' '}
+                        •{' '}
+                        {
+                          payment.payment_method
+                        }
+                      </p>
+                    </div>
+
+                    <div
+                      className="amount-tag"
+                      style={{
+                        marginLeft:
+                          'auto',
+                      }}
+                    >
+                      {money(
+                        payment.amount,
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="glass-footer">
+                    <span>
+                      {payment.payment_date}
+                    </span>
+
+                    <button
+                      className="text-button"
+                      onClick={() =>
+                        printReceipt(
+                          payment,
+                        )
+                      }
+                    >
+                      Print Receipt
+                    </button>
+                  </div>
+                </div>
+              ),
+            )}
 
             {payments.length === 0 && (
               <div className="glass-card">
-                <p className="card-subtext">
-                  No payments recorded yet.
-                </p>
+                <div className="empty-state">
+                  <h3>
+                    No payments yet
+                  </h3>
+
+                  <p>
+                    Recorded payments will
+                    appear here.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -1375,64 +1977,120 @@ function App() {
 
         {activeTab === 'invoices' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Invoices</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Invoices
+                </h2>
+
+                <p>
+                  Rent billing and dues
+                </p>
+              </div>
 
               <button
-                className="btn-primary-sm"
+                className="btn-primary"
                 onClick={() =>
-                  setActiveModal('addInvoice')
+                  setActiveModal(
+                    'addInvoice',
+                  )
                 }
               >
                 + Invoice
               </button>
             </div>
 
-            {invoices.map((invoice) => (
-              <div
-                className="glass-card"
-                key={invoice.id}
-              >
-                <div className="glass-header">
-                  <div>
-                    <h3 className="card-heading">
-                      {invoice.invoice_number}
-                    </h3>
+            {invoices.map(
+              (invoice) => (
+                <div
+                  className="glass-card"
+                  key={invoice.id}
+                >
+                  <div className="glass-header">
+                    <div>
+                      <h3>
+                        {
+                          invoice.invoice_number
+                        }
+                      </h3>
 
-                    <p className="card-subtext">
-                      {invoice.tenant_name} •{' '}
-                      {invoice.month || 'Monthly Rent'}
-                    </p>
+                      <p>
+                        {invoice.tenant_name ||
+                          tenants.find(
+                            (tenant) =>
+                              tenant.id ===
+                              invoice.tenant_id,
+                          )?.name ||
+                          'Tenant'}
+                      </p>
+                    </div>
+
+                    <span className="badge">
+                      {invoice.status}
+                    </span>
                   </div>
 
-                  <span
-                    className={`badge ${
-                      invoice.status === 'Paid'
-                        ? 'badge-emerald'
-                        : 'badge-amber'
-                    }`}
-                  >
-                    {invoice.status}
-                  </span>
-                </div>
+                  <div className="metrics-row">
+                    <div>
+                      <span>
+                        Amount
+                      </span>
 
-                <div className="glass-footer">
-                  <span>
-                    Due {invoice.due_date}
-                  </span>
+                      <strong>
+                        {money(
+                          invoice.amount,
+                        )}
+                      </strong>
+                    </div>
 
-                  <span className="accent-text">
-                    {money(invoice.amount)}
-                  </span>
+                    <div>
+                      <span>
+                        Month
+                      </span>
+
+                      <strong>
+                        {invoice.month ||
+                          '-'}
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Due
+                      </span>
+
+                      <strong>
+                        {invoice.due_date}
+                      </strong>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ),
+            )}
 
             {invoices.length === 0 && (
               <div className="glass-card">
-                <p className="card-subtext">
-                  No invoices created yet.
-                </p>
+                <div className="empty-state">
+                  <h3>
+                    No invoices yet
+                  </h3>
+
+                  <p>
+                    Create an invoice for a
+                    tenant.
+                  </p>
+
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      setActiveModal(
+                        'addInvoice',
+                      )
+                    }
+                  >
+                    Create Invoice
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -1440,115 +2098,294 @@ function App() {
 
         {activeTab === 'analytics' && (
           <div className="view-container">
-            <div className="view-header">
-              <h2>Portfolio Insights</h2>
+            <div className="section-heading">
+              <div>
+                <h2>
+                  Analytics
+                </h2>
+
+                <p>
+                  Your business at a glance
+                </p>
+              </div>
             </div>
 
-            <div className="hero-card">
-              <div className="hero-header">
-                <span className="tag-light">
-                  Annual Projected Yield
-                </span>
+            <div className="metrics-grid">
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  💰
+                </div>
+
+                <div className="tile-value">
+                  {money(
+                    totalRevenue,
+                  )}
+                </div>
+
+                <div className="tile-label">
+                  Monthly Revenue
+                </div>
               </div>
 
-              <div className="hero-value">
-                {money(totalRevenue * 12)}
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  📈
+                </div>
+
+                <div className="tile-value">
+                  {collectionRate}%
+                </div>
+
+                <div className="tile-label">
+                  Collection Rate
+                </div>
               </div>
 
-              <div
-                className="card-subtext"
-                style={{ marginTop: '8px' }}
-              >
-                Based on current {totalOccupancy}%
-                average occupancy across all beds.
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  🛏️
+                </div>
+
+                <div className="tile-value">
+                  {totalOccupancy}%
+                </div>
+
+                <div className="tile-label">
+                  Occupancy
+                </div>
+              </div>
+
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  ⏰
+                </div>
+
+                <div className="tile-value">
+                  {money(
+                    pendingDues,
+                  )}
+                </div>
+
+                <div className="tile-label">
+                  Pending Dues
+                </div>
               </div>
             </div>
 
             <div className="glass-card">
-              <h3
-                className="card-heading"
-                style={{ marginBottom: '12px' }}
-              >
-                Occupancy Distribution
-              </h3>
+              <div className="glass-header">
+                <div>
+                  <h3>
+                    Portfolio Summary
+                  </h3>
 
-              <div className="distribution-list">
-                {properties.map((property) => (
-                  <div
-                    key={property.id}
-                    className="dist-item"
-                  >
-                    <div className="dist-meta">
-                      <span>{property.name}</span>
-                      <span>
-                        {property.occupancy_rate}%
-                      </span>
-                    </div>
+                  <p>
+                    Current database
+                    statistics
+                  </p>
+                </div>
+              </div>
 
-                    <div className="progress-bar-bg">
-                      <div
-                        className="progress-bar-fill"
-                        style={{
-                          width: `${Math.min(
-                            property.occupancy_rate,
-                            100,
-                          )}%`,
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
+              <div className="metrics-row">
+                <div>
+                  <span>
+                    Properties
+                  </span>
+
+                  <strong>
+                    {properties.length}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Rooms
+                  </span>
+
+                  <strong>
+                    {rooms.length}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Beds
+                  </span>
+
+                  <strong>
+                    {beds.length}
+                  </strong>
+                </div>
               </div>
             </div>
           </div>
         )}
       </main>
 
+      <nav className="glass-nav">
+        <button
+          className={`nav-item ${
+            activeTab === 'dashboard'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab('dashboard')
+          }
+        >
+          <span>⌂</span>
+          <small>
+            Home
+          </small>
+        </button>
+
+        <button
+          className={`nav-item ${
+            activeTab === 'properties' ||
+            activeTab === 'rooms'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab('properties')
+          }
+        >
+          <span>🏠</span>
+          <small>
+            Assets
+          </small>
+        </button>
+
+        <button
+          className={`nav-item ${
+            activeTab === 'tenants'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab('tenants')
+          }
+        >
+          <span>👥</span>
+          <small>
+            Tenants
+          </small>
+        </button>
+
+        <button
+          className={`nav-item ${
+            activeTab === 'payments'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab('payments')
+          }
+        >
+          <span>₹</span>
+          <small>
+            Payments
+          </small>
+        </button>
+
+        <button
+          className={`nav-item ${
+            activeTab === 'analytics'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab('analytics')
+          }
+        >
+          <span>📊</span>
+          <small>
+            Analytics
+          </small>
+        </button>
+      </nav>
+
       {activeModal !== 'none' && (
         <div
           className="modal-backdrop"
-          onClick={closeModal}
-        >
-          <div
-            className="modal-card"
-            onClick={(e) =>
-              e.stopPropagation()
+          onMouseDown={(event) => {
+            if (
+              event.target ===
+              event.currentTarget
+            ) {
+              closeModal();
             }
-          >
-            {error && (
-              <div
-                style={{
-                  color: '#fda4af',
-                  fontSize: '13px',
-                  marginBottom: '12px',
-                }}
-              >
-                {error}
+          }}
+        >
+          <div className="modal-card">
+            <div className="glass-header">
+              <div>
+                <h3>
+                  {activeModal ===
+                    'addProperty' &&
+                    'Add Property'}
+
+                  {activeModal ===
+                    'addRoom' &&
+                    'Add Room'}
+
+                  {activeModal ===
+                    'addBed' &&
+                    'Add Bed'}
+
+                  {activeModal ===
+                    'addTenant' &&
+                    'Add Tenant'}
+
+                  {activeModal ===
+                    'recordPayment' &&
+                    'Record Payment'}
+
+                  {activeModal ===
+                    'addInvoice' &&
+                    'Create Invoice'}
+                </h3>
+
+                <p>
+                  Enter the details below
+                </p>
               </div>
-            )}
 
-            {activeModal === 'addProperty' && (
-              <form onSubmit={handleCreateProperty}>
-                <h3>Add New Property</h3>
+              <button
+                className="btn-secondary"
+                onClick={closeModal}
+                disabled={saving}
+              >
+                ✕
+              </button>
+            </div>
 
+            {activeModal ===
+              'addProperty' && (
+              <form
+                onSubmit={
+                  handleCreateProperty
+                }
+              >
                 <input
-                  type="text"
-                  placeholder="Property Name"
                   className="modal-input"
+                  placeholder="Property name"
                   value={propName}
-                  onChange={(e) =>
-                    setPropName(e.target.value)
+                  onChange={(event) =>
+                    setPropName(
+                      event.target.value,
+                    )
                   }
-                  required
                 />
 
                 <input
-                  type="text"
-                  placeholder="Address / Location"
                   className="modal-input"
+                  placeholder="Address"
                   value={propAddress}
-                  onChange={(e) =>
-                    setPropAddress(e.target.value)
+                  onChange={(event) =>
+                    setPropAddress(
+                      event.target.value,
+                    )
                   }
                 />
 
@@ -1568,80 +2405,92 @@ function App() {
                   >
                     {saving
                       ? 'Saving...'
-                      : 'Save Property'}
+                      : 'Add Property'}
                   </button>
                 </div>
               </form>
             )}
 
-            {activeModal === 'addRoom' && (
-              <form onSubmit={handleCreateRoom}>
-                <h3>Add New Room</h3>
-
+            {activeModal ===
+              'addRoom' && (
+              <form
+                onSubmit={
+                  handleCreateRoom
+                }
+              >
                 <select
                   className="modal-input"
                   value={roomPropertyId}
-                  onChange={(e) =>
-                    setRoomPropertyId(e.target.value)
+                  onChange={(event) =>
+                    setRoomPropertyId(
+                      event.target.value,
+                    )
                   }
-                  required
                 >
                   <option value="">
-                    Select Property
+                    Select property
                   </option>
 
-                  {properties.map((property) => (
-                    <option
-                      key={property.id}
-                      value={property.id}
-                    >
-                      {property.name}
-                    </option>
-                  ))}
+                  {properties.map(
+                    (property) => (
+                      <option
+                        key={property.id}
+                        value={
+                          property.id
+                        }
+                      >
+                        {property.name}
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <input
-                  type="text"
-                  placeholder="Room Number"
                   className="modal-input"
+                  placeholder="Room number"
                   value={roomNumber}
-                  onChange={(e) =>
-                    setRoomNumber(e.target.value)
+                  onChange={(event) =>
+                    setRoomNumber(
+                      event.target.value,
+                    )
                   }
-                  required
                 />
 
                 <select
                   className="modal-input"
                   value={sharingType}
-                  onChange={(e) =>
-                    setSharingType(e.target.value)
+                  onChange={(event) =>
+                    setSharingType(
+                      event.target.value,
+                    )
                   }
                 >
-                  <option value="Single">
+                  <option>
                     Single
                   </option>
-                  <option value="Double">
+                  <option>
                     Double
                   </option>
-                  <option value="Triple">
+                  <option>
                     Triple
                   </option>
-                  <option value="Four Sharing">
+                  <option>
                     Four Sharing
                   </option>
-                  <option value="Dormitory">
-                    Dormitory
+                  <option>
+                    Other
                   </option>
                 </select>
 
                 <input
-                  type="number"
-                  placeholder="Monthly Rent (₹)"
                   className="modal-input"
+                  type="number"
+                  placeholder="Monthly room rent"
                   value={roomRent}
-                  onChange={(e) =>
-                    setRoomRent(e.target.value)
+                  onChange={(event) =>
+                    setRoomRent(
+                      event.target.value,
+                    )
                   }
                 />
 
@@ -1661,26 +2510,30 @@ function App() {
                   >
                     {saving
                       ? 'Saving...'
-                      : 'Save Room'}
+                      : 'Add Room'}
                   </button>
                 </div>
               </form>
             )}
 
-            {activeModal === 'addBed' && (
-              <form onSubmit={handleCreateBed}>
-                <h3>Add New Bed</h3>
-
+            {activeModal ===
+              'addBed' && (
+              <form
+                onSubmit={
+                  handleCreateBed
+                }
+              >
                 <select
                   className="modal-input"
                   value={bedRoomId}
-                  onChange={(e) =>
-                    setBedRoomId(e.target.value)
+                  onChange={(event) =>
+                    setBedRoomId(
+                      event.target.value,
+                    )
                   }
-                  required
                 >
                   <option value="">
-                    Select Room
+                    Select room
                   </option>
 
                   {rooms.map((room) => (
@@ -1688,21 +2541,25 @@ function App() {
                       key={room.id}
                       value={room.id}
                     >
-                      Room {room.room_number} —{' '}
-                      {room.property_name}
+                      {room.property_name ||
+                        'Property'}{' '}
+                      • Room{' '}
+                      {
+                        room.room_number
+                      }
                     </option>
                   ))}
                 </select>
 
                 <input
-                  type="text"
-                  placeholder="Bed Number e.g. A1"
                   className="modal-input"
+                  placeholder="Bed number / name"
                   value={bedNumber}
-                  onChange={(e) =>
-                    setBedNumber(e.target.value)
+                  onChange={(event) =>
+                    setBedNumber(
+                      event.target.value,
+                    )
                   }
-                  required
                 />
 
                 <div className="modal-actions">
@@ -1721,163 +2578,197 @@ function App() {
                   >
                     {saving
                       ? 'Saving...'
-                      : 'Save Bed'}
+                      : 'Add Bed'}
                   </button>
                 </div>
               </form>
             )}
 
-            {activeModal === 'addTenant' && (
-              <form onSubmit={handleCreateTenant}>
-                <h3>Onboard New Tenant</h3>
-
+            {activeModal ===
+              'addTenant' && (
+              <form
+                onSubmit={
+                  handleCreateTenant
+                }
+              >
                 <input
-                  type="text"
-                  placeholder="Tenant Full Name"
                   className="modal-input"
+                  placeholder="Tenant name"
                   value={tenantName}
-                  onChange={(e) =>
-                    setTenantName(e.target.value)
+                  onChange={(event) =>
+                    setTenantName(
+                      event.target.value,
+                    )
                   }
-                  required
                 />
 
                 <input
+                  className="modal-input"
+                  placeholder="Phone number"
                   type="tel"
-                  placeholder="Phone Number"
-                  className="modal-input"
                   value={tenantPhone}
-                  onChange={(e) =>
-                    setTenantPhone(e.target.value)
+                  onChange={(event) =>
+                    setTenantPhone(
+                      event.target.value,
+                    )
                   }
-                  required
                 />
 
                 <input
-                  type="email"
-                  placeholder="Email (optional)"
                   className="modal-input"
+                  placeholder="Email (optional)"
+                  type="email"
                   value={tenantEmail}
-                  onChange={(e) =>
-                    setTenantEmail(e.target.value)
+                  onChange={(event) =>
+                    setTenantEmail(
+                      event.target.value,
+                    )
                   }
                 />
 
                 <select
                   className="modal-input"
                   value={tenantPropertyId}
-                  onChange={(e) => {
+                  onChange={(event) => {
                     setTenantPropertyId(
-                      e.target.value,
+                      event.target.value,
                     );
                     setTenantRoomId('');
                     setTenantBedId('');
                   }}
-                  required
                 >
                   <option value="">
-                    Select Property
+                    Select property
                   </option>
 
-                  {properties.map((property) => (
-                    <option
-                      key={property.id}
-                      value={property.id}
-                    >
-                      {property.name}
-                    </option>
-                  ))}
+                  {properties.map(
+                    (property) => (
+                      <option
+                        key={property.id}
+                        value={
+                          property.id
+                        }
+                      >
+                        {property.name}
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <select
                   className="modal-input"
                   value={tenantRoomId}
-                  onChange={(e) => {
+                  onChange={(event) => {
                     setTenantRoomId(
-                      e.target.value,
+                      event.target.value,
                     );
                     setTenantBedId('');
                   }}
-                  disabled={!tenantPropertyId}
+                  disabled={
+                    !tenantPropertyId
+                  }
                 >
                   <option value="">
-                    Select Room
+                    Select room
                   </option>
 
-                  {tenantRooms.map((room) => (
-                    <option
-                      key={room.id}
-                      value={room.id}
-                    >
-                      Room {room.room_number}
-                    </option>
-                  ))}
+                  {tenantRooms.map(
+                    (room) => (
+                      <option
+                        key={room.id}
+                        value={room.id}
+                      >
+                        Room{' '}
+                        {
+                          room.room_number
+                        }{' '}
+                        •{' '}
+                        {
+                          room.sharing_type
+                        }
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <select
                   className="modal-input"
                   value={tenantBedId}
-                  onChange={(e) =>
-                    setTenantBedId(e.target.value)
+                  onChange={(event) =>
+                    setTenantBedId(
+                      event.target.value,
+                    )
                   }
-                  disabled={!tenantRoomId}
+                  disabled={
+                    !tenantRoomId
+                  }
                 >
                   <option value="">
-                    Select Available Bed
+                    Select available bed
                   </option>
 
-                  {availableBeds.map((bed) => (
-                    <option
-                      key={bed.id}
-                      value={bed.id}
-                    >
-                      Bed {bed.bed_number}
-                    </option>
-                  ))}
+                  {availableBeds.map(
+                    (bed) => (
+                      <option
+                        key={bed.id}
+                        value={bed.id}
+                      >
+                        Bed{' '}
+                        {
+                          bed.bed_number
+                        }
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <input
-                  type="number"
-                  placeholder="Monthly Rent (₹)"
                   className="modal-input"
+                  type="number"
+                  placeholder="Monthly rent"
                   value={tenantRent}
-                  onChange={(e) =>
-                    setTenantRent(e.target.value)
-                  }
-                  required
-                />
-
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  placeholder="Rent Due Day"
-                  className="modal-input"
-                  value={tenantDueDate}
-                  onChange={(e) =>
-                    setTenantDueDate(e.target.value)
-                  }
-                />
-
-                <input
-                  type="number"
-                  placeholder="Security Deposit (₹)"
-                  className="modal-input"
-                  value={tenantDeposit}
-                  onChange={(e) =>
-                    setTenantDeposit(
-                      e.target.value,
+                  onChange={(event) =>
+                    setTenantRent(
+                      event.target.value,
                     )
                   }
                 />
 
                 <input
-                  type="date"
                   className="modal-input"
-                  value={tenantMoveInDate}
-                  onChange={(e) =>
+                  type="number"
+                  min="1"
+                  max="31"
+                  placeholder="Rent due day"
+                  value={tenantDueDate}
+                  onChange={(event) =>
+                    setTenantDueDate(
+                      event.target.value,
+                    )
+                  }
+                />
+
+                <input
+                  className="modal-input"
+                  type="number"
+                  placeholder="Security deposit"
+                  value={tenantDeposit}
+                  onChange={(event) =>
+                    setTenantDeposit(
+                      event.target.value,
+                    )
+                  }
+                />
+
+                <input
+                  className="modal-input"
+                  type="date"
+                  value={
+                    tenantMoveInDate
+                  }
+                  onChange={(event) =>
                     setTenantMoveInDate(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
                 />
@@ -1904,96 +2795,118 @@ function App() {
               </form>
             )}
 
-            {activeModal === 'recordPayment' && (
-              <form onSubmit={handleRecordPayment}>
-                <h3>Record Rent Payment</h3>
-
+            {activeModal ===
+              'recordPayment' && (
+              <form
+                onSubmit={
+                  handleRecordPayment
+                }
+              >
                 <select
                   className="modal-input"
                   value={paymentTenantId}
-                  onChange={(e) =>
+                  onChange={(event) => {
                     setPaymentTenantId(
-                      e.target.value,
-                    )
-                  }
-                  required
+                      event.target.value,
+                    );
+
+                    const tenant =
+                      tenants.find(
+                        (item) =>
+                          item.id ===
+                          Number(
+                            event.target
+                              .value,
+                          ),
+                      );
+
+                    if (tenant) {
+                      setPaymentAmount(
+                        String(
+                          tenant.monthly_rent ||
+                            '',
+                        ),
+                      );
+                    }
+                  }}
                 >
                   <option value="">
-                    Select Tenant
+                    Select tenant
                   </option>
 
-                  {tenants
-                    .filter(
-                      (tenant) =>
-                        tenant.status ===
-                        'Active',
-                    )
-                    .map((tenant) => (
+                  {activeTenants.map(
+                    (tenant) => (
                       <option
                         key={tenant.id}
                         value={tenant.id}
                       >
-                        {tenant.name} —{' '}
+                        {tenant.name} •{' '}
                         {money(
                           tenant.monthly_rent,
                         )}
                       </option>
-                    ))}
+                    ),
+                  )}
                 </select>
 
                 <input
-                  type="number"
-                  placeholder="Amount Received (₹)"
                   className="modal-input"
+                  type="number"
+                  placeholder="Amount"
                   value={paymentAmount}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setPaymentAmount(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <select
                   className="modal-input"
                   value={paymentMethod}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setPaymentMethod(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
                 >
-                  <option value="UPI">UPI</option>
-                  <option value="Cash">Cash</option>
-                  <option value="Bank Transfer">
+                  <option>
+                    UPI
+                  </option>
+                  <option>
+                    Cash
+                  </option>
+                  <option>
                     Bank Transfer
                   </option>
-                  <option value="Other">Other</option>
+                  <option>
+                    Card
+                  </option>
+                  <option>
+                    Other
+                  </option>
                 </select>
 
                 <input
-                  type="text"
-                  placeholder="Payment Month"
                   className="modal-input"
-                  value={paymentMonth}
-                  onChange={(e) =>
-                    setPaymentMonth(
-                      e.target.value,
+                  type="date"
+                  value={paymentDate}
+                  onChange={(event) =>
+                    setPaymentDate(
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <input
-                  type="date"
                   className="modal-input"
-                  value={paymentDate}
-                  onChange={(e) =>
-                    setPaymentDate(
-                      e.target.value,
+                  placeholder="Payment month"
+                  value={paymentMonth}
+                  onChange={(event) =>
+                    setPaymentMonth(
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <div className="modal-actions">
@@ -2012,82 +2925,95 @@ function App() {
                   >
                     {saving
                       ? 'Saving...'
-                      : 'Record & Print'}
+                      : 'Record Payment'}
                   </button>
                 </div>
               </form>
             )}
 
-            {activeModal === 'addInvoice' && (
-              <form onSubmit={handleCreateInvoice}>
-                <h3>Create Rent Invoice</h3>
-
+            {activeModal ===
+              'addInvoice' && (
+              <form
+                onSubmit={
+                  handleCreateInvoice
+                }
+              >
                 <select
                   className="modal-input"
                   value={invoiceTenantId}
-                  onChange={(e) =>
+                  onChange={(event) => {
                     setInvoiceTenantId(
-                      e.target.value,
-                    )
-                  }
-                  required
+                      event.target.value,
+                    );
+
+                    const tenant =
+                      tenants.find(
+                        (item) =>
+                          item.id ===
+                          Number(
+                            event.target
+                              .value,
+                          ),
+                      );
+
+                    if (tenant) {
+                      setInvoiceAmount(
+                        String(
+                          tenant.monthly_rent ||
+                            '',
+                        ),
+                      );
+                    }
+                  }}
                 >
                   <option value="">
-                    Select Tenant
+                    Select tenant
                   </option>
 
-                  {tenants
-                    .filter(
-                      (tenant) =>
-                        tenant.status ===
-                        'Active',
-                    )
-                    .map((tenant) => (
+                  {activeTenants.map(
+                    (tenant) => (
                       <option
                         key={tenant.id}
                         value={tenant.id}
                       >
                         {tenant.name}
                       </option>
-                    ))}
+                    ),
+                  )}
                 </select>
 
                 <input
+                  className="modal-input"
                   type="number"
-                  placeholder="Invoice Amount (₹)"
-                  className="modal-input"
+                  placeholder="Invoice amount"
                   value={invoiceAmount}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setInvoiceAmount(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <input
-                  type="text"
-                  placeholder="Billing Month"
                   className="modal-input"
+                  placeholder="Billing month"
                   value={invoiceMonth}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setInvoiceMonth(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <input
-                  type="date"
                   className="modal-input"
+                  type="date"
                   value={invoiceDueDate}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setInvoiceDueDate(
-                      e.target.value,
+                      event.target.value,
                     )
                   }
-                  required
                 />
 
                 <div className="modal-actions">
@@ -2114,80 +3040,6 @@ function App() {
           </div>
         </div>
       )}
-
-      <nav className="glass-nav">
-        <button
-          className={`nav-item ${
-            activeTab === 'dashboard'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab('dashboard')
-          }
-        >
-          <span className="nav-icon">⚡</span>
-          <span className="nav-label">Home</span>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'properties' ||
-            activeTab === 'rooms'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab('properties')
-          }
-        >
-          <span className="nav-icon">🏢</span>
-          <span className="nav-label">Assets</span>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'tenants'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab('tenants')
-          }
-        >
-          <span className="nav-icon">👥</span>
-          <span className="nav-label">Tenants</span>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'payments' ||
-            activeTab === 'invoices'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab('payments')
-          }
-        >
-          <span className="nav-icon">💳</span>
-          <span className="nav-label">Ledger</span>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'analytics'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab('analytics')
-          }
-        >
-          <span className="nav-icon">📈</span>
-          <span className="nav-label">Insights</span>
-        </button>
-      </nav>
     </div>
   );
 }
@@ -2199,4 +3051,3 @@ ReactDOM.createRoot(
     <App />
   </React.StrictMode>,
 );
-```
