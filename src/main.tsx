@@ -54,10 +54,10 @@ function App() {
   ]);
 
   const [tenants, setTenants] = useState<Tenant[]>([
-    { id: 1, name: 'Aarav Sharma', phone: '+91 98765 43210', room_number: '301', monthly_rent: 18000, status: 'Paid', property_name: 'Apex Luxury Suites', due_date: '05 Sep' },
-    { id: 2, name: 'Rhea Sen', phone: '+91 98123 45678', room_number: '104', monthly_rent: 15000, status: 'Pending', property_name: 'Sereno Heights PG', due_date: '10 Sep' },
-    { id: 3, name: 'Vikram Malhotra', phone: '+91 99887 76655', room_number: '202', monthly_rent: 22000, status: 'Overdue', property_name: 'Urban Living Co-Stay', due_date: '01 Sep' },
-    { id: 4, name: 'Ananya Gupta', phone: '+91 97654 32109', room_number: '108', monthly_rent: 16500, status: 'Paid', property_name: 'Sereno Heights PG', due_date: '05 Sep' }
+    { id: 1, name: 'Aarav Sharma', phone: '+919876543210', room_number: '301', monthly_rent: 18000, status: 'Paid', property_name: 'Apex Luxury Suites', due_date: '05 Sep' },
+    { id: 2, name: 'Rhea Sen', phone: '+919812345678', room_number: '104', monthly_rent: 15000, status: 'Pending', property_name: 'Sereno Heights PG', due_date: '10 Sep' },
+    { id: 3, name: 'Vikram Malhotra', phone: '+919988776655', room_number: '202', monthly_rent: 22000, status: 'Overdue', property_name: 'Urban Living Co-Stay', due_date: '01 Sep' },
+    { id: 4, name: 'Ananya Gupta', phone: '+919765432109', room_number: '108', monthly_rent: 16500, status: 'Paid', property_name: 'Sereno Heights PG', due_date: '05 Sep' }
   ]);
 
   const [payments, setPayments] = useState<Payment[]>([
@@ -77,11 +77,19 @@ function App() {
         if (tRes.ok) setTenants(await tRes.json());
         if (payRes.ok) setPayments(await payRes.json());
       } catch (e) {
-        // Fallback to initial state if server is offline
+        // Fallback to local memory if server offline
       }
     }
     fetchData();
   }, []);
+
+  const sendWhatsAppReminder = (tenant: Tenant) => {
+    const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
+    const message = encodeURIComponent(
+      `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent payment of ₹${tenant.monthly_rent.toLocaleString()} for Room ${tenant.room_number} (${tenant.property_name}), which was due on ${tenant.due_date}.\n\nPlease let us know once paid.`
+    );
+    window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+  };
 
   const handleCreateProperty = (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,7 +115,7 @@ function App() {
     const newT: Tenant = {
       id: Date.now(),
       name: tenantName,
-      phone: tenantPhone || '+91 90000 00000',
+      phone: tenantPhone || '+919000000000',
       room_number: '101',
       monthly_rent: Number(tenantRent) || 15000,
       status: 'Pending',
@@ -313,8 +321,15 @@ function App() {
                   </span>
                 </div>
                 <div className="glass-footer">
-                  <span className="card-subtext">{t.phone}</span>
-                  <span className="accent-text">₹{t.monthly_rent.toLocaleString()} / mo</span>
+                  <div>
+                    <span className="card-subtext">{t.phone}</span>
+                    <div className="accent-text">₹{t.monthly_rent.toLocaleString()} / mo</div>
+                  </div>
+                  {t.status !== 'Paid' && (
+                    <button className="btn-primary-sm" style={{ background: '#25D366', color: '#ffffff' }} onClick={() => sendWhatsAppReminder(t)}>
+                      💬 Remind
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
