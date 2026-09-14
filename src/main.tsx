@@ -192,42 +192,115 @@ function App() {
     return data as T;
   };
 
+  /*
+   * Load every data source independently.
+   *
+   * Previously Promise.all() meant that if even one endpoint
+   * failed, all data stayed empty. Promise.allSettled() lets
+   * Peacely display everything that successfully loaded.
+   */
   const loadAllData = async () => {
     setLoading(true);
     setError('');
 
-    try {
-      const [
-        propertyData,
-        roomData,
-        bedData,
-        tenantData,
-        paymentData,
-        invoiceData,
-      ] = await Promise.all([
-        apiRequest<Property[]>('/properties'),
-        apiRequest<Room[]>('/rooms'),
-        apiRequest<Bed[]>('/beds'),
-        apiRequest<Tenant[]>('/tenants'),
-        apiRequest<Payment[]>('/payments'),
-        apiRequest<Invoice[]>('/invoices'),
-      ]);
+    const results = await Promise.allSettled([
+      apiRequest<Property[]>('/properties'),
+      apiRequest<Room[]>('/rooms'),
+      apiRequest<Bed[]>('/beds'),
+      apiRequest<Tenant[]>('/tenants'),
+      apiRequest<Payment[]>('/payments'),
+      apiRequest<Invoice[]>('/invoices'),
+    ]);
 
-      setProperties(propertyData || []);
-      setRooms(roomData || []);
-      setBeds(bedData || []);
-      setTenants(tenantData || []);
-      setPayments(paymentData || []);
-      setInvoices(invoiceData || []);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to load Peacely data.',
+    const [
+      propertyResult,
+      roomResult,
+      bedResult,
+      tenantResult,
+      paymentResult,
+      invoiceResult,
+    ] = results;
+
+    const errors: string[] = [];
+
+    if (propertyResult.status === 'fulfilled') {
+      setProperties(propertyResult.value || []);
+    } else {
+      setProperties([]);
+
+      errors.push(
+        propertyResult.reason instanceof Error
+          ? `Properties: ${propertyResult.reason.message}`
+          : 'Properties failed to load.',
       );
-    } finally {
-      setLoading(false);
     }
+
+    if (roomResult.status === 'fulfilled') {
+      setRooms(roomResult.value || []);
+    } else {
+      setRooms([]);
+
+      errors.push(
+        roomResult.reason instanceof Error
+          ? `Rooms: ${roomResult.reason.message}`
+          : 'Rooms failed to load.',
+      );
+    }
+
+    if (bedResult.status === 'fulfilled') {
+      setBeds(bedResult.value || []);
+    } else {
+      setBeds([]);
+
+      errors.push(
+        bedResult.reason instanceof Error
+          ? `Beds: ${bedResult.reason.message}`
+          : 'Beds failed to load.',
+      );
+    }
+
+    if (tenantResult.status === 'fulfilled') {
+      setTenants(tenantResult.value || []);
+    } else {
+      setTenants([]);
+
+      errors.push(
+        tenantResult.reason instanceof Error
+          ? `Tenants: ${tenantResult.reason.message}`
+          : 'Tenants failed to load.',
+      );
+    }
+
+    if (paymentResult.status === 'fulfilled') {
+      setPayments(paymentResult.value || []);
+    } else {
+      setPayments([]);
+
+      errors.push(
+        paymentResult.reason instanceof Error
+          ? `Payments: ${paymentResult.reason.message}`
+          : 'Payments failed to load.',
+      );
+    }
+
+    if (invoiceResult.status === 'fulfilled') {
+      setInvoices(invoiceResult.value || []);
+    } else {
+      setInvoices([]);
+
+      errors.push(
+        invoiceResult.reason instanceof Error
+          ? `Invoices: ${invoiceResult.reason.message}`
+          : 'Invoices failed to load.',
+      );
+    }
+
+    if (errors.length > 0) {
+      console.error('Peacely loading errors:', errors);
+      setError(errors.join(' • '));
+    }
+
+    setLoading(false);
   };
 
   useEffect(() => {
@@ -541,7 +614,10 @@ function App() {
       .filter(
         (payment) =>
           payment.tenant_id === tenant.id &&
-          payment.payment_month === currentMonthName(),
+          String(payment.payment_month || '')
+            .trim()
+            .toLowerCase() ===
+            currentMonthName().trim().toLowerCase(),
       )
       .reduce(
         (sum, payment) =>
@@ -549,27 +625,42 @@ function App() {
         0,
       );
 
+    const monthlyRent = Number(
+      tenant.monthly_rent || 0,
+    );
+
     if (
-      monthPayments >= Number(tenant.monthly_rent || 0) &&
-      Number(tenant.monthly_rent || 0) > 0
+      monthlyRent > 0 &&
+      monthPayments >= monthlyRent
     ) {
       return 'Paid';
     }
 
     const currentDay = new Date().getDate();
 
-    if (currentDay > Number(tenant.due_date || 5)) {
+    if (
+      currentDay >
+      Number(tenant.due_date || 5)
+    ) {
       return 'Overdue';
     }
 
     return 'Pending';
   };
 
-  const sendWhatsAppReminder = (tenant: Tenant) => {
-    const cleanPhone = tenant.phone.replace(
+  const sendWhatsAppReminder = (
+    tenant: Tenant,
+  ) => {
+    let cleanPhone = tenant.phone.replace(
       /[^0-9]/g,
       '',
     );
+
+    if (
+      cleanPhone.length === 10
+    ) {
+      cleanPhone = `91${cleanPhone}`;
+    }
 
     const message = encodeURIComponent(
       `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent payment of ${money(
@@ -602,6 +693,7 @@ function App() {
       <html>
         <head>
           <title>Peacely Payment Receipt</title>
+
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -680,12 +772,14 @@ function App() {
         <body>
           <div class="card">
             <div class="brand">Peacely</div>
+
             <div class="subtitle">
               OFFICIAL RENT PAYMENT RECEIPT
             </div>
 
             <div class="row">
               <span class="label">Receipt ID</span>
+
               <span class="value">
                 #REC-${payment.id}
               </span>
@@ -693,13 +787,19 @@ function App() {
 
             <div class="row">
               <span class="label">Tenant</span>
+
               <span class="value">
-                ${tenant?.name || payment.tenant_name || 'Tenant'}
+                ${
+                  tenant?.name ||
+                  payment.tenant_name ||
+                  'Tenant'
+                }
               </span>
             </div>
 
             <div class="row">
               <span class="label">Date</span>
+
               <span class="value">
                 ${payment.payment_date}
               </span>
@@ -707,6 +807,7 @@ function App() {
 
             <div class="row">
               <span class="label">Month</span>
+
               <span class="value">
                 ${payment.payment_month}
               </span>
@@ -714,6 +815,7 @@ function App() {
 
             <div class="row">
               <span class="label">Method</span>
+
               <span class="value">
                 ${payment.payment_method}
               </span>
@@ -747,64 +849,100 @@ function App() {
     win.document.close();
   };
 
-  const totalRevenue = useMemo(
+  /*
+   * Active tenants are now detected case-insensitively.
+   *
+   * This fixes the dropdown problem when PostgreSQL returns
+   * "active", "ACTIVE", "Active", etc.
+   */
+  const activeTenants = useMemo(
     () =>
-      properties.reduce(
-        (sum, property) =>
+      tenants.filter(
+        (tenant) =>
+          String(tenant.status || '')
+            .trim()
+            .toLowerCase() === 'active',
+      ),
+    [tenants],
+  );
+
+  const totalTenants =
+    activeTenants.length;
+
+  /*
+   * Dashboard revenue is calculated directly from active
+   * tenants instead of relying on the property SQL joins.
+   * This prevents duplicated revenue caused by joins between
+   * properties, rooms, beds and tenants.
+   */
+  const expectedRent = useMemo(
+    () =>
+      activeTenants.reduce(
+        (sum, tenant) =>
           sum +
-          Number(property.monthly_revenue || 0),
+          Number(
+            tenant.monthly_rent || 0,
+          ),
         0,
       ),
-    [properties],
+    [activeTenants],
   );
 
-  const activeTenants = tenants.filter(
-    (tenant) => tenant.status === 'Active',
+  const totalRevenue = expectedRent;
+
+  const totalBeds = useMemo(
+    () => beds.length,
+    [beds],
   );
 
-  const totalTenants = activeTenants.length;
-
-  const totalBeds = properties.reduce(
-    (sum, property) =>
-      sum + Number(property.bed_count || 0),
-    0,
-  );
-
-  const occupiedBeds = properties.reduce(
-    (sum, property) =>
-      sum +
-      Number(property.occupied_bed_count || 0),
-    0,
+  const occupiedBeds = useMemo(
+    () =>
+      beds.filter(
+        (bed) =>
+          Boolean(bed.is_occupied),
+      ).length,
+    [beds],
   );
 
   const totalOccupancy =
     totalBeds > 0
       ? Math.round(
-          (occupiedBeds / totalBeds) * 100,
+          (occupiedBeds / totalBeds) *
+            100,
         )
       : 0;
 
-  const expectedRent = activeTenants.reduce(
-    (sum, tenant) =>
-      sum + Number(tenant.monthly_rent || 0),
-    0,
+  const currentMonth =
+    currentMonthName();
+
+  const collectedThisMonth = useMemo(
+    () =>
+      payments
+        .filter(
+          (payment) =>
+            String(
+              payment.payment_month || '',
+            )
+              .trim()
+              .toLowerCase() ===
+            currentMonth
+              .trim()
+              .toLowerCase(),
+        )
+        .reduce(
+          (sum, payment) =>
+            sum +
+            Number(
+              payment.amount || 0,
+            ),
+          0,
+        ),
+    [payments, currentMonth],
   );
 
-  const currentMonth = currentMonthName();
-
-  const collectedThisMonth = payments
-    .filter(
-      (payment) =>
-        payment.payment_month === currentMonth,
-    )
-    .reduce(
-      (sum, payment) =>
-        sum + Number(payment.amount || 0),
-      0,
-    );
-
   const pendingDues = Math.max(
-    expectedRent - collectedThisMonth,
+    expectedRent -
+      collectedThisMonth,
     0,
   );
 
@@ -812,17 +950,20 @@ function App() {
     expectedRent > 0
       ? Math.min(
           Math.round(
-            (collectedThisMonth / expectedRent) *
+            (collectedThisMonth /
+              expectedRent) *
               100,
           ),
           100,
         )
       : 0;
 
-  const filteredTenants = tenants.filter(
-    (tenant) => {
+  const filteredTenants =
+    tenants.filter((tenant) => {
       const query =
-        searchQuery.trim().toLowerCase();
+        searchQuery
+          .trim()
+          .toLowerCase();
 
       const matchesSearch =
         tenant.name
@@ -840,53 +981,90 @@ function App() {
           .includes(query);
 
       const paymentStatus =
-        getTenantPaymentStatus(tenant);
+        getTenantPaymentStatus(
+          tenant,
+        );
 
       const matchesStatus =
         statusFilter === 'All' ||
-        paymentStatus === statusFilter;
+        paymentStatus ===
+          statusFilter;
 
       return (
         matchesSearch &&
         matchesStatus
       );
-    },
-  );
+    });
 
-  const tenantRooms = rooms.filter(
-    (room) =>
-      !tenantPropertyId ||
-      Number(room.property_id) ===
-        Number(tenantPropertyId),
-  );
+  const tenantRooms =
+    rooms.filter(
+      (room) =>
+        !tenantPropertyId ||
+        Number(room.property_id) ===
+          Number(tenantPropertyId),
+    );
 
-  const tenantBeds = beds.filter(
-    (bed) =>
-      !tenantRoomId ||
-      Number(bed.room_id) ===
-        Number(tenantRoomId),
-  );
+  const tenantBeds =
+    beds.filter(
+      (bed) =>
+        !tenantRoomId ||
+        Number(bed.room_id) ===
+          Number(tenantRoomId),
+    );
 
   const availableBeds =
     tenantBeds.filter(
-      (bed) => !bed.is_occupied,
+      (bed) =>
+        !bed.is_occupied,
     );
 
-  const selectedTenant = tenants.find(
-    (tenant) =>
-      tenant.id === Number(paymentTenantId),
-  );
+  const selectedPaymentTenant =
+    tenants.find(
+      (tenant) =>
+        tenant.id ===
+        Number(paymentTenantId),
+    );
+
+  const selectedInvoiceTenant =
+    tenants.find(
+      (tenant) =>
+        tenant.id ===
+        Number(invoiceTenantId),
+    );
 
   useEffect(() => {
     if (
-      selectedTenant &&
+      selectedPaymentTenant &&
       !paymentAmount
     ) {
       setPaymentAmount(
-        String(selectedTenant.monthly_rent || ''),
+        String(
+          selectedPaymentTenant.monthly_rent ||
+            '',
+        ),
       );
     }
-  }, [selectedTenant]);
+  }, [
+    selectedPaymentTenant,
+    paymentAmount,
+  ]);
+
+  useEffect(() => {
+    if (
+      selectedInvoiceTenant &&
+      !invoiceAmount
+    ) {
+      setInvoiceAmount(
+        String(
+          selectedInvoiceTenant.monthly_rent ||
+            '',
+        ),
+      );
+    }
+  }, [
+    selectedInvoiceTenant,
+    invoiceAmount,
+  ]);
 
   if (loading) {
     return (
@@ -956,11 +1134,23 @@ function App() {
 
         <button
           className="avatar-btn"
-          onClick={() =>
+          onClick={() => {
+            setError('');
+
+            if (
+              activeTenants.length ===
+              0
+            ) {
+              setActiveTab(
+                'tenants',
+              );
+              return;
+            }
+
             setActiveModal(
               'recordPayment',
-            )
-          }
+            );
+          }}
         >
           <span className="plus-icon">
             +
@@ -989,7 +1179,8 @@ function App() {
       )}
 
       <main className="content-area">
-        {activeTab === 'dashboard' && (
+        {activeTab ===
+          'dashboard' && (
           <div className="view-container">
             <div className="hero-card">
               <div className="hero-header">
@@ -1057,7 +1248,9 @@ function App() {
                 </div>
 
                 <div className="tile-value">
-                  {money(pendingDues)}
+                  {money(
+                    pendingDues,
+                  )}
                 </div>
 
                 <div className="tile-label">
@@ -1096,7 +1289,10 @@ function App() {
 
             <div className="section-heading">
               <div>
-                <h2>Quick Actions</h2>
+                <h2>
+                  Quick Actions
+                </h2>
+
                 <p>
                   Manage your rental business
                 </p>
@@ -1157,11 +1353,52 @@ function App() {
 
               <button
                 className="metric-tile"
-                onClick={() =>
+                onClick={() => {
+                  setError('');
+
+                  if (
+                    activeTenants.length ===
+                    0
+                  ) {
+                    setActiveTab(
+                      'tenants',
+                    );
+                    return;
+                  }
+
+                  setActiveModal(
+                    'recordPayment',
+                  );
+                }}
+              >
+                <div className="tile-icon">
+                  ₹
+                </div>
+
+                <div className="tile-label">
+                  Record Payment
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() => {
+                  setError('');
+
+                  if (
+                    activeTenants.length ===
+                    0
+                  ) {
+                    setActiveTab(
+                      'tenants',
+                    );
+                    return;
+                  }
+
                   setActiveModal(
                     'addInvoice',
-                  )
-                }
+                  );
+                }}
               >
                 <div className="tile-icon">
                   🧾
@@ -1196,7 +1433,8 @@ function App() {
               </button>
             </div>
 
-            {properties.length === 0 ? (
+            {properties.length ===
+            0 ? (
               <div className="glass-card">
                 <div className="empty-state">
                   <div className="empty-icon">
@@ -1227,90 +1465,96 @@ function App() {
             ) : (
               properties
                 .slice(0, 5)
-                .map((property) => (
-                  <div
-                    className="glass-card"
-                    key={property.id}
-                  >
-                    <div className="glass-header">
-                      <div>
-                        <h3>
-                          {property.name}
-                        </h3>
+                .map(
+                  (property) => (
+                    <div
+                      className="glass-card"
+                      key={property.id}
+                    >
+                      <div className="glass-header">
+                        <div>
+                          <h3>
+                            {
+                              property.name
+                            }
+                          </h3>
 
-                        <p>
-                          {property.address ||
-                            'No address added'}
-                        </p>
-                      </div>
+                          <p>
+                            {property.address ||
+                              'No address added'}
+                          </p>
+                        </div>
 
-                      <span className="badge">
-                        {Number(
-                          property.bed_count ||
-                            0,
-                        )}{' '}
-                        Beds
-                      </span>
-                    </div>
-
-                    <div className="metrics-row">
-                      <div>
-                        <span>
-                          Occupancy
-                        </span>
-
-                        <strong>
+                        <span className="badge">
                           {Number(
                             property.bed_count ||
                               0,
-                          ) > 0
-                            ? Math.round(
-                                (Number(
-                                  property.occupied_bed_count ||
-                                    0,
-                                ) /
-                                  Number(
-                                    property.bed_count ||
+                          )}{' '}
+                          Beds
+                        </span>
+                      </div>
+
+                      <div className="metrics-row">
+                        <div>
+                          <span>
+                            Occupancy
+                          </span>
+
+                          <strong>
+                            {Number(
+                              property.bed_count ||
+                                0,
+                            ) > 0
+                              ? Math.round(
+                                  (Number(
+                                    property.occupied_bed_count ||
                                       0,
-                                  )) *
-                                  100,
-                              )
-                            : 0}
-                          %
-                        </strong>
-                      </div>
+                                  ) /
+                                    Number(
+                                      property.bed_count ||
+                                        0,
+                                    )) *
+                                    100,
+                                )
+                              : 0}
+                            %
+                          </strong>
+                        </div>
 
-                      <div>
-                        <span>
-                          Monthly
-                        </span>
+                        <div>
+                          <span>
+                            Monthly
+                          </span>
 
-                        <strong>
-                          {money(
-                            property.monthly_revenue,
-                          )}
-                        </strong>
-                      </div>
+                          <strong>
+                            {money(
+                              property.monthly_revenue ||
+                                0,
+                            )}
+                          </strong>
+                        </div>
 
-                      <div>
-                        <span>
-                          Tenants
-                        </span>
+                        <div>
+                          <span>
+                            Tenants
+                          </span>
 
-                        <strong>
-                          {
-                            property.tenant_count
-                          }
-                        </strong>
+                          <strong>
+                            {
+                              property.tenant_count
+                            }
+                          </strong>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  ),
+                )
             )}
           </div>
         )}
 
-        {activeTab === 'properties' && (
+        {activeTab ===
+          'properties' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
@@ -1373,7 +1617,9 @@ function App() {
                       </span>
 
                       <strong>
-                        {property.room_count}
+                        {
+                          property.room_count
+                        }
                       </strong>
                     </div>
 
@@ -1407,7 +1653,8 @@ function App() {
 
                     <strong>
                       {money(
-                        property.monthly_revenue,
+                        property.monthly_revenue ||
+                          0,
                       )}
                     </strong>
                   </div>
@@ -1415,7 +1662,8 @@ function App() {
               ),
             )}
 
-            {properties.length === 0 && (
+            {properties.length ===
+              0 && (
               <div className="glass-card">
                 <div className="empty-state">
                   <h3>
@@ -1530,7 +1778,9 @@ function App() {
                         {
                           roomBeds.filter(
                             (bed) =>
-                              bed.is_occupied,
+                              Boolean(
+                                bed.is_occupied,
+                              ),
                           ).length
                         }
                       </strong>
@@ -1803,6 +2053,7 @@ function App() {
                           flex: 1,
                         }}
                         onClick={() => {
+                          setError('');
                           setPaymentTenantId(
                             String(
                               tenant.id,
@@ -1827,7 +2078,8 @@ function App() {
               },
             )}
 
-            {filteredTenants.length === 0 && (
+            {filteredTenants.length ===
+              0 && (
               <div className="glass-card">
                 <div className="empty-state">
                   <h3>
@@ -1859,11 +2111,23 @@ function App() {
 
               <button
                 className="btn-primary"
-                onClick={() =>
+                onClick={() => {
+                  setError('');
+
+                  if (
+                    activeTenants.length ===
+                    0
+                  ) {
+                    setActiveTab(
+                      'tenants',
+                    );
+                    return;
+                  }
+
                   setActiveModal(
                     'recordPayment',
-                  )
-                }
+                  );
+                }}
               >
                 + Payment
               </button>
@@ -1883,11 +2147,20 @@ function App() {
               </div>
 
               <div className="hero-meta">
-                {payments.filter(
-                  (payment) =>
-                    payment.payment_month ===
-                    currentMonth,
-                ).length}{' '}
+                {
+                  payments.filter(
+                    (payment) =>
+                      String(
+                        payment.payment_month ||
+                          '',
+                      )
+                        .trim()
+                        .toLowerCase() ===
+                      currentMonth
+                        .trim()
+                        .toLowerCase(),
+                  ).length
+                }{' '}
                 payments
               </div>
             </div>
@@ -1990,11 +2263,23 @@ function App() {
 
               <button
                 className="btn-primary"
-                onClick={() =>
+                onClick={() => {
+                  setError('');
+
+                  if (
+                    activeTenants.length ===
+                    0
+                  ) {
+                    setActiveTab(
+                      'tenants',
+                    );
+                    return;
+                  }
+
                   setActiveModal(
                     'addInvoice',
-                  )
-                }
+                  );
+                }}
               >
                 + Invoice
               </button>
@@ -2082,11 +2367,21 @@ function App() {
 
                   <button
                     className="btn-primary"
-                    onClick={() =>
+                    onClick={() => {
+                      if (
+                        activeTenants.length ===
+                        0
+                      ) {
+                        setActiveTab(
+                          'tenants',
+                        );
+                        return;
+                      }
+
                       setActiveModal(
                         'addInvoice',
-                      )
-                    }
+                      );
+                    }}
                   >
                     Create Invoice
                   </button>
@@ -2217,6 +2512,47 @@ function App() {
                   </strong>
                 </div>
               </div>
+
+              <div
+                className="metrics-row"
+                style={{
+                  marginTop: '14px',
+                }}
+              >
+                <div>
+                  <span>
+                    Active Tenants
+                  </span>
+
+                  <strong>
+                    {totalTenants}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Collected
+                  </span>
+
+                  <strong>
+                    {money(
+                      collectedThisMonth,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Pending
+                  </span>
+
+                  <strong>
+                    {money(
+                      pendingDues,
+                    )}
+                  </strong>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -2230,10 +2566,13 @@ function App() {
               : ''
           }`}
           onClick={() =>
-            setActiveTab('dashboard')
+            setActiveTab(
+              'dashboard',
+            )
           }
         >
           <span>⌂</span>
+
           <small>
             Home
           </small>
@@ -2247,10 +2586,13 @@ function App() {
               : ''
           }`}
           onClick={() =>
-            setActiveTab('properties')
+            setActiveTab(
+              'properties',
+            )
           }
         >
           <span>🏠</span>
+
           <small>
             Assets
           </small>
@@ -2263,10 +2605,13 @@ function App() {
               : ''
           }`}
           onClick={() =>
-            setActiveTab('tenants')
+            setActiveTab(
+              'tenants',
+            )
           }
         >
           <span>👥</span>
+
           <small>
             Tenants
           </small>
@@ -2279,12 +2624,34 @@ function App() {
               : ''
           }`}
           onClick={() =>
-            setActiveTab('payments')
+            setActiveTab(
+              'payments',
+            )
           }
         >
           <span>₹</span>
+
           <small>
             Payments
+          </small>
+        </button>
+
+        <button
+          className={`nav-item ${
+            activeTab === 'invoices'
+              ? 'active'
+              : ''
+          }`}
+          onClick={() =>
+            setActiveTab(
+              'invoices',
+            )
+          }
+        >
+          <span>🧾</span>
+
+          <small>
+            Invoices
           </small>
         </button>
 
@@ -2295,10 +2662,13 @@ function App() {
               : ''
           }`}
           onClick={() =>
-            setActiveTab('analytics')
+            setActiveTab(
+              'analytics',
+            )
           }
         >
           <span>📊</span>
+
           <small>
             Analytics
           </small>
@@ -2468,15 +2838,19 @@ function App() {
                   <option>
                     Single
                   </option>
+
                   <option>
                     Double
                   </option>
+
                   <option>
                     Triple
                   </option>
+
                   <option>
                     Four Sharing
                   </option>
+
                   <option>
                     Other
                   </option>
@@ -2633,8 +3007,14 @@ function App() {
                     setTenantPropertyId(
                       event.target.value,
                     );
-                    setTenantRoomId('');
-                    setTenantBedId('');
+
+                    setTenantRoomId(
+                      '',
+                    );
+
+                    setTenantBedId(
+                      '',
+                    );
                   }}
                 >
                   <option value="">
@@ -2662,7 +3042,10 @@ function App() {
                     setTenantRoomId(
                       event.target.value,
                     );
-                    setTenantBedId('');
+
+                    setTenantBedId(
+                      '',
+                    );
                   }}
                   disabled={
                     !tenantPropertyId
@@ -2806,17 +3189,21 @@ function App() {
                   className="modal-input"
                   value={paymentTenantId}
                   onChange={(event) => {
+                    const selectedId =
+                      event.target.value;
+
                     setPaymentTenantId(
-                      event.target.value,
+                      selectedId,
                     );
 
                     const tenant =
-                      tenants.find(
+                      activeTenants.find(
                         (item) =>
-                          item.id ===
                           Number(
-                            event.target
-                              .value,
+                            item.id,
+                          ) ===
+                          Number(
+                            selectedId,
                           ),
                       );
 
@@ -2827,11 +3214,18 @@ function App() {
                             '',
                         ),
                       );
+                    } else {
+                      setPaymentAmount(
+                        '',
+                      );
                     }
                   }}
                 >
                   <option value="">
-                    Select tenant
+                    {activeTenants.length ===
+                    0
+                      ? 'No active tenants found'
+                      : 'Select tenant'}
                   </option>
 
                   {activeTenants.map(
@@ -2844,14 +3238,33 @@ function App() {
                         {money(
                           tenant.monthly_rent,
                         )}
+                        {tenant.room_number
+                          ? ` • Room ${tenant.room_number}`
+                          : ''}
                       </option>
                     ),
                   )}
                 </select>
 
+                {activeTenants.length ===
+                  0 && (
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      opacity: 0.7,
+                      marginTop: '-4px',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    Add an active tenant first
+                    from the Tenants section.
+                  </p>
+                )}
+
                 <input
                   className="modal-input"
                   type="number"
+                  min="1"
                   placeholder="Amount"
                   value={paymentAmount}
                   onChange={(event) =>
@@ -2873,15 +3286,19 @@ function App() {
                   <option>
                     UPI
                   </option>
+
                   <option>
                     Cash
                   </option>
+
                   <option>
                     Bank Transfer
                   </option>
+
                   <option>
                     Card
                   </option>
+
                   <option>
                     Other
                   </option>
@@ -2921,7 +3338,11 @@ function App() {
                   <button
                     type="submit"
                     className="btn-primary"
-                    disabled={saving}
+                    disabled={
+                      saving ||
+                      activeTenants.length ===
+                        0
+                    }
                   >
                     {saving
                       ? 'Saving...'
@@ -2942,17 +3363,21 @@ function App() {
                   className="modal-input"
                   value={invoiceTenantId}
                   onChange={(event) => {
+                    const selectedId =
+                      event.target.value;
+
                     setInvoiceTenantId(
-                      event.target.value,
+                      selectedId,
                     );
 
                     const tenant =
-                      tenants.find(
+                      activeTenants.find(
                         (item) =>
-                          item.id ===
                           Number(
-                            event.target
-                              .value,
+                            item.id,
+                          ) ===
+                          Number(
+                            selectedId,
                           ),
                       );
 
@@ -2963,11 +3388,18 @@ function App() {
                             '',
                         ),
                       );
+                    } else {
+                      setInvoiceAmount(
+                        '',
+                      );
                     }
                   }}
                 >
                   <option value="">
-                    Select tenant
+                    {activeTenants.length ===
+                    0
+                      ? 'No active tenants found'
+                      : 'Select tenant'}
                   </option>
 
                   {activeTenants.map(
@@ -2976,15 +3408,37 @@ function App() {
                         key={tenant.id}
                         value={tenant.id}
                       >
-                        {tenant.name}
+                        {tenant.name} •{' '}
+                        {money(
+                          tenant.monthly_rent,
+                        )}
+                        {tenant.room_number
+                          ? ` • Room ${tenant.room_number}`
+                          : ''}
                       </option>
                     ),
                   )}
                 </select>
 
+                {activeTenants.length ===
+                  0 && (
+                  <p
+                    style={{
+                      fontSize: '12px',
+                      opacity: 0.7,
+                      marginTop: '-4px',
+                      marginBottom: '12px',
+                    }}
+                  >
+                    Add an active tenant first
+                    from the Tenants section.
+                  </p>
+                )}
+
                 <input
                   className="modal-input"
                   type="number"
+                  min="1"
                   placeholder="Invoice amount"
                   value={invoiceAmount}
                   onChange={(event) =>
@@ -3028,7 +3482,11 @@ function App() {
                   <button
                     type="submit"
                     className="btn-primary"
-                    disabled={saving}
+                    disabled={
+                      saving ||
+                      activeTenants.length ===
+                        0
+                    }
                   >
                     {saving
                       ? 'Saving...'
