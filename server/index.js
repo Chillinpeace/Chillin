@@ -2,7 +2,7 @@ import express from 'express';
 import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
-import { pool, query, initializeDatabase } from './database.js';
+import { query, initializeDatabase } from './database.js';
 
 const app = express();
 
@@ -10,28 +10,25 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const DIST_DIR = path.join(__dirname, '..', 'dist');
 
-const PORT = process.env.PORT || 8080;
+const PORT = Number(process.env.PORT || 8080);
 
 const SESSION_COOKIE = 'peacely_session';
 const SESSION_DAYS = 30;
-
-// =====================================================
-// MIDDLEWARE
-// =====================================================
+const QUERY_TIMEOUT_MS = 15000;
 
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // =====================================================
-// BASIC HELPERS
+// HELPERS
 // =====================================================
-
-function normalizeEmail(email) {
-  return String(email || '').trim().toLowerCase();
-}
 
 function cleanString(value) {
   return String(value ?? '').trim();
+}
+
+function normalizeEmail(value) {
+  return cleanString(value).toLowerCase();
 }
 
 function toNumber(value, fallback = 0) {
@@ -63,11 +60,11 @@ function parseCookies(req) {
 
   const cookies = {};
 
-  header.split(';').forEach((part) => {
+  for (const part of header.split(';')) {
     const index = part.indexOf('=');
 
     if (index === -1) {
-      return;
+      continue;
     }
 
     const key = part.slice(0, index).trim();
@@ -78,7 +75,7 @@ function parseCookies(req) {
     } catch {
       cookies[key] = value;
     }
-  });
+  }
 
   return cookies;
 }
@@ -88,19 +85,25 @@ function setSessionCookie(res, token) {
 
   res.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`
+    `${SESSION_COOKIE}=${encodeURIComponent(
+      token,
+    )}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`,
   );
 }
 
 function clearSessionCookie(res) {
   res.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`
+    `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`,
   );
 }
 
-function sendError(res, status, message, details = null) {
-  console.error(`API ERROR ${status}:`, message, details || '');
+function sendError(res, status, message) {
+  console.error(`API ERROR ${status}: ${message}`);
+
+  if (res.headersSent) {
+    return;
+  }
 
   return res.status(status).json({
     success: false,
@@ -108,8 +111,45 @@ function sendError(res, status, message, details = null) {
   });
 }
 
+/*
+ * Prevent the frontend from being stuck forever on
+ * "Saving..." if PostgreSQL ever hangs on a query.
+ */
+async function safeQuery(sql, params = []) {
+  return Promise.race([
+    query(sql, params),
+    new Promise((_, reject) => {
+      setTimeout(() => {
+        reject(
+          new Error(
+            'Database request timed out. Please try again.',
+          ),
+        );
+      }, QUERY_TIMEOUT_MS);
+    }),
+  ]);
+}
+
+function asyncHandler(handler) {
+  return async (req, res, next) => {
+    try {
+      await handler(req, res, next);
+    } catch (error) {
+      console.error('Unhandled route error:', error);
+
+      if (!res.headersSent) {
+        return sendError(
+          res,
+          500,
+          error?.message || 'Internal server error.',
+        );
+      }
+    }
+  };
+}
+
 // =====================================================
-// AUTH HELPERS
+// AUTH
 // =====================================================
 
 async function getSessionOwner(req) {
@@ -123,7 +163,7 @@ async function getSessionOwner(req) {
 
     const tokenHash = hashValue(token);
 
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           o.id,
@@ -139,7 +179,7 @@ async function getSessionOwner(req) {
           AND s.expires_at > CURRENT_TIMESTAMP
         LIMIT 1
       `,
-      [tokenHash]
+      [tokenHash],
     );
 
     if (result.rows.length === 0) {
@@ -148,47 +188,40 @@ async function getSessionOwner(req) {
 
     return result.rows[0];
   } catch (error) {
-    console.error('getSessionOwner error:', error);
+    console.error('Session lookup failed:', error);
     return null;
   }
 }
 
 async function requireAuth(req, res, next) {
-  try {
-    const owner = await getSessionOwner(req);
+  const owner = await getSessionOwner(req);
 
-    if (!owner) {
-      return sendError(res, 401, 'Authentication required.');
-    }
-
-    req.owner = owner;
-
-    next();
-  } catch (error) {
-    console.error('Authentication middleware error:', error);
-
+  if (!owner) {
     return sendError(
       res,
-      500,
-      'Authentication check failed.'
+      401,
+      'Authentication required. Please log in again.',
     );
   }
+
+  req.owner = owner;
+  next();
 }
 
 async function createSession(ownerId) {
   const token = createToken();
   const tokenHash = hashValue(token);
 
-  await query(
+  await safeQuery(
     `
       DELETE FROM sessions
       WHERE owner_id = $1
          OR expires_at < CURRENT_TIMESTAMP
     `,
-    [ownerId]
+    [ownerId],
   );
 
-  await query(
+  await safeQuery(
     `
       INSERT INTO sessions (
         owner_id,
@@ -198,35 +231,13 @@ async function createSession(ownerId) {
       VALUES (
         $1,
         $2,
-        CURRENT_TIMESTAMP + INTERVAL '${SESSION_DAYS} days'
+        CURRENT_TIMESTAMP + INTERVAL '30 days'
       )
     `,
-    [ownerId, tokenHash]
+    [ownerId, tokenHash],
   );
 
   return token;
-}
-
-// =====================================================
-// ERROR HANDLER FOR ASYNC ROUTES
-// =====================================================
-
-function asyncHandler(handler) {
-  return async (req, res, next) => {
-    try {
-      await handler(req, res, next);
-    } catch (error) {
-      console.error('Unhandled route error:', error);
-
-      if (!res.headersSent) {
-        sendError(
-          res,
-          500,
-          error?.message || 'Internal server error.'
-        );
-      }
-    }
-  };
 }
 
 // =====================================================
@@ -236,7 +247,9 @@ function asyncHandler(handler) {
 app.get(
   '/api/health',
   asyncHandler(async (req, res) => {
-    const result = await query('SELECT NOW() AS now');
+    const result = await safeQuery(
+      'SELECT NOW() AS now',
+    );
 
     res.json({
       success: true,
@@ -244,11 +257,11 @@ app.get(
       database: 'connected',
       time: result.rows[0].now,
     });
-  })
+  }),
 );
 
 // =====================================================
-// AUTH - CURRENT USER
+// AUTH - ME
 // =====================================================
 
 app.get(
@@ -273,11 +286,11 @@ app.get(
         created_at: owner.created_at,
       },
     });
-  })
+  }),
 );
 
 // =====================================================
-// AUTH - SIGN UP
+// AUTH - SIGNUP
 // =====================================================
 
 app.post(
@@ -292,43 +305,43 @@ app.post(
       return sendError(res, 400, 'Name is required.');
     }
 
-    if (!email) {
-      return sendError(res, 400, 'Email is required.');
-    }
-
-    if (!email.includes('@')) {
-      return sendError(res, 400, 'Please enter a valid email address.');
+    if (!email || !email.includes('@')) {
+      return sendError(
+        res,
+        400,
+        'Please enter a valid email address.',
+      );
     }
 
     if (password.length < 6) {
       return sendError(
         res,
         400,
-        'Password must be at least 6 characters.'
+        'Password must be at least 6 characters.',
       );
     }
 
-    const existing = await query(
+    const existing = await safeQuery(
       `
         SELECT id
         FROM owners
         WHERE LOWER(email) = LOWER($1)
         LIMIT 1
       `,
-      [email]
+      [email],
     );
 
     if (existing.rows.length > 0) {
       return sendError(
         res,
         409,
-        'An account with this email already exists.'
+        'An account with this email already exists.',
       );
     }
 
     const passwordHash = hashPassword(password);
 
-    const ownerResult = await query(
+    const result = await safeQuery(
       `
         INSERT INTO owners (
           name,
@@ -336,12 +349,7 @@ app.post(
           phone,
           password_hash
         )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4
-        )
+        VALUES ($1, $2, $3, $4)
         RETURNING
           id,
           name,
@@ -354,39 +362,27 @@ app.post(
         email,
         phone,
         passwordHash,
-      ]
+      ],
     );
 
-    const owner = ownerResult.rows[0];
+    const owner = result.rows[0];
 
-    // -------------------------------------------------
-    // IMPORTANT:
-    // If this is the first owner, attach all existing
-    // unassigned properties to this owner.
-    // -------------------------------------------------
-
-    const ownerCountResult = await query(
+    // First owner receives any old unassigned properties.
+    const countResult = await safeQuery(
       `
         SELECT COUNT(*)::INTEGER AS count
         FROM owners
-      `
+      `,
     );
 
-    const ownerCount =
-      ownerCountResult.rows[0]?.count || 0;
-
-    if (ownerCount === 1) {
-      await query(
+    if (Number(countResult.rows[0].count) === 1) {
+      await safeQuery(
         `
           UPDATE properties
           SET owner_id = $1
           WHERE owner_id IS NULL
         `,
-        [owner.id]
-      );
-
-      console.log(
-        `Existing properties assigned to first owner ${owner.id}.`
+        [owner.id],
       );
     }
 
@@ -399,7 +395,7 @@ app.post(
       authenticated: true,
       owner,
     });
-  })
+  }),
 );
 
 // =====================================================
@@ -416,11 +412,11 @@ app.post(
       return sendError(
         res,
         400,
-        'Email and password are required.'
+        'Email and password are required.',
       );
     }
 
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           id,
@@ -433,44 +429,42 @@ app.post(
         WHERE LOWER(email) = LOWER($1)
         LIMIT 1
       `,
-      [email]
+      [email],
     );
 
     if (result.rows.length === 0) {
       return sendError(
         res,
         401,
-        'Invalid email or password.'
+        'Invalid email or password.',
       );
     }
 
     const owner = result.rows[0];
 
-    const passwordHash = hashPassword(password);
-
-    const passwordMatches =
-      passwordHash === owner.password_hash;
-
-    if (!passwordMatches) {
+    if (
+      hashPassword(password) !==
+      owner.password_hash
+    ) {
       return sendError(
         res,
         401,
-        'Invalid email or password.'
+        'Invalid email or password.',
       );
     }
 
     const token = await createSession(owner.id);
 
-    setSessionCookie(res, token);
-
     delete owner.password_hash;
+
+    setSessionCookie(res, token);
 
     return res.json({
       success: true,
       authenticated: true,
       owner,
     });
-  })
+  }),
 );
 
 // =====================================================
@@ -484,35 +478,33 @@ app.post(
     const token = cookies[SESSION_COOKIE];
 
     if (token) {
-      const tokenHash = hashValue(token);
-
-      await query(
+      await safeQuery(
         `
           DELETE FROM sessions
           WHERE token_hash = $1
         `,
-        [tokenHash]
+        [hashValue(token)],
       );
     }
 
     clearSessionCookie(res);
 
-    return res.json({
+    res.json({
       success: true,
       authenticated: false,
     });
-  })
+  }),
 );
 
 // =====================================================
-// PROPERTIES - GET
+// PROPERTIES
 // =====================================================
 
 app.get(
   '/api/properties',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           p.id,
@@ -521,7 +513,6 @@ app.get(
           p.created_at,
 
           COUNT(DISTINCT r.id)::INTEGER AS room_count,
-
           COUNT(DISTINCT b.id)::INTEGER AS bed_count,
 
           COUNT(
@@ -570,67 +561,64 @@ app.get(
 
         ORDER BY p.id DESC
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
-    const properties = result.rows.map((property) => {
-      const bedCount = Number(property.bed_count || 0);
-      const occupiedBedCount =
-        Number(property.occupied_bed_count || 0);
+    return res.json(
+      result.rows.map((p) => {
+        const beds = Number(p.bed_count || 0);
+        const occupied = Number(
+          p.occupied_bed_count || 0,
+        );
 
-      return {
-        ...property,
-        room_count: Number(property.room_count || 0),
-        bed_count: bedCount,
-        occupied_bed_count: occupiedBedCount,
-        tenant_count: Number(property.tenant_count || 0),
-        monthly_revenue: Number(
-          property.monthly_revenue || 0
-        ),
-        occupancy_rate:
-          bedCount > 0
-            ? Math.round(
-                (occupiedBedCount / bedCount) * 100
-              )
-            : 0,
-      };
-    });
-
-    return res.json(properties);
-  })
+        return {
+          ...p,
+          room_count: Number(p.room_count || 0),
+          bed_count: beds,
+          occupied_bed_count: occupied,
+          tenant_count: Number(
+            p.tenant_count || 0,
+          ),
+          monthly_revenue: Number(
+            p.monthly_revenue || 0,
+          ),
+          occupancy_rate:
+            beds > 0
+              ? Math.round(
+                  (occupied / beds) * 100,
+                )
+              : 0,
+        };
+      }),
+    );
+  }),
 );
-
-// =====================================================
-// PROPERTIES - CREATE
-// =====================================================
 
 app.post(
   '/api/properties',
   requireAuth,
   asyncHandler(async (req, res) => {
     const name = cleanString(req.body?.name);
-    const address = cleanString(req.body?.address);
+    const address = cleanString(
+      req.body?.address,
+    );
 
     if (!name) {
       return sendError(
         res,
         400,
-        'Property name is required.'
+        'Property name is required.',
       );
     }
 
-    const result = await query(
+    const result = await safeQuery(
       `
         INSERT INTO properties (
           name,
           address,
           owner_id
         )
-        VALUES (
-          $1,
-          $2,
-          $3
-        )
+        VALUES ($1, $2, $3)
         RETURNING
           id,
           name,
@@ -642,26 +630,24 @@ app.post(
         name,
         address,
         req.owner.id,
-      ]
+      ],
     );
 
-    console.log(
-      `Property ${result.rows[0].id} created by owner ${req.owner.id}.`
+    return res.status(201).json(
+      result.rows[0],
     );
-
-    return res.status(201).json(result.rows[0]);
-  })
+  }),
 );
 
 // =====================================================
-// ROOMS - GET
+// ROOMS
 // =====================================================
 
 app.get(
   '/api/rooms',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           r.id,
@@ -670,6 +656,7 @@ app.get(
           r.sharing_type,
           r.rent_amount,
           r.created_at,
+
           p.name AS property_name,
 
           COUNT(b.id)::INTEGER AS bed_count,
@@ -693,51 +680,77 @@ app.get(
 
         GROUP BY
           r.id,
+          r.property_id,
+          r.room_number,
+          r.sharing_type,
+          r.rent_amount,
+          r.created_at,
           p.name
 
         ORDER BY
           p.id,
           r.room_number
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
     return res.json(
       result.rows.map((room) => ({
         ...room,
-        rent_amount: Number(room.rent_amount || 0),
-        bed_count: Number(room.bed_count || 0),
-        occupied_bed_count: Number(
-          room.occupied_bed_count || 0
+        rent_amount: Number(
+          room.rent_amount || 0,
         ),
-      }))
+        bed_count: Number(
+          room.bed_count || 0,
+        ),
+        occupied_bed_count: Number(
+          room.occupied_bed_count || 0,
+        ),
+      })),
     );
-  })
+  }),
 );
-
-// =====================================================
-// ROOMS - CREATE
-// =====================================================
 
 app.post(
   '/api/rooms',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const propertyId = Number(req.body?.property_id);
-    const roomNumber = cleanString(req.body?.room_number);
+    const propertyId = Number(
+      req.body?.property_id,
+    );
+
+    const roomNumber = cleanString(
+      req.body?.room_number,
+    );
+
     const sharingType =
-      cleanString(req.body?.sharing_type) || 'Single';
+      cleanString(req.body?.sharing_type) ||
+      'Single';
 
     const rentAmount = toNumber(
       req.body?.rent_amount,
-      0
+      0,
     );
 
-    if (!Number.isInteger(propertyId) || propertyId <= 0) {
+    console.log(
+      'CREATE ROOM:',
+      {
+        owner: req.owner.id,
+        propertyId,
+        roomNumber,
+        sharingType,
+        rentAmount,
+      },
+    );
+
+    if (
+      !Number.isInteger(propertyId) ||
+      propertyId <= 0
+    ) {
       return sendError(
         res,
         400,
-        'A valid property is required.'
+        'A valid property is required.',
       );
     }
 
@@ -745,11 +758,11 @@ app.post(
       return sendError(
         res,
         400,
-        'Room number is required.'
+        'Room number is required.',
       );
     }
 
-    const propertyResult = await query(
+    const property = await safeQuery(
       `
         SELECT id
         FROM properties
@@ -760,18 +773,41 @@ app.post(
       [
         propertyId,
         req.owner.id,
-      ]
+      ],
     );
 
-    if (propertyResult.rows.length === 0) {
+    if (property.rows.length === 0) {
       return sendError(
         res,
         403,
-        'Property does not belong to your account.'
+        'Property does not belong to your account.',
       );
     }
 
-    const result = await query(
+    // Prevent duplicate room numbers gracefully.
+    const duplicate = await safeQuery(
+      `
+        SELECT id
+        FROM rooms
+        WHERE property_id = $1
+          AND LOWER(room_number) = LOWER($2)
+        LIMIT 1
+      `,
+      [
+        propertyId,
+        roomNumber,
+      ],
+    );
+
+    if (duplicate.rows.length > 0) {
+      return sendError(
+        res,
+        409,
+        `Room ${roomNumber} already exists in this property.`,
+      );
+    }
+
+    const result = await safeQuery(
       `
         INSERT INTO rooms (
           property_id,
@@ -779,12 +815,7 @@ app.post(
           sharing_type,
           rent_amount
         )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4
-        )
+        VALUES ($1, $2, $3, $4)
         RETURNING
           id,
           property_id,
@@ -798,22 +829,29 @@ app.post(
         roomNumber,
         sharingType,
         rentAmount,
-      ]
+      ],
     );
 
-    return res.status(201).json(result.rows[0]);
-  })
+    console.log(
+      `Room ${roomNumber} created successfully.`,
+    );
+
+    return res.status(201).json({
+      success: true,
+      ...result.rows[0],
+    });
+  }),
 );
 
 // =====================================================
-// BEDS - GET
+// BEDS
 // =====================================================
 
 app.get(
   '/api/beds',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           b.id,
@@ -839,7 +877,9 @@ app.get(
 
         LEFT JOIN tenants t
           ON t.bed_id = b.id
-          AND LOWER(COALESCE(t.status, '')) = 'active'
+          AND LOWER(
+            COALESCE(t.status, '')
+          ) = 'active'
 
         WHERE p.owner_id = $1
 
@@ -848,29 +888,33 @@ app.get(
           r.room_number,
           b.bed_number
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
     return res.json(result.rows);
-  })
+  }),
 );
-
-// =====================================================
-// BEDS - CREATE
-// =====================================================
 
 app.post(
   '/api/beds',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const roomId = Number(req.body?.room_id);
-    const bedNumber = cleanString(req.body?.bed_number);
+    const roomId = Number(
+      req.body?.room_id,
+    );
 
-    if (!Number.isInteger(roomId) || roomId <= 0) {
+    const bedNumber = cleanString(
+      req.body?.bed_number,
+    );
+
+    if (
+      !Number.isInteger(roomId) ||
+      roomId <= 0
+    ) {
       return sendError(
         res,
         400,
-        'A valid room is required.'
+        'A valid room is required.',
       );
     }
 
@@ -878,11 +922,11 @@ app.post(
       return sendError(
         res,
         400,
-        'Bed number is required.'
+        'Bed number is required.',
       );
     }
 
-    const roomResult = await query(
+    const room = await safeQuery(
       `
         SELECT r.id
         FROM rooms r
@@ -895,29 +939,47 @@ app.post(
       [
         roomId,
         req.owner.id,
-      ]
+      ],
     );
 
-    if (roomResult.rows.length === 0) {
+    if (room.rows.length === 0) {
       return sendError(
         res,
         403,
-        'Room does not belong to your account.'
+        'Room does not belong to your account.',
       );
     }
 
-    const result = await query(
+    const duplicate = await safeQuery(
+      `
+        SELECT id
+        FROM beds
+        WHERE room_id = $1
+          AND LOWER(bed_number) = LOWER($2)
+        LIMIT 1
+      `,
+      [
+        roomId,
+        bedNumber,
+      ],
+    );
+
+    if (duplicate.rows.length > 0) {
+      return sendError(
+        res,
+        409,
+        `Bed ${bedNumber} already exists in this room.`,
+      );
+    }
+
+    const result = await safeQuery(
       `
         INSERT INTO beds (
           room_id,
           bed_number,
           is_occupied
         )
-        VALUES (
-          $1,
-          $2,
-          FALSE
-        )
+        VALUES ($1, $2, FALSE)
         RETURNING
           id,
           room_id,
@@ -928,22 +990,25 @@ app.post(
       [
         roomId,
         bedNumber,
-      ]
+      ],
     );
 
-    return res.status(201).json(result.rows[0]);
-  })
+    return res.status(201).json({
+      success: true,
+      ...result.rows[0],
+    });
+  }),
 );
 
 // =====================================================
-// TENANTS - GET
+// TENANTS
 // =====================================================
 
 app.get(
   '/api/tenants',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           t.id,
@@ -983,40 +1048,44 @@ app.get(
 
         ORDER BY t.id DESC
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
     return res.json(
       result.rows.map((tenant) => ({
         ...tenant,
         monthly_rent: Number(
-          tenant.monthly_rent || 0
-        ),
-        deposit_amount: Number(
-          tenant.deposit_amount || 0
+          tenant.monthly_rent || 0,
         ),
         due_date: Number(
-          tenant.due_date || 5
+          tenant.due_date || 5,
         ),
-      }))
+        deposit_amount: Number(
+          tenant.deposit_amount || 0,
+        ),
+      })),
     );
-  })
+  }),
 );
-
-// =====================================================
-// TENANTS - CREATE
-// =====================================================
 
 app.post(
   '/api/tenants',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const name = cleanString(req.body?.name);
-    const phone = cleanString(req.body?.phone);
-    const email = cleanString(req.body?.email);
+    const name = cleanString(
+      req.body?.name,
+    );
+
+    const phone = cleanString(
+      req.body?.phone,
+    );
+
+    const email = cleanString(
+      req.body?.email,
+    );
 
     const propertyId = Number(
-      req.body?.property_id
+      req.body?.property_id,
     );
 
     const roomId =
@@ -1035,30 +1104,33 @@ app.post(
 
     const monthlyRent = toNumber(
       req.body?.monthly_rent,
-      0
+      0,
     );
 
     const dueDate = toNumber(
       req.body?.due_date,
-      5
+      5,
     );
 
     const depositAmount = toNumber(
       req.body?.deposit_amount,
-      0
+      0,
     );
 
     const moveInDate =
-      cleanString(req.body?.move_in_date) || null;
+      cleanString(
+        req.body?.move_in_date,
+      ) || null;
 
     const status =
-      cleanString(req.body?.status) || 'Active';
+      cleanString(req.body?.status) ||
+      'Active';
 
     if (!name) {
       return sendError(
         res,
         400,
-        'Tenant name is required.'
+        'Tenant name is required.',
       );
     }
 
@@ -1066,23 +1138,22 @@ app.post(
       return sendError(
         res,
         400,
-        'Tenant phone is required.'
+        'Tenant phone is required.',
       );
     }
 
-    if (!Number.isInteger(propertyId) || propertyId <= 0) {
+    if (
+      !Number.isInteger(propertyId) ||
+      propertyId <= 0
+    ) {
       return sendError(
         res,
         400,
-        'A valid property is required.'
+        'A valid property is required.',
       );
     }
 
-    // -------------------------------------------------
-    // Verify property ownership
-    // -------------------------------------------------
-
-    const propertyResult = await query(
+    const property = await safeQuery(
       `
         SELECT id
         FROM properties
@@ -1093,66 +1164,43 @@ app.post(
       [
         propertyId,
         req.owner.id,
-      ]
+      ],
     );
 
-    if (propertyResult.rows.length === 0) {
+    if (property.rows.length === 0) {
       return sendError(
         res,
         403,
-        'Property does not belong to your account.'
+        'Property does not belong to your account.',
       );
     }
 
-    // -------------------------------------------------
-    // Verify room if supplied
-    // -------------------------------------------------
-
     if (roomId !== null) {
-      if (!Number.isInteger(roomId) || roomId <= 0) {
-        return sendError(
-          res,
-          400,
-          'Invalid room.'
-        );
-      }
-
-      const roomResult = await query(
+      const room = await safeQuery(
         `
           SELECT id
           FROM rooms
           WHERE id = $1
             AND property_id = $2
+          LIMIT 1
         `,
         [
           roomId,
           propertyId,
-        ]
+        ],
       );
 
-      if (roomResult.rows.length === 0) {
+      if (room.rows.length === 0) {
         return sendError(
           res,
           400,
-          'Selected room does not belong to the property.'
+          'Selected room does not belong to the property.',
         );
       }
     }
 
-    // -------------------------------------------------
-    // Verify bed if supplied
-    // -------------------------------------------------
-
     if (bedId !== null) {
-      if (!Number.isInteger(bedId) || bedId <= 0) {
-        return sendError(
-          res,
-          400,
-          'Invalid bed.'
-        );
-      }
-
-      const bedResult = await query(
+      const bed = await safeQuery(
         `
           SELECT b.id
           FROM beds b
@@ -1160,46 +1208,45 @@ app.post(
             ON r.id = b.room_id
           WHERE b.id = $1
             AND r.property_id = $2
+          LIMIT 1
         `,
         [
           bedId,
           propertyId,
-        ]
+        ],
       );
 
-      if (bedResult.rows.length === 0) {
+      if (bed.rows.length === 0) {
         return sendError(
           res,
           400,
-          'Selected bed does not belong to the property.'
+          'Selected bed does not belong to the property.',
         );
       }
 
-      const occupiedResult = await query(
+      const occupied = await safeQuery(
         `
           SELECT id
           FROM tenants
           WHERE bed_id = $1
-            AND LOWER(COALESCE(status, '')) = 'active'
+            AND LOWER(
+              COALESCE(status, '')
+            ) = 'active'
           LIMIT 1
         `,
-        [bedId]
+        [bedId],
       );
 
-      if (occupiedResult.rows.length > 0) {
+      if (occupied.rows.length > 0) {
         return sendError(
           res,
           409,
-          'This bed is already occupied.'
+          'This bed is already occupied.',
         );
       }
     }
 
-    // -------------------------------------------------
-    // Create tenant
-    // -------------------------------------------------
-
-    const result = await query(
+    const result = await safeQuery(
       `
         INSERT INTO tenants (
           name,
@@ -1215,17 +1262,7 @@ app.post(
           status
         )
         VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6,
-          $7,
-          $8,
-          $9,
-          $10,
-          $11
+          $1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11
         )
         RETURNING
           id,
@@ -1255,54 +1292,49 @@ app.post(
         depositAmount,
         moveInDate,
         status,
-      ]
+      ],
     );
-
-    // -------------------------------------------------
-    // Mark selected bed occupied
-    // -------------------------------------------------
 
     if (
       bedId !== null &&
       status.toLowerCase() === 'active'
     ) {
-      await query(
+      await safeQuery(
         `
           UPDATE beds
           SET is_occupied = TRUE
           WHERE id = $1
         `,
-        [bedId]
+        [bedId],
       );
     }
 
-    return res.status(201).json(
-      result.rows[0]
-    );
-  })
+    return res.status(201).json({
+      success: true,
+      ...result.rows[0],
+    });
+  }),
 );
 
 // =====================================================
-// PAYMENTS - GET
+// PAYMENTS
 // =====================================================
 
 app.get(
   '/api/payments',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           pay.id,
           pay.tenant_id,
           t.name AS tenant_name,
-
           pay.amount,
           pay.payment_date,
           pay.payment_method,
           pay.payment_month,
           pay.notes,
-
           p.name AS property_name,
           r.room_number
 
@@ -1323,54 +1355,59 @@ app.get(
           pay.payment_date DESC,
           pay.id DESC
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
     return res.json(
       result.rows.map((payment) => ({
         ...payment,
-        amount: Number(payment.amount || 0),
-      }))
+        amount: Number(
+          payment.amount || 0,
+        ),
+      })),
     );
-  })
+  }),
 );
-
-// =====================================================
-// PAYMENTS - CREATE
-// =====================================================
 
 app.post(
   '/api/payments',
   requireAuth,
   asyncHandler(async (req, res) => {
     const tenantId = Number(
-      req.body?.tenant_id
+      req.body?.tenant_id,
     );
 
     const amount = toNumber(
       req.body?.amount,
-      0
+      0,
     );
 
     const paymentDate =
-      cleanString(req.body?.payment_date) ||
-      null;
+      cleanString(
+        req.body?.payment_date,
+      ) || null;
 
     const paymentMethod =
-      cleanString(req.body?.payment_method) ||
-      'UPI';
+      cleanString(
+        req.body?.payment_method,
+      ) || 'UPI';
 
-    const paymentMonth =
-      cleanString(req.body?.payment_month);
+    const paymentMonth = cleanString(
+      req.body?.payment_month,
+    );
 
-    const notes =
-      cleanString(req.body?.notes);
+    const notes = cleanString(
+      req.body?.notes,
+    );
 
-    if (!Number.isInteger(tenantId) || tenantId <= 0) {
+    if (
+      !Number.isInteger(tenantId) ||
+      tenantId <= 0
+    ) {
       return sendError(
         res,
         400,
-        'A valid tenant is required.'
+        'A valid tenant is required.',
       );
     }
 
@@ -1378,7 +1415,7 @@ app.post(
       return sendError(
         res,
         400,
-        'Payment amount must be greater than zero.'
+        'Payment amount must be greater than zero.',
       );
     }
 
@@ -1386,11 +1423,11 @@ app.post(
       return sendError(
         res,
         400,
-        'Payment month is required.'
+        'Payment month is required.',
       );
     }
 
-    const tenantResult = await query(
+    const tenant = await safeQuery(
       `
         SELECT t.id
         FROM tenants t
@@ -1403,21 +1440,21 @@ app.post(
       [
         tenantId,
         req.owner.id,
-      ]
+      ],
     );
 
-    if (tenantResult.rows.length === 0) {
+    if (tenant.rows.length === 0) {
       return sendError(
         res,
         403,
-        'Tenant does not belong to your account.'
+        'Tenant does not belong to your account.',
       );
     }
 
     let result;
 
     if (paymentDate) {
-      result = await query(
+      result = await safeQuery(
         `
           INSERT INTO payments (
             tenant_id,
@@ -1427,14 +1464,7 @@ app.post(
             payment_month,
             notes
           )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            $6
-          )
+          VALUES ($1,$2,$3,$4,$5,$6)
           RETURNING *
         `,
         [
@@ -1444,10 +1474,10 @@ app.post(
           paymentMethod,
           paymentMonth,
           notes,
-        ]
+        ],
       );
     } else {
-      result = await query(
+      result = await safeQuery(
         `
           INSERT INTO payments (
             tenant_id,
@@ -1456,13 +1486,7 @@ app.post(
             payment_month,
             notes
           )
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5
-          )
+          VALUES ($1,$2,$3,$4,$5)
           RETURNING *
         `,
         [
@@ -1471,25 +1495,26 @@ app.post(
           paymentMethod,
           paymentMonth,
           notes,
-        ]
+        ],
       );
     }
 
-    return res.status(201).json(
-      result.rows[0]
-    );
-  })
+    return res.status(201).json({
+      success: true,
+      ...result.rows[0],
+    });
+  }),
 );
 
 // =====================================================
-// INVOICES - GET
+// INVOICES
 // =====================================================
 
 app.get(
   '/api/invoices',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const result = await query(
+    const result = await safeQuery(
       `
         SELECT
           i.id,
@@ -1511,64 +1536,55 @@ app.get(
 
         WHERE p.owner_id = $1
 
-        ORDER BY
-          i.id DESC
+        ORDER BY i.id DESC
       `,
-      [req.owner.id]
+      [req.owner.id],
     );
 
     return res.json(
       result.rows.map((invoice) => ({
         ...invoice,
-        amount: Number(invoice.amount || 0),
-      }))
+        amount: Number(
+          invoice.amount || 0,
+        ),
+      })),
     );
-  })
+  }),
 );
-
-// =====================================================
-// INVOICES - CREATE
-// =====================================================
 
 app.post(
   '/api/invoices',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const invoiceNumber =
-      cleanString(req.body?.invoice_number);
-
     const tenantId = Number(
-      req.body?.tenant_id
+      req.body?.tenant_id,
     );
 
     const amount = toNumber(
       req.body?.amount,
-      0
+      0,
     );
 
     const month =
-      cleanString(req.body?.month) || null;
+      cleanString(req.body?.month) ||
+      null;
 
-    const dueDate =
-      cleanString(req.body?.due_date);
+    const dueDate = cleanString(
+      req.body?.due_date,
+    );
 
     const status =
       cleanString(req.body?.status) ||
       'Pending';
 
-    if (!invoiceNumber) {
+    if (
+      !Number.isInteger(tenantId) ||
+      tenantId <= 0
+    ) {
       return sendError(
         res,
         400,
-        'Invoice number is required.'
-      );
-    }
-
-    if (!Number.isInteger(tenantId) || tenantId <= 0) {
-      return sendError(
-        res,
-        400,
-        'A valid tenant is required.'
+        'A valid tenant is required.',
       );
     }
 
@@ -1576,7 +1592,7 @@ app.post(
       return sendError(
         res,
         400,
-        'Invoice amount must be greater than zero.'
+        'Invoice amount must be greater than zero.',
       );
     }
 
@@ -1584,11 +1600,11 @@ app.post(
       return sendError(
         res,
         400,
-        'Due date is required.'
+        'Due date is required.',
       );
     }
 
-    const tenantResult = await query(
+    const tenant = await safeQuery(
       `
         SELECT t.id
         FROM tenants t
@@ -1601,18 +1617,25 @@ app.post(
       [
         tenantId,
         req.owner.id,
-      ]
+      ],
     );
 
-    if (tenantResult.rows.length === 0) {
+    if (tenant.rows.length === 0) {
       return sendError(
         res,
         403,
-        'Tenant does not belong to your account.'
+        'Tenant does not belong to your account.',
       );
     }
 
-    const result = await query(
+    // Automatically generate invoice number.
+    const invoiceNumber =
+      `INV-${Date.now()}-${crypto
+        .randomBytes(3)
+        .toString('hex')
+        .toUpperCase()}`;
+
+    const result = await safeQuery(
       `
         INSERT INTO invoices (
           invoice_number,
@@ -1622,14 +1645,7 @@ app.post(
           due_date,
           status
         )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4,
-          $5,
-          $6
-        )
+        VALUES ($1,$2,$3,$4,$5,$6)
         RETURNING *
       `,
       [
@@ -1639,544 +1655,34 @@ app.post(
         month,
         dueDate,
         status,
-      ]
+      ],
     );
 
-    return res.status(201).json(
-      result.rows[0]
-    );
-  })
+    return res.status(201).json({
+      success: true,
+      ...result.rows[0],
+    });
+  }),
 );
 
 // =====================================================
 // FRONTEND
 // =====================================================
 
-function loginPage() {
-  return `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0"
-  />
-  <title>Peacely</title>
-
-  <style>
-    * {
-      box-sizing: border-box;
-    }
-
-    body {
-      margin: 0;
-      min-height: 100vh;
-      font-family:
-        Inter,
-        -apple-system,
-        BlinkMacSystemFont,
-        "Segoe UI",
-        sans-serif;
-
-      background:
-        linear-gradient(
-          135deg,
-          #f5f7ff 0%,
-          #eef2ff 45%,
-          #f8fafc 100%
-        );
-
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
-      color: #172033;
-    }
-
-    .card {
-      width: 100%;
-      max-width: 430px;
-      background: white;
-      border-radius: 24px;
-      padding: 32px;
-      box-shadow:
-        0 20px 60px rgba(15, 23, 42, 0.12);
-    }
-
-    .logo {
-      width: 58px;
-      height: 58px;
-      border-radius: 18px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      margin-bottom: 18px;
-      background: #111827;
-      color: white;
-      font-size: 25px;
-      font-weight: 800;
-    }
-
-    h1 {
-      margin: 0 0 8px;
-      font-size: 30px;
-    }
-
-    p {
-      color: #64748b;
-      margin: 0 0 24px;
-      line-height: 1.5;
-    }
-
-    label {
-      display: block;
-      font-size: 14px;
-      font-weight: 600;
-      margin-bottom: 7px;
-    }
-
-    input {
-      width: 100%;
-      border: 1px solid #dbe1ea;
-      border-radius: 12px;
-      padding: 13px 14px;
-      font-size: 15px;
-      outline: none;
-      margin-bottom: 16px;
-    }
-
-    input:focus {
-      border-color: #6366f1;
-      box-shadow:
-        0 0 0 3px rgba(99, 102, 241, 0.12);
-    }
-
-    button {
-      width: 100%;
-      border: 0;
-      border-radius: 12px;
-      padding: 14px;
-      background: #111827;
-      color: white;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-    }
-
-    button:hover {
-      opacity: 0.92;
-    }
-
-    .secondary {
-      margin-top: 12px;
-      background: #eef2ff;
-      color: #3730a3;
-    }
-
-    .message {
-      display: none;
-      padding: 12px;
-      border-radius: 10px;
-      margin-bottom: 16px;
-      font-size: 14px;
-    }
-
-    .error {
-      display: block;
-      background: #fef2f2;
-      color: #b91c1c;
-    }
-
-    .success {
-      display: block;
-      background: #f0fdf4;
-      color: #15803d;
-    }
-
-    .hidden {
-      display: none;
-    }
-
-    .mode {
-      margin-top: 18px;
-      text-align: center;
-      color: #64748b;
-      font-size: 14px;
-    }
-
-    .mode button {
-      width: auto;
-      padding: 0;
-      margin-left: 5px;
-      background: transparent;
-      color: #4f46e5;
-      font-size: 14px;
-    }
-  </style>
-</head>
-
-<body>
-
-  <div class="card">
-
-    <div class="logo">P</div>
-
-    <h1 id="title">Welcome to Peacely</h1>
-
-    <p id="subtitle">
-      Manage your PG properties, rooms, tenants and payments in one place.
-    </p>
-
-    <div id="message" class="message"></div>
-
-    <div id="loginForm">
-
-      <label>Email</label>
-
-      <input
-        id="loginEmail"
-        type="email"
-        placeholder="you@example.com"
-        autocomplete="email"
-      />
-
-      <label>Password</label>
-
-      <input
-        id="loginPassword"
-        type="password"
-        placeholder="Enter your password"
-        autocomplete="current-password"
-      />
-
-      <button onclick="login()">
-        Login
-      </button>
-
-      <div class="mode">
-        Don't have an account?
-        <button onclick="showSignup()">
-          Create account
-        </button>
-      </div>
-
-    </div>
-
-    <div id="signupForm" class="hidden">
-
-      <label>Your name</label>
-
-      <input
-        id="signupName"
-        type="text"
-        placeholder="Your name"
-        autocomplete="name"
-      />
-
-      <label>Email</label>
-
-      <input
-        id="signupEmail"
-        type="email"
-        placeholder="you@example.com"
-        autocomplete="email"
-      />
-
-      <label>Phone</label>
-
-      <input
-        id="signupPhone"
-        type="tel"
-        placeholder="Phone number"
-        autocomplete="tel"
-      />
-
-      <label>Password</label>
-
-      <input
-        id="signupPassword"
-        type="password"
-        placeholder="Minimum 6 characters"
-        autocomplete="new-password"
-      />
-
-      <button onclick="signup()">
-        Create account
-      </button>
-
-      <div class="mode">
-        Already have an account?
-        <button onclick="showLogin()">
-          Login
-        </button>
-      </div>
-
-    </div>
-
-  </div>
-
-<script>
-
-function showMessage(message, type) {
-  const box = document.getElementById('message');
-
-  box.textContent = message;
-
-  box.className =
-    'message ' +
-    (type === 'success'
-      ? 'success'
-      : 'error');
-}
-
-function showLogin() {
-  document
-    .getElementById('loginForm')
-    .classList.remove('hidden');
-
-  document
-    .getElementById('signupForm')
-    .classList.add('hidden');
-
-  document.getElementById('title').textContent =
-    'Welcome to Peacely';
-
-  document.getElementById('subtitle').textContent =
-    'Manage your PG properties, rooms, tenants and payments in one place.';
-
-  document.getElementById('message').className =
-    'message';
-}
-
-function showSignup() {
-  document
-    .getElementById('loginForm')
-    .classList.add('hidden');
-
-  document
-    .getElementById('signupForm')
-    .classList.remove('hidden');
-
-  document.getElementById('title').textContent =
-    'Create your Peacely account';
-
-  document.getElementById('subtitle').textContent =
-    'Start managing your properties in one simple place.';
-
-  document.getElementById('message').className =
-    'message';
-}
-
-async function login() {
-  const email =
-    document.getElementById('loginEmail').value.trim();
-
-  const password =
-    document.getElementById('loginPassword').value;
-
-  if (!email || !password) {
-    showMessage(
-      'Please enter your email and password.',
-      'error'
-    );
-
-    return;
+app.use(express.static(DIST_DIR));
+
+app.get('*', (req, res) => {
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({
+      success: false,
+      error: 'API endpoint not found.',
+    });
   }
 
-  try {
-    const response = await fetch(
-      '/api/auth/login',
-      {
-        method: 'POST',
-
-        headers: {
-          'Content-Type': 'application/json'
-        },
-
-        credentials: 'same-origin',
-
-        body: JSON.stringify({
-          email,
-          password
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        'Login failed.'
-      );
-    }
-
-    showMessage(
-      'Login successful. Opening Peacely...',
-      'success'
-    );
-
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 400);
-
-  } catch (error) {
-    showMessage(
-      error.message ||
-      'Unable to login.',
-      'error'
-    );
-  }
-}
-
-async function signup() {
-  const name =
-    document.getElementById('signupName').value.trim();
-
-  const email =
-    document.getElementById('signupEmail').value.trim();
-
-  const phone =
-    document.getElementById('signupPhone').value.trim();
-
-  const password =
-    document.getElementById('signupPassword').value;
-
-  if (!name || !email || !password) {
-    showMessage(
-      'Please fill in your name, email and password.',
-      'error'
-    );
-
-    return;
-  }
-
-  if (password.length < 6) {
-    showMessage(
-      'Password must be at least 6 characters.',
-      'error'
-    );
-
-    return;
-  }
-
-  try {
-    const response = await fetch(
-      '/api/auth/signup',
-      {
-        method: 'POST',
-
-        headers: {
-          'Content-Type': 'application/json'
-        },
-
-        credentials: 'same-origin',
-
-        body: JSON.stringify({
-          name,
-          email,
-          phone,
-          password
-        })
-      }
-    );
-
-    const data = await response.json();
-
-    if (!response.ok) {
-      throw new Error(
-        data.error ||
-        'Unable to create account.'
-      );
-    }
-
-    showMessage(
-      'Account created. Opening Peacely...',
-      'success'
-    );
-
-    setTimeout(() => {
-      window.location.href = '/';
-    }, 400);
-
-  } catch (error) {
-    showMessage(
-      error.message ||
-      'Unable to create account.',
-      'error'
-    );
-  }
-}
-
-</script>
-
-</body>
-</html>
-  `;
-}
-
-// =====================================================
-// STATIC FRONTEND
-// =====================================================
-
-app.use(
-  express.static(DIST_DIR, {
-    index: false,
-  })
-);
-
-// =====================================================
-// ROOT
-// =====================================================
-
-app.get(
-  '/',
-  asyncHandler(async (req, res) => {
-    const owner = await getSessionOwner(req);
-
-    if (!owner) {
-      return res
-        .status(200)
-        .type('html')
-        .send(loginPage());
-    }
-
-    return res.sendFile(
-      path.join(DIST_DIR, 'index.html')
-    );
-  })
-);
-
-// =====================================================
-// SPA FALLBACK
-// =====================================================
-
-app.get(
-  '*',
-  asyncHandler(async (req, res) => {
-    // Never intercept API routes.
-    if (req.path.startsWith('/api/')) {
-      return res.status(404).json({
-        success: false,
-        error: 'API route not found.',
-      });
-    }
-
-    const owner = await getSessionOwner(req);
-
-    if (!owner) {
-      return res
-        .status(200)
-        .type('html')
-        .send(loginPage());
-    }
-
-    return res.sendFile(
-      path.join(DIST_DIR, 'index.html')
-    );
-  })
-);
+  return res.sendFile(
+    path.join(DIST_DIR, 'index.html'),
+  );
+});
 
 // =====================================================
 // SERVER START
@@ -2186,19 +1692,15 @@ async function startServer() {
   try {
     await initializeDatabase();
 
-    app.listen(
-      PORT,
-      '0.0.0.0',
-      () => {
-        console.log(
-          `Peacely server running on port ${PORT}`
-        );
-      }
-    );
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(
+        `Peacely server running on port ${PORT}`,
+      );
+    });
   } catch (error) {
     console.error(
       'Failed to start Peacely server:',
-      error
+      error,
     );
 
     process.exit(1);
@@ -2206,36 +1708,3 @@ async function startServer() {
 }
 
 startServer();
-
-// =====================================================
-// GRACEFUL SHUTDOWN
-// =====================================================
-
-async function shutdown(signal) {
-  console.log(
-    `${signal} received. Shutting down...`
-  );
-
-  try {
-    await pool.end();
-
-    process.exit(0);
-  } catch (error) {
-    console.error(
-      'Shutdown error:',
-      error
-    );
-
-    process.exit(1);
-  }
-}
-
-process.on(
-  'SIGTERM',
-  () => shutdown('SIGTERM')
-);
-
-process.on(
-  'SIGINT',
-  () => shutdown('SIGINT')
-);
