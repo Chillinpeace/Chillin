@@ -1,13 +1,3 @@
-// COMPLETE PEACELY BACKEND
-// Phase 3A → 3F integrated version
-//
-// IMPORTANT:
-// - Owner isolation is enforced server-side.
-// - Financial history is never deleted by feature operations.
-// - Multi-step tenant/bed operations use transactions.
-// - Existing payment/invoice behavior is preserved.
-// - Frontend is served from the Vite dist folder in production.
-
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
