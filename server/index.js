@@ -111,10 +111,6 @@ function sendError(res, status, message) {
   });
 }
 
-/*
- * Prevent the frontend from being stuck forever on
- * "Saving..." if PostgreSQL ever hangs on a query.
- */
 async function safeQuery(sql, params = []) {
   return Promise.race([
     query(sql, params),
@@ -153,18 +149,18 @@ function asyncHandler(handler) {
 // =====================================================
 
 /*
- * Recalculate one invoice from its linked payments.
+ * Recalculate invoice status from its linked payments.
  *
  * Status rules:
  *
  * Paid amount >= invoice amount
  *     -> Paid
  *
+ * Due date passed with outstanding balance
+ *     -> Overdue
+ *
  * Paid amount > 0
  *     -> Partially Paid
- *
- * Paid amount = 0 and due date passed
- *     -> Overdue
  *
  * Otherwise
  *     -> Pending
@@ -178,7 +174,8 @@ async function refreshInvoiceStatus(invoiceId) {
         id,
         amount,
         due_date,
-        status
+        status,
+        paid_at
       FROM invoices
       WHERE id = $1
       LIMIT 1
@@ -218,27 +215,25 @@ async function refreshInvoiceStatus(invoiceId) {
   );
 
   let status = 'Pending';
+  let paidAt = null;
 
   if (
     paidAmount >= invoiceAmount &&
     invoiceAmount > 0
   ) {
     status = 'Paid';
+    paidAt =
+      invoice.paid_at ||
+      new Date();
+  } else if (
+    invoice.due_date &&
+    new Date(
+      `${invoice.due_date}T23:59:59`,
+    ) < new Date()
+  ) {
+    status = 'Overdue';
   } else if (paidAmount > 0) {
     status = 'Partially Paid';
-  } else {
-    const dueDate = new Date(
-      `${invoice.due_date}T23:59:59`,
-    );
-
-    const today = new Date();
-
-    if (
-      !Number.isNaN(dueDate.getTime()) &&
-      dueDate < today
-    ) {
-      status = 'Overdue';
-    }
   }
 
   await safeQuery(
@@ -247,6 +242,11 @@ async function refreshInvoiceStatus(invoiceId) {
       SET
         paid_amount = $1,
         status = $2,
+        paid_at = CASE
+          WHEN $2 = 'Paid'
+            THEN COALESCE(paid_at, CURRENT_TIMESTAMP)
+          ELSE NULL
+        END,
         updated_at = CURRENT_TIMESTAMP
       WHERE id = $3
     `,
@@ -261,13 +261,16 @@ async function refreshInvoiceStatus(invoiceId) {
     ...invoice,
     paid_amount: paidAmount,
     status,
+    paid_at: paidAt,
   };
 }
 
 /*
- * Refresh all non-cancelled invoices before displaying
- * them. This makes overdue status automatic without
- * requiring a background cron job.
+ * Refresh all invoices belonging to an owner.
+ *
+ * This means an invoice automatically becomes
+ * Overdue when the owner opens the invoice page,
+ * without needing a background cron job.
  */
 async function refreshAllInvoiceStatuses(ownerId) {
   const result = await safeQuery(
@@ -279,7 +282,9 @@ async function refreshAllInvoiceStatuses(ownerId) {
       INNER JOIN properties p
         ON p.id = t.property_id
       WHERE p.owner_id = $1
-        AND LOWER(COALESCE(i.status, '')) <> 'cancelled'
+        AND LOWER(
+          COALESCE(i.status, '')
+        ) <> 'cancelled'
     `,
     [ownerId],
   );
@@ -336,7 +341,11 @@ async function getSessionOwner(req) {
 
     return result.rows[0];
   } catch (error) {
-    console.error('Session lookup failed:', error);
+    console.error(
+      'Session lookup failed:',
+      error,
+    );
+
     return null;
   }
 }
@@ -445,15 +454,28 @@ app.post(
   '/api/auth/signup',
   asyncHandler(async (req, res) => {
     const name = cleanString(req.body?.name);
-    const email = normalizeEmail(req.body?.email);
-    const phone = cleanString(req.body?.phone);
-    const password = String(req.body?.password || '');
+    const email = normalizeEmail(
+      req.body?.email,
+    );
+    const phone = cleanString(
+      req.body?.phone,
+    );
+    const password = String(
+      req.body?.password || '',
+    );
 
     if (!name) {
-      return sendError(res, 400, 'Name is required.');
+      return sendError(
+        res,
+        400,
+        'Name is required.',
+      );
     }
 
-    if (!email || !email.includes('@')) {
+    if (
+      !email ||
+      !email.includes('@')
+    ) {
       return sendError(
         res,
         400,
@@ -487,7 +509,8 @@ app.post(
       );
     }
 
-    const passwordHash = hashPassword(password);
+    const passwordHash =
+      hashPassword(password);
 
     const result = await safeQuery(
       `
@@ -522,7 +545,11 @@ app.post(
       `,
     );
 
-    if (Number(countResult.rows[0].count) === 1) {
+    if (
+      Number(
+        countResult.rows[0].count,
+      ) === 1
+    ) {
       await safeQuery(
         `
           UPDATE properties
@@ -533,7 +560,8 @@ app.post(
       );
     }
 
-    const token = await createSession(owner.id);
+    const token =
+      await createSession(owner.id);
 
     setSessionCookie(res, token);
 
@@ -552,8 +580,13 @@ app.post(
 app.post(
   '/api/auth/login',
   asyncHandler(async (req, res) => {
-    const email = normalizeEmail(req.body?.email);
-    const password = String(req.body?.password || '');
+    const email = normalizeEmail(
+      req.body?.email,
+    );
+
+    const password = String(
+      req.body?.password || '',
+    );
 
     if (!email || !password) {
       return sendError(
@@ -600,7 +633,8 @@ app.post(
       );
     }
 
-    const token = await createSession(owner.id);
+    const token =
+      await createSession(owner.id);
 
     delete owner.password_hash;
 
@@ -660,6 +694,7 @@ app.get(
           p.created_at,
 
           COUNT(DISTINCT r.id)::INTEGER AS room_count,
+
           COUNT(DISTINCT b.id)::INTEGER AS bed_count,
 
           COUNT(
@@ -671,7 +706,9 @@ app.get(
 
           COUNT(
             DISTINCT CASE
-              WHEN LOWER(COALESCE(t.status, '')) = 'active'
+              WHEN LOWER(
+                COALESCE(t.status, '')
+              ) = 'active'
               THEN t.id
             END
           )::INTEGER AS tenant_count,
@@ -679,7 +716,9 @@ app.get(
           COALESCE(
             SUM(
               CASE
-                WHEN LOWER(COALESCE(t.status, '')) = 'active'
+                WHEN LOWER(
+                  COALESCE(t.status, '')
+                ) = 'active'
                 THEN t.monthly_rent
                 ELSE 0
               END
@@ -713,14 +752,19 @@ app.get(
 
     return res.json(
       result.rows.map((p) => {
-        const beds = Number(p.bed_count || 0);
+        const beds = Number(
+          p.bed_count || 0,
+        );
+
         const occupied = Number(
           p.occupied_bed_count || 0,
         );
 
         return {
           ...p,
-          room_count: Number(p.room_count || 0),
+          room_count: Number(
+            p.room_count || 0,
+          ),
           bed_count: beds,
           occupied_bed_count: occupied,
           tenant_count: Number(
@@ -732,7 +776,8 @@ app.get(
           occupancy_rate:
             beds > 0
               ? Math.round(
-                  (occupied / beds) * 100,
+                  (occupied / beds) *
+                    100,
                 )
               : 0,
         };
@@ -745,7 +790,10 @@ app.post(
   '/api/properties',
   requireAuth,
   asyncHandler(async (req, res) => {
-    const name = cleanString(req.body?.name);
+    const name = cleanString(
+      req.body?.name,
+    );
+
     const address = cleanString(
       req.body?.address,
     );
@@ -871,8 +919,9 @@ app.post(
     );
 
     const sharingType =
-      cleanString(req.body?.sharing_type) ||
-      'Single';
+      cleanString(
+        req.body?.sharing_type,
+      ) || 'Single';
 
     const rentAmount = toNumber(
       req.body?.rent_amount,
@@ -1448,7 +1497,7 @@ app.post(
 );
 
 // =====================================================
-// PAYMENTS
+// PAYMENTS - LIST
 // =====================================================
 
 app.get(
@@ -1460,14 +1509,16 @@ app.get(
         SELECT
           pay.id,
           pay.tenant_id,
+          pay.invoice_id,
           t.name AS tenant_name,
           pay.amount,
           pay.payment_date,
           pay.payment_method,
           pay.payment_month,
           pay.notes,
-          pay.invoice_id,
+
           i.invoice_number,
+
           p.name AS property_name,
           r.room_number
 
@@ -1505,18 +1556,25 @@ app.get(
   }),
 );
 
+// =====================================================
+// PAYMENTS - CREATE
+// =====================================================
+
 /*
- * Record a payment.
+ * invoice_id is optional.
  *
- * invoice_id is OPTIONAL so all old payment functionality
- * continues to work.
+ * Existing normal tenant payments continue to work.
  *
- * If invoice_id is supplied:
- *   1. Validate invoice ownership.
- *   2. Check remaining balance.
- *   3. Insert payment.
- *   4. Recalculate invoice.
+ * If invoice_id is provided:
+ *
+ * 1. Validate invoice ownership.
+ * 2. Validate tenant/invoice relationship.
+ * 3. Calculate current balance.
+ * 4. Prevent overpayment.
+ * 5. Save payment against invoice.
+ * 6. Recalculate invoice status.
  */
+
 app.post(
   '/api/payments',
   requireAuth,
@@ -1582,6 +1640,10 @@ app.post(
       );
     }
 
+    // -----------------------------------------------------
+    // Verify tenant belongs to owner
+    // -----------------------------------------------------
+
     const tenant = await safeQuery(
       `
         SELECT
@@ -1608,41 +1670,56 @@ app.post(
       );
     }
 
-    // -----------------------------------------------
-    // INVOICE VALIDATION
-    // -----------------------------------------------
-
-    let invoice = null;
+    // -----------------------------------------------------
+    // Invoice validation
+    // -----------------------------------------------------
 
     if (invoiceId !== null) {
-      const invoiceResult = await safeQuery(
-        `
-          SELECT
-            i.id,
-            i.invoice_number,
-            i.tenant_id,
-            i.amount,
-            i.paid_amount,
-            i.status,
-            i.due_date
-          FROM invoices i
-          INNER JOIN tenants t
-            ON t.id = i.tenant_id
-          INNER JOIN properties p
-            ON p.id = t.property_id
-          WHERE i.id = $1
-            AND i.tenant_id = $2
-            AND p.owner_id = $3
-          LIMIT 1
-        `,
-        [
-          invoiceId,
-          tenantId,
-          req.owner.id,
-        ],
-      );
+      if (
+        !Number.isInteger(invoiceId) ||
+        invoiceId <= 0
+      ) {
+        return sendError(
+          res,
+          400,
+          'Invalid invoice ID.',
+        );
+      }
 
-      if (invoiceResult.rows.length === 0) {
+      const invoiceOwner =
+        await safeQuery(
+          `
+            SELECT
+              i.id,
+              i.invoice_number,
+              i.tenant_id,
+              i.amount,
+              i.status,
+              i.due_date
+            FROM invoices i
+
+            INNER JOIN tenants t
+              ON t.id = i.tenant_id
+
+            INNER JOIN properties p
+              ON p.id = t.property_id
+
+            WHERE i.id = $1
+              AND i.tenant_id = $2
+              AND p.owner_id = $3
+
+            LIMIT 1
+          `,
+          [
+            invoiceId,
+            tenantId,
+            req.owner.id,
+          ],
+        );
+
+      if (
+        invoiceOwner.rows.length === 0
+      ) {
         return sendError(
           res,
           404,
@@ -1650,10 +1727,13 @@ app.post(
         );
       }
 
-      invoice = invoiceResult.rows[0];
+      const invoice =
+        invoiceOwner.rows[0];
 
       if (
-        cleanString(invoice.status).toLowerCase() ===
+        cleanString(
+          invoice.status,
+        ).toLowerCase() ===
         'cancelled'
       ) {
         return sendError(
@@ -1663,34 +1743,42 @@ app.post(
         );
       }
 
-      // Recalculate current invoice balance.
-      await refreshInvoiceStatus(invoice.id);
-
-      const freshInvoice = await safeQuery(
-        `
-          SELECT
-            amount,
-            paid_amount,
-            status
-          FROM invoices
-          WHERE id = $1
-          LIMIT 1
-        `,
-        [invoice.id],
+      // Always calculate the latest balance
+      // before accepting another payment.
+      await refreshInvoiceStatus(
+        invoiceId,
       );
 
-      invoice = freshInvoice.rows[0];
+      const freshInvoice =
+        await safeQuery(
+          `
+            SELECT
+              amount,
+              paid_amount,
+              status
+            FROM invoices
+            WHERE id = $1
+            LIMIT 1
+          `,
+          [invoiceId],
+        );
 
-      const invoiceAmount = Number(
-        invoice.amount || 0,
-      );
+      const fresh =
+        freshInvoice.rows[0];
 
-      const paidAmount = Number(
-        invoice.paid_amount || 0,
-      );
+      const invoiceAmount =
+        Number(fresh.amount || 0);
+
+      const paidAmount =
+        Number(
+          fresh.paid_amount || 0,
+        );
 
       const balance =
-        invoiceAmount - paidAmount;
+        Math.max(
+          invoiceAmount - paidAmount,
+          0,
+        );
 
       if (balance <= 0) {
         return sendError(
@@ -1711,9 +1799,9 @@ app.post(
       }
     }
 
-    // -----------------------------------------------
-    // INSERT PAYMENT
-    // -----------------------------------------------
+    // -----------------------------------------------------
+    // Insert payment
+    // -----------------------------------------------------
 
     let result;
 
@@ -1729,7 +1817,15 @@ app.post(
             notes,
             invoice_id
           )
-          VALUES ($1,$2,$3,$4,$5,$6,$7)
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6,
+            $7
+          )
           RETURNING *
         `,
         [
@@ -1753,7 +1849,14 @@ app.post(
             notes,
             invoice_id
           )
-          VALUES ($1,$2,$3,$4,$5,$6)
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4,
+            $5,
+            $6
+          )
           RETURNING *
         `,
         [
@@ -1767,9 +1870,9 @@ app.post(
       );
     }
 
-    // -----------------------------------------------
-    // REFRESH INVOICE
-    // -----------------------------------------------
+    // -----------------------------------------------------
+    // Refresh invoice after payment
+    // -----------------------------------------------------
 
     let updatedInvoice = null;
 
@@ -1796,7 +1899,6 @@ app.get(
   '/api/invoices',
   requireAuth,
   asyncHandler(async (req, res) => {
-    // Automatically update overdue/paid status.
     await refreshAllInvoiceStatuses(
       req.owner.id,
     );
@@ -1807,31 +1909,43 @@ app.get(
           i.id,
           i.invoice_number,
           i.tenant_id,
+
           t.name AS tenant_name,
+          t.phone AS tenant_phone,
+
           i.amount,
           i.month,
           i.due_date,
           i.status,
           i.paid_amount,
+
           i.delivery_status,
+          i.sent_at,
+          i.paid_at,
+
           i.created_at,
           i.updated_at,
 
           GREATEST(
-            i.amount - COALESCE(i.paid_amount, 0),
+            i.amount -
+            COALESCE(i.paid_amount, 0),
             0
-          )::NUMERIC(10,2) AS balance_amount,
+          )::NUMERIC(10,2)
+            AS balance_amount,
 
           CASE
             WHEN i.amount > 0
             THEN ROUND(
               (
-                COALESCE(i.paid_amount, 0)
-                / i.amount
+                COALESCE(
+                  i.paid_amount,
+                  0
+                ) / i.amount
               ) * 100
             )
             ELSE 0
-          END::INTEGER AS payment_percentage
+          END::INTEGER
+            AS payment_percentage
 
         FROM invoices i
 
@@ -1843,7 +1957,9 @@ app.get(
 
         WHERE p.owner_id = $1
 
-        ORDER BY i.id DESC
+        ORDER BY
+          i.due_date DESC,
+          i.id DESC
       `,
       [req.owner.id],
     );
@@ -1865,7 +1981,8 @@ app.get(
         ),
 
         payment_percentage: Number(
-          invoice.payment_percentage || 0,
+          invoice.payment_percentage ||
+            0,
         ),
       })),
     );
@@ -1898,24 +2015,27 @@ app.post(
     );
 
     /*
-     * Only allow legitimate invoice statuses when
-     * importing/creating. New invoices normally start
-     * as Pending.
+     * New invoices normally start as Pending.
+     *
+     * Cancelled is retained only for controlled
+     * imports/administrative use.
      */
     const requestedStatus =
-      cleanString(req.body?.status) ||
-      'Pending';
+      cleanString(
+        req.body?.status,
+      ) || 'Pending';
 
     const allowedStatuses = [
       'Pending',
       'Cancelled',
     ];
 
-    const status = allowedStatuses.includes(
-      requestedStatus,
-    )
-      ? requestedStatus
-      : 'Pending';
+    const status =
+      allowedStatuses.includes(
+        requestedStatus,
+      )
+        ? requestedStatus
+        : 'Pending';
 
     if (
       !Number.isInteger(tenantId) ||
@@ -1986,7 +2106,9 @@ app.post(
           due_date,
           status,
           paid_amount,
-          delivery_status
+          delivery_status,
+          sent_at,
+          paid_at
         )
         VALUES (
           $1,
@@ -1996,7 +2118,9 @@ app.post(
           $5,
           $6,
           0,
-          'Not Sent'
+          'Not Sent',
+          NULL,
+          NULL
         )
         RETURNING *
       `,
@@ -2010,18 +2134,23 @@ app.post(
       ],
     );
 
-    const invoice = result.rows[0];
+    const invoice =
+      result.rows[0];
 
     return res.status(201).json({
       success: true,
       ...invoice,
+
       amount: Number(
         invoice.amount || 0,
       ),
+
       paid_amount: 0,
+
       balance_amount: Number(
         invoice.amount || 0,
       ),
+
       payment_percentage: 0,
     });
   }),
@@ -2050,25 +2179,32 @@ app.get(
       );
     }
 
-    const invoiceOwner = await safeQuery(
-      `
-        SELECT i.id
-        FROM invoices i
-        INNER JOIN tenants t
-          ON t.id = i.tenant_id
-        INNER JOIN properties p
-          ON p.id = t.property_id
-        WHERE i.id = $1
-          AND p.owner_id = $2
-        LIMIT 1
-      `,
-      [
-        invoiceId,
-        req.owner.id,
-      ],
-    );
+    const invoiceOwner =
+      await safeQuery(
+        `
+          SELECT i.id
+          FROM invoices i
 
-    if (invoiceOwner.rows.length === 0) {
+          INNER JOIN tenants t
+            ON t.id = i.tenant_id
+
+          INNER JOIN properties p
+            ON p.id = t.property_id
+
+          WHERE i.id = $1
+            AND p.owner_id = $2
+
+          LIMIT 1
+        `,
+        [
+          invoiceId,
+          req.owner.id,
+        ],
+      );
+
+    if (
+      invoiceOwner.rows.length === 0
+    ) {
       return sendError(
         res,
         404,
@@ -2086,21 +2222,29 @@ app.get(
           i.id,
           i.invoice_number,
           i.tenant_id,
+
           t.name AS tenant_name,
           t.phone AS tenant_phone,
+
           i.amount,
           i.month,
           i.due_date,
           i.status,
           i.paid_amount,
+
           i.delivery_status,
+          i.sent_at,
+          i.paid_at,
+
           i.created_at,
           i.updated_at,
 
           GREATEST(
-            i.amount - COALESCE(i.paid_amount, 0),
+            i.amount -
+            COALESCE(i.paid_amount, 0),
             0
-          )::NUMERIC(10,2) AS balance_amount
+          )::NUMERIC(10,2)
+            AS balance_amount
 
         FROM invoices i
 
@@ -2112,6 +2256,7 @@ app.get(
 
         WHERE i.id = $1
           AND p.owner_id = $2
+
         LIMIT 1
       `,
       [
@@ -2120,38 +2265,40 @@ app.get(
       ],
     );
 
-    const invoice = result.rows[0];
+    const invoice =
+      result.rows[0];
 
-    const payments = await safeQuery(
-      `
-        SELECT
-          pay.id,
-          pay.amount,
-          pay.payment_date,
-          pay.payment_method,
-          pay.payment_month,
-          pay.notes
+    const payments =
+      await safeQuery(
+        `
+          SELECT
+            pay.id,
+            pay.amount,
+            pay.payment_date,
+            pay.payment_method,
+            pay.payment_month,
+            pay.notes
 
-        FROM payments pay
+          FROM payments pay
 
-        INNER JOIN tenants t
-          ON t.id = pay.tenant_id
+          INNER JOIN tenants t
+            ON t.id = pay.tenant_id
 
-        INNER JOIN properties p
-          ON p.id = t.property_id
+          INNER JOIN properties p
+            ON p.id = t.property_id
 
-        WHERE pay.invoice_id = $1
-          AND p.owner_id = $2
+          WHERE pay.invoice_id = $1
+            AND p.owner_id = $2
 
-        ORDER BY
-          pay.payment_date DESC,
-          pay.id DESC
-      `,
-      [
-        invoiceId,
-        req.owner.id,
-      ],
-    );
+          ORDER BY
+            pay.payment_date DESC,
+            pay.id DESC
+        `,
+        [
+          invoiceId,
+          req.owner.id,
+        ],
+      );
 
     return res.json({
       ...invoice,
@@ -2168,14 +2315,15 @@ app.get(
         invoice.balance_amount || 0,
       ),
 
-      payments: payments.rows.map(
-        (payment) => ({
-          ...payment,
-          amount: Number(
-            payment.amount || 0,
-          ),
-        }),
-      ),
+      payments:
+        payments.rows.map(
+          (payment) => ({
+            ...payment,
+            amount: Number(
+              payment.amount || 0,
+            ),
+          }),
+        ),
     });
   }),
 );
@@ -2206,11 +2354,13 @@ app.patch(
     const result = await safeQuery(
       `
         UPDATE invoices i
+
         SET
           status = 'Cancelled',
           updated_at = CURRENT_TIMESTAMP
 
         FROM tenants t
+
         INNER JOIN properties p
           ON p.id = t.property_id
 
@@ -2218,8 +2368,7 @@ app.patch(
           AND i.tenant_id = t.id
           AND p.owner_id = $2
 
-        RETURNING
-          i.*
+        RETURNING i.*
       `,
       [
         invoiceId,
@@ -2268,11 +2417,17 @@ app.patch(
     const result = await safeQuery(
       `
         UPDATE invoices i
+
         SET
           delivery_status = 'Sent',
+          sent_at = COALESCE(
+            i.sent_at,
+            CURRENT_TIMESTAMP
+          ),
           updated_at = CURRENT_TIMESTAMP
 
         FROM tenants t
+
         INNER JOIN properties p
           ON p.id = t.property_id
 
@@ -2281,7 +2436,19 @@ app.patch(
           AND p.owner_id = $2
 
         RETURNING
-          i.*
+          i.id,
+          i.invoice_number,
+          i.tenant_id,
+          i.amount,
+          i.month,
+          i.due_date,
+          i.status,
+          i.paid_amount,
+          i.delivery_status,
+          i.sent_at,
+          i.paid_at,
+          i.created_at,
+          i.updated_at
       `,
       [
         invoiceId,
@@ -2297,9 +2464,31 @@ app.patch(
       );
     }
 
+    const invoice =
+      result.rows[0];
+
     return res.json({
       success: true,
-      invoice: result.rows[0],
+      message: 'Invoice marked as sent.',
+      invoice: {
+        ...invoice,
+
+        amount: Number(
+          invoice.amount || 0,
+        ),
+
+        paid_amount: Number(
+          invoice.paid_amount || 0,
+        ),
+
+        balance_amount: Math.max(
+          Number(invoice.amount || 0) -
+            Number(
+              invoice.paid_amount || 0,
+            ),
+          0,
+        ),
+      },
     });
   }),
 );
@@ -2319,6 +2508,7 @@ app.get(
     const result = await safeQuery(
       `
         SELECT
+
           COALESCE(
             SUM(i.amount),
             0
@@ -2326,7 +2516,10 @@ app.get(
 
           COALESCE(
             SUM(
-              COALESCE(i.paid_amount, 0)
+              COALESCE(
+                i.paid_amount,
+                0
+              )
             ),
             0
           ) AS collected,
@@ -2335,14 +2528,20 @@ app.get(
             SUM(
               CASE
                 WHEN LOWER(
-                  COALESCE(i.status, '')
+                  COALESCE(
+                    i.status,
+                    ''
+                  )
                 ) IN (
                   'pending',
                   'partially paid'
                 )
                 THEN GREATEST(
                   i.amount -
-                  COALESCE(i.paid_amount, 0),
+                  COALESCE(
+                    i.paid_amount,
+                    0
+                  ),
                   0
                 )
                 ELSE 0
@@ -2355,38 +2554,68 @@ app.get(
             SUM(
               CASE
                 WHEN LOWER(
-                  COALESCE(i.status, '')
+                  COALESCE(
+                    i.status,
+                    ''
+                  )
                 ) = 'overdue'
+
                 THEN GREATEST(
                   i.amount -
-                  COALESCE(i.paid_amount, 0),
+                  COALESCE(
+                    i.paid_amount,
+                    0
+                  ),
                   0
                 )
+
                 ELSE 0
               END
             ),
             0
           ) AS overdue,
 
-          COUNT(*)::INTEGER AS invoice_count,
+          COUNT(*)::INTEGER
+            AS invoice_count,
 
           COUNT(
             CASE
               WHEN LOWER(
-                COALESCE(i.status, '')
+                COALESCE(
+                  i.status,
+                  ''
+                )
               ) = 'paid'
               THEN 1
             END
-          )::INTEGER AS paid_invoice_count,
+          )::INTEGER
+            AS paid_invoice_count,
 
           COUNT(
             CASE
               WHEN LOWER(
-                COALESCE(i.status, '')
+                COALESCE(
+                  i.status,
+                  ''
+                )
               ) = 'overdue'
               THEN 1
             END
-          )::INTEGER AS overdue_invoice_count
+          )::INTEGER
+            AS overdue_invoice_count,
+
+          COUNT(
+            CASE
+              WHEN LOWER(
+                COALESCE(
+                  i.delivery_status,
+                  ''
+                )
+              ) = 'sent'
+              THEN 1
+            END
+          )::INTEGER
+            AS sent_invoice_count
 
         FROM invoices i
 
@@ -2397,27 +2626,31 @@ app.get(
           ON p.id = t.property_id
 
         WHERE p.owner_id = $1
+
           AND LOWER(
-            COALESCE(i.status, '')
+            COALESCE(
+              i.status,
+              ''
+            )
           ) <> 'cancelled'
       `,
       [req.owner.id],
     );
 
-    const row = result.rows[0];
+    const row =
+      result.rows[0];
 
-    const expected = Number(
-      row.expected || 0,
-    );
+    const expected =
+      Number(row.expected || 0);
 
-    const collected = Number(
-      row.collected || 0,
-    );
+    const collected =
+      Number(row.collected || 0);
 
     return res.json({
       success: true,
 
       expected,
+
       collected,
 
       pending: Number(
@@ -2432,13 +2665,23 @@ app.get(
         row.invoice_count || 0,
       ),
 
-      paid_invoice_count: Number(
-        row.paid_invoice_count || 0,
-      ),
+      paid_invoice_count:
+        Number(
+          row.paid_invoice_count ||
+            0,
+        ),
 
-      overdue_invoice_count: Number(
-        row.overdue_invoice_count || 0,
-      ),
+      overdue_invoice_count:
+        Number(
+          row.overdue_invoice_count ||
+            0,
+        ),
+
+      sent_invoice_count:
+        Number(
+          row.sent_invoice_count ||
+            0,
+        ),
 
       collection_rate:
         expected > 0
@@ -2455,10 +2698,14 @@ app.get(
 // FRONTEND
 // =====================================================
 
-app.use(express.static(DIST_DIR));
+app.use(
+  express.static(DIST_DIR),
+);
 
 app.get('*', (req, res) => {
-  if (req.path.startsWith('/api/')) {
+  if (
+    req.path.startsWith('/api/')
+  ) {
     return res.status(404).json({
       success: false,
       error: 'API endpoint not found.',
@@ -2466,7 +2713,10 @@ app.get('*', (req, res) => {
   }
 
   return res.sendFile(
-    path.join(DIST_DIR, 'index.html'),
+    path.join(
+      DIST_DIR,
+      'index.html',
+    ),
   );
 });
 
@@ -2478,11 +2728,15 @@ async function startServer() {
   try {
     await initializeDatabase();
 
-    app.listen(PORT, '0.0.0.0', () => {
-      console.log(
-        `Peacely server running on port ${PORT}`,
-      );
-    });
+    app.listen(
+      PORT,
+      '0.0.0.0',
+      () => {
+        console.log(
+          `Peacely server running on port ${PORT}`,
+        );
+      },
+    );
   } catch (error) {
     console.error(
       'Failed to start Peacely server:',
