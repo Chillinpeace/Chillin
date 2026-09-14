@@ -1,4 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, {
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import ReactDOM from 'react-dom/client';
 import './style.css';
 
@@ -131,7 +135,8 @@ const API = '/api';
 const money = (value: number) =>
   `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () =>
+  new Date().toISOString().slice(0, 10);
 
 const currentMonthName = () =>
   new Date().toLocaleString('en-IN', {
@@ -146,7 +151,10 @@ const formatDate = (value?: string) => {
   if (!value) return '-';
 
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
 
   return date.toLocaleDateString('en-IN', {
     day: '2-digit',
@@ -160,27 +168,35 @@ const getInitials = (name: string) =>
     .split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0]?.toUpperCase())
+    .map((part) =>
+      part[0]?.toUpperCase(),
+    )
     .join('') || 'P';
 
 async function apiRequest<T>(
   endpoint: string,
   options?: RequestInit,
 ): Promise<T> {
-  const response = await fetch(`${API}${endpoint}`, {
-    ...options,
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-      ...(options?.headers || {}),
+  const response = await fetch(
+    `${API}${endpoint}`,
+    {
+      ...options,
+      credentials: 'include',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(options?.headers || {}),
+      },
     },
-  });
+  );
 
-  const data = await response.json().catch(() => null);
+  const data = await response
+    .json()
+    .catch(() => null);
 
   if (!response.ok) {
     throw new Error(
-      data?.error || `Request failed: ${response.status}`,
+      data?.error ||
+        `Request failed: ${response.status}`,
     );
   }
 
@@ -191,25 +207,34 @@ function App() {
   const [authenticated, setAuthenticated] =
     useState<boolean | null>(null);
 
-  const [owner, setOwner] = useState<Owner | null>(null);
+  const [owner, setOwner] =
+    useState<Owner | null>(null);
 
   const [authMode, setAuthMode] =
     useState<'login' | 'signup'>('login');
 
-  const [authName, setAuthName] = useState('');
-  const [authEmail, setAuthEmail] = useState('');
-  const [authPhone, setAuthPhone] = useState('');
-  const [authPassword, setAuthPassword] = useState('');
-  const [authError, setAuthError] = useState('');
-  const [authSaving, setAuthSaving] = useState(false);
+  const [authName, setAuthName] =
+    useState('');
+  const [authEmail, setAuthEmail] =
+    useState('');
+  const [authPhone, setAuthPhone] =
+    useState('');
+  const [authPassword, setAuthPassword] =
+    useState('');
+  const [authError, setAuthError] =
+    useState('');
+  const [authSaving, setAuthSaving] =
+    useState(false);
 
   const [activeTab, setActiveTab] =
     useState<Tab>('dashboard');
 
   const [properties, setProperties] =
     useState<Property[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [beds, setBeds] = useState<Bed[]>([]);
+  const [rooms, setRooms] =
+    useState<Room[]>([]);
+  const [beds, setBeds] =
+    useState<Bed[]>([]);
   const [tenants, setTenants] =
     useState<Tenant[]>([]);
   const [payments, setPayments] =
@@ -217,9 +242,12 @@ function App() {
   const [invoices, setInvoices] =
     useState<Invoice[]>([]);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [loading, setLoading] =
+    useState(true);
+  const [saving, setSaving] =
+    useState(false);
+  const [error, setError] =
+    useState('');
 
   const [activeModal, setActiveModal] =
     useState<Modal>('none');
@@ -231,9 +259,9 @@ function App() {
     useState('');
 
   const [tenantFilter, setTenantFilter] =
-    useState<'all' | 'paid' | 'pending' | 'overdue'>(
-      'all',
-    );
+    useState<
+      'all' | 'paid' | 'pending' | 'overdue'
+    >('all');
 
   const [paymentSearch, setPaymentSearch] =
     useState('');
@@ -244,27 +272,39 @@ function App() {
   const [propertyFilter, setPropertyFilter] =
     useState('');
 
-  const [propName, setPropName] = useState('');
-  const [propAddress, setPropAddress] = useState('');
+  const [propName, setPropName] =
+    useState('');
+  const [propAddress, setPropAddress] =
+    useState('');
 
   const [roomPropertyId, setRoomPropertyId] =
     useState('');
-  const [roomNumber, setRoomNumber] = useState('');
+  const [roomNumber, setRoomNumber] =
+    useState('');
   const [sharingType, setSharingType] =
     useState('Single');
-  const [roomRent, setRoomRent] = useState('');
+  const [roomRent, setRoomRent] =
+    useState('');
 
-  const [bedRoomId, setBedRoomId] = useState('');
-  const [bedNumber, setBedNumber] = useState('');
+  const [bedRoomId, setBedRoomId] =
+    useState('');
+  const [bedNumber, setBedNumber] =
+    useState('');
 
-  const [tenantName, setTenantName] = useState('');
-  const [tenantPhone, setTenantPhone] = useState('');
-  const [tenantEmail, setTenantEmail] = useState('');
+  const [tenantName, setTenantName] =
+    useState('');
+  const [tenantPhone, setTenantPhone] =
+    useState('');
+  const [tenantEmail, setTenantEmail] =
+    useState('');
   const [tenantPropertyId, setTenantPropertyId] =
     useState('');
-  const [tenantRoomId, setTenantRoomId] = useState('');
-  const [tenantBedId, setTenantBedId] = useState('');
-  const [tenantRent, setTenantRent] = useState('');
+  const [tenantRoomId, setTenantRoomId] =
+    useState('');
+  const [tenantBedId, setTenantBedId] =
+    useState('');
+  const [tenantRent, setTenantRent] =
+    useState('');
   const [tenantDueDate, setTenantDueDate] =
     useState('5');
   const [tenantDeposit, setTenantDeposit] =
@@ -298,14 +338,15 @@ function App() {
     setLoading(true);
     setError('');
 
-    const results = await Promise.allSettled([
-      apiRequest<Property[]>('/properties'),
-      apiRequest<Room[]>('/rooms'),
-      apiRequest<Bed[]>('/beds'),
-      apiRequest<Tenant[]>('/tenants'),
-      apiRequest<Payment[]>('/payments'),
-      apiRequest<Invoice[]>('/invoices'),
-    ]);
+    const results =
+      await Promise.allSettled([
+        apiRequest<Property[]>('/properties'),
+        apiRequest<Room[]>('/rooms'),
+        apiRequest<Bed[]>('/beds'),
+        apiRequest<Tenant[]>('/tenants'),
+        apiRequest<Payment[]>('/payments'),
+        apiRequest<Invoice[]>('/invoices'),
+      ]);
 
     const [
       propertyResult,
@@ -319,12 +360,16 @@ function App() {
     const errors: string[] = [];
 
     if (propertyResult.status === 'fulfilled') {
-      setProperties(propertyResult.value || []);
+      setProperties(
+        propertyResult.value || [],
+      );
     } else {
       setProperties([]);
+
       errors.push(
         `Properties: ${
-          propertyResult.reason instanceof Error
+          propertyResult.reason instanceof
+          Error
             ? propertyResult.reason.message
             : 'Failed'
         }`,
@@ -335,6 +380,7 @@ function App() {
       setRooms(roomResult.value || []);
     } else {
       setRooms([]);
+
       errors.push(
         `Rooms: ${
           roomResult.reason instanceof Error
@@ -348,6 +394,7 @@ function App() {
       setBeds(bedResult.value || []);
     } else {
       setBeds([]);
+
       errors.push(
         `Beds: ${
           bedResult.reason instanceof Error
@@ -358,12 +405,16 @@ function App() {
     }
 
     if (tenantResult.status === 'fulfilled') {
-      setTenants(tenantResult.value || []);
+      setTenants(
+        tenantResult.value || [],
+      );
     } else {
       setTenants([]);
+
       errors.push(
         `Tenants: ${
-          tenantResult.reason instanceof Error
+          tenantResult.reason instanceof
+          Error
             ? tenantResult.reason.message
             : 'Failed'
         }`,
@@ -371,12 +422,16 @@ function App() {
     }
 
     if (paymentResult.status === 'fulfilled') {
-      setPayments(paymentResult.value || []);
+      setPayments(
+        paymentResult.value || [],
+      );
     } else {
       setPayments([]);
+
       errors.push(
         `Payments: ${
-          paymentResult.reason instanceof Error
+          paymentResult.reason instanceof
+          Error
             ? paymentResult.reason.message
             : 'Failed'
         }`,
@@ -384,12 +439,16 @@ function App() {
     }
 
     if (invoiceResult.status === 'fulfilled') {
-      setInvoices(invoiceResult.value || []);
+      setInvoices(
+        invoiceResult.value || [],
+      );
     } else {
       setInvoices([]);
+
       errors.push(
         `Invoices: ${
-          invoiceResult.reason instanceof Error
+          invoiceResult.reason instanceof
+          Error
             ? invoiceResult.reason.message
             : 'Failed'
         }`,
@@ -424,6 +483,7 @@ function App() {
         ) {
           setOwner(data.owner);
           setAuthenticated(true);
+
           await loadAllData();
         } else {
           setOwner(null);
@@ -445,7 +505,10 @@ function App() {
   ) => {
     event.preventDefault();
 
-    if (!authEmail.trim() || !authPassword) {
+    if (
+      !authEmail.trim() ||
+      !authPassword
+    ) {
       setAuthError(
         'Email and password are required.',
       );
@@ -456,19 +519,21 @@ function App() {
     setAuthError('');
 
     try {
-      const data = await apiRequest<{
-        owner: Owner;
-      }>('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({
-          email: authEmail.trim(),
-          password: authPassword,
-        }),
-      });
+      const data =
+        await apiRequest<{
+          owner: Owner;
+        }>('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: authEmail.trim(),
+            password: authPassword,
+          }),
+        });
 
       setOwner(data.owner);
       setAuthenticated(true);
       setAuthPassword('');
+
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -507,21 +572,23 @@ function App() {
     setAuthError('');
 
     try {
-      const data = await apiRequest<{
-        owner: Owner;
-      }>('/auth/signup', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: authName.trim(),
-          email: authEmail.trim(),
-          phone: authPhone.trim(),
-          password: authPassword,
-        }),
-      });
+      const data =
+        await apiRequest<{
+          owner: Owner;
+        }>('/auth/signup', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: authName.trim(),
+            email: authEmail.trim(),
+            phone: authPhone.trim(),
+            password: authPassword,
+          }),
+        });
 
       setOwner(data.owner);
       setAuthenticated(true);
       setAuthPassword('');
+
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -536,20 +603,25 @@ function App() {
 
   const handleLogout = async () => {
     try {
-      await fetch(`${API}/auth/logout`, {
-        method: 'POST',
-        credentials: 'include',
-      });
+      await fetch(
+        `${API}/auth/logout`,
+        {
+          method: 'POST',
+          credentials: 'include',
+        },
+      );
     } catch {}
 
     setOwner(null);
     setAuthenticated(false);
+
     setProperties([]);
     setRooms([]);
     setBeds([]);
     setTenants([]);
     setPayments([]);
     setInvoices([]);
+
     setActiveTab('dashboard');
   };
 
@@ -580,12 +652,16 @@ function App() {
     setPaymentInvoiceId('');
     setPaymentAmount('');
     setPaymentMethod('UPI');
-    setPaymentMonth(currentMonthName());
+    setPaymentMonth(
+      currentMonthName(),
+    );
     setPaymentDate(today());
 
     setInvoiceTenantId('');
     setInvoiceAmount('');
-    setInvoiceMonth(currentMonthName());
+    setInvoiceMonth(
+      currentMonthName(),
+    );
     setInvoiceDueDate(today());
   };
 
@@ -594,9 +670,19 @@ function App() {
     setActiveModal(modal);
   };
 
+  /*
+   * IMPORTANT:
+   * Do not block modal closing while saving.
+   *
+   * Previously this function contained:
+   * if (saving) return;
+   *
+   * That caused the payment modal to remain
+   * open after a successful payment because
+   * handleRecordPayment was still in the
+   * saving=true state when closeModal() ran.
+   */
   const closeModal = () => {
-    if (saving) return;
-
     setActiveModal('none');
     setSelectedTenant(null);
     setError('');
@@ -608,7 +694,9 @@ function App() {
     event.preventDefault();
 
     if (!propName.trim()) {
-      setError('Property name is required.');
+      setError(
+        'Property name is required.',
+      );
       return;
     }
 
@@ -626,6 +714,7 @@ function App() {
 
       resetForms();
       closeModal();
+
       await loadAllData();
     } catch (err) {
       setError(
@@ -643,7 +732,10 @@ function App() {
   ) => {
     event.preventDefault();
 
-    if (!roomPropertyId || !roomNumber.trim()) {
+    if (
+      !roomPropertyId ||
+      !roomNumber.trim()
+    ) {
       setError(
         'Select a property and enter a room number.',
       );
@@ -657,15 +749,19 @@ function App() {
       await apiRequest('/rooms', {
         method: 'POST',
         body: JSON.stringify({
-          property_id: Number(roomPropertyId),
-          room_number: roomNumber.trim(),
+          property_id:
+            Number(roomPropertyId),
+          room_number:
+            roomNumber.trim(),
           sharing_type: sharingType,
-          rent_amount: Number(roomRent) || 0,
+          rent_amount:
+            Number(roomRent) || 0,
         }),
       });
 
       resetForms();
       closeModal();
+
       await loadAllData();
     } catch (err) {
       setError(
@@ -683,7 +779,10 @@ function App() {
   ) => {
     event.preventDefault();
 
-    if (!bedRoomId || !bedNumber.trim()) {
+    if (
+      !bedRoomId ||
+      !bedNumber.trim()
+    ) {
       setError(
         'Select a room and enter a bed number.',
       );
@@ -698,12 +797,14 @@ function App() {
         method: 'POST',
         body: JSON.stringify({
           room_id: Number(bedRoomId),
-          bed_number: bedNumber.trim(),
+          bed_number:
+            bedNumber.trim(),
         }),
       });
 
       resetForms();
       closeModal();
+
       await loadAllData();
     } catch (err) {
       setError(
@@ -742,15 +843,18 @@ function App() {
           name: tenantName.trim(),
           phone: tenantPhone.trim(),
           email: tenantEmail.trim(),
-          property_id: Number(tenantPropertyId),
+          property_id:
+            Number(tenantPropertyId),
           room_id: tenantRoomId
             ? Number(tenantRoomId)
             : null,
           bed_id: tenantBedId
             ? Number(tenantBedId)
             : null,
-          monthly_rent: Number(tenantRent) || 0,
-          due_date: Number(tenantDueDate) || 5,
+          monthly_rent:
+            Number(tenantRent) || 0,
+          due_date:
+            Number(tenantDueDate) || 5,
           deposit_amount:
             Number(tenantDeposit) || 0,
           move_in_date:
@@ -760,6 +864,7 @@ function App() {
 
       resetForms();
       closeModal();
+
       await loadAllData();
     } catch (err) {
       setError(
@@ -772,58 +877,190 @@ function App() {
     }
   };
 
+  /*
+   * FIXED PAYMENT HANDLER
+   *
+   * The payment is now:
+   *
+   * 1. Validated
+   * 2. Sent to backend
+   * 3. Backend confirms success
+   * 4. Modal closes immediately
+   * 5. Forms reset
+   * 6. Data refreshes
+   * 7. Saving is always released in finally
+   */
   const handleRecordPayment = async (
     event: React.FormEvent,
   ) => {
     event.preventDefault();
 
-    if (
-      !paymentTenantId ||
-      !paymentAmount ||
-      Number(paymentAmount) <= 0
-    ) {
+    if (!paymentTenantId) {
       setError(
-        'Select a tenant and enter a valid amount.',
+        'Please select a tenant.',
       );
       return;
     }
 
+    const amount = Number(
+      paymentAmount,
+    );
+
     if (
-      paymentInvoiceId &&
-      invoices.some(
-        (invoice) =>
-          invoice.id === Number(paymentInvoiceId) &&
-          normalize(invoice.status) === 'cancelled',
-      )
+      !Number.isFinite(amount) ||
+      amount <= 0
     ) {
       setError(
-        'This invoice is cancelled and cannot receive a payment.',
+        'Please enter a valid payment amount.',
       );
       return;
+    }
+
+    if (!paymentDate) {
+      setError(
+        'Please select a payment date.',
+      );
+      return;
+    }
+
+    if (!paymentMonth.trim()) {
+      setError(
+        'Please enter the payment month.',
+      );
+      return;
+    }
+
+    /*
+     * If this payment is linked to an invoice,
+     * validate the invoice before sending it.
+     */
+    if (paymentInvoiceId) {
+      const invoice = invoices.find(
+        (item) =>
+          item.id ===
+          Number(paymentInvoiceId),
+      );
+
+      if (!invoice) {
+        setError(
+          'Selected invoice could not be found.',
+        );
+        return;
+      }
+
+      if (
+        normalize(invoice.status) ===
+        'cancelled'
+      ) {
+        setError(
+          'This invoice is cancelled and cannot receive a payment.',
+        );
+        return;
+      }
+
+      const invoiceAmount =
+        Number(invoice.amount || 0);
+
+      const paidAmount =
+        Number(
+          invoice.paid_amount || 0,
+        );
+
+      const balance = Math.max(
+        Number(
+          invoice.balance_amount ??
+            invoiceAmount -
+              paidAmount,
+        ),
+        0,
+      );
+
+      if (balance <= 0) {
+        setError(
+          'This invoice is already fully paid.',
+        );
+        return;
+      }
+
+      if (amount > balance) {
+        setError(
+          `Payment cannot be more than the invoice balance of ${money(
+            balance,
+          )}.`,
+        );
+        return;
+      }
     }
 
     setSaving(true);
     setError('');
 
     try {
-      await apiRequest('/payments', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenant_id: Number(paymentTenantId),
-          amount: Number(paymentAmount),
-          payment_date: paymentDate,
-          payment_method: paymentMethod,
-          payment_month: paymentMonth,
-          invoice_id: paymentInvoiceId
-            ? Number(paymentInvoiceId)
-            : null,
-        }),
-      });
+      const result =
+        await apiRequest<{
+          payment?: Payment;
+          invoice?: Invoice;
+          message?: string;
+        }>('/payments', {
+          method: 'POST',
+          body: JSON.stringify({
+            tenant_id:
+              Number(paymentTenantId),
+            amount,
+            payment_date:
+              paymentDate,
+            payment_method:
+              paymentMethod,
+            payment_month:
+              paymentMonth.trim(),
+            invoice_id:
+              paymentInvoiceId
+                ? Number(
+                    paymentInvoiceId,
+                  )
+                : null,
+          }),
+        });
 
+      console.log(
+        'Payment recorded successfully:',
+        result,
+      );
+
+      /*
+       * The backend has confirmed that
+       * the payment was saved.
+       *
+       * Close the modal directly instead
+       * of calling closeModal() while saving.
+       */
       resetForms();
-      closeModal();
-      await loadAllData();
+      setActiveModal('none');
+      setSelectedTenant(null);
+      setError('');
+
+      /*
+       * Refresh the dashboard, invoices,
+       * payments and tenant balances.
+       *
+       * Even if the refresh has a temporary
+       * problem, the payment itself is already
+       * safely saved in the database.
+       */
+      try {
+        await loadAllData();
+      } catch (refreshError) {
+        console.error(
+          'Payment saved but refresh failed:',
+          refreshError,
+        );
+      }
     } catch (err) {
+      console.error(
+        'Payment recording failed:',
+        err,
+      );
+
       setError(
         err instanceof Error
           ? err.message
@@ -857,16 +1094,21 @@ function App() {
       await apiRequest('/invoices', {
         method: 'POST',
         body: JSON.stringify({
-          tenant_id: Number(invoiceTenantId),
-          amount: Number(invoiceAmount),
-          month: invoiceMonth,
-          due_date: invoiceDueDate,
+          tenant_id:
+            Number(invoiceTenantId),
+          amount:
+            Number(invoiceAmount),
+          month:
+            invoiceMonth.trim(),
+          due_date:
+            invoiceDueDate,
           status: 'Pending',
         }),
       });
 
       resetForms();
       closeModal();
+
       await loadAllData();
     } catch (err) {
       setError(
@@ -883,33 +1125,46 @@ function App() {
     () =>
       tenants.filter(
         (tenant) =>
-          normalize(tenant.status) === 'active',
+          normalize(
+            tenant.status,
+          ) === 'active',
       ),
     [tenants],
   );
 
-  const currentMonth = currentMonthName();
+  const currentMonth =
+    currentMonthName();
 
-  const expectedRent = activeTenants.reduce(
-    (sum, tenant) =>
-      sum + Number(tenant.monthly_rent || 0),
-    0,
-  );
-
-  const collectedThisMonth = payments
-    .filter(
-      (payment) =>
-        normalize(payment.payment_month) ===
-        normalize(currentMonth),
-    )
-    .reduce(
-      (sum, payment) =>
-        sum + Number(payment.amount || 0),
+  const expectedRent =
+    activeTenants.reduce(
+      (sum, tenant) =>
+        sum +
+        Number(
+          tenant.monthly_rent || 0,
+        ),
       0,
     );
 
+  const collectedThisMonth =
+    payments
+      .filter(
+        (payment) =>
+          normalize(
+            payment.payment_month,
+          ) === normalize(currentMonth),
+      )
+      .reduce(
+        (sum, payment) =>
+          sum +
+          Number(
+            payment.amount || 0,
+          ),
+        0,
+      );
+
   const pendingDues = Math.max(
-    expectedRent - collectedThisMonth,
+    expectedRent -
+      collectedThisMonth,
     0,
   );
 
@@ -917,16 +1172,19 @@ function App() {
     expectedRent > 0
       ? Math.min(
           Math.round(
-            (collectedThisMonth / expectedRent) *
+            (collectedThisMonth /
+              expectedRent) *
               100,
           ),
           100,
         )
       : 0;
 
-  const occupiedBeds = beds.filter(
-    (bed) => Boolean(bed.is_occupied),
-  ).length;
+  const occupiedBeds =
+    beds.filter(
+      (bed) =>
+        Boolean(bed.is_occupied),
+    ).length;
 
   const availableBedCount =
     beds.length - occupiedBeds;
@@ -934,303 +1192,426 @@ function App() {
   const totalOccupancy =
     beds.length > 0
       ? Math.round(
-          (occupiedBeds / beds.length) * 100,
+          (occupiedBeds /
+            beds.length) *
+            100,
         )
       : 0;
 
-  const paymentTotalsByTenant = useMemo(() => {
-    const totals: Record<number, number> = {};
+  const paymentTotalsByTenant =
+    useMemo(() => {
+      const totals: Record<
+        number,
+        number
+      > = {};
 
-    payments.forEach((payment) => {
-      if (
-        normalize(payment.payment_month) ===
-        normalize(currentMonth)
-      ) {
-        totals[payment.tenant_id] =
-          (totals[payment.tenant_id] || 0) +
-          Number(payment.amount || 0);
-      }
-    });
+      payments.forEach((payment) => {
+        if (
+          normalize(
+            payment.payment_month,
+          ) === normalize(currentMonth)
+        ) {
+          totals[payment.tenant_id] =
+            (totals[
+              payment.tenant_id
+            ] || 0) +
+            Number(
+              payment.amount || 0,
+            );
+        }
+      });
 
-    return totals;
-  }, [payments, currentMonth]);
+      return totals;
+    }, [payments, currentMonth]);
 
-  const getTenantPaid = (tenantId: number) =>
-    Number(paymentTotalsByTenant[tenantId] || 0);
+  const getTenantPaid = (
+    tenantId: number,
+  ) =>
+    Number(
+      paymentTotalsByTenant[
+        tenantId
+      ] || 0,
+    );
 
-  const getTenantPending = (tenant: Tenant) =>
+  const getTenantPending = (
+    tenant: Tenant,
+  ) =>
     Math.max(
-      Number(tenant.monthly_rent || 0) -
-        getTenantPaid(tenant.id),
+      Number(
+        tenant.monthly_rent || 0,
+      ) -
+        getTenantPaid(
+          tenant.id,
+        ),
       0,
     );
 
   const getTenantStatus = (
     tenant: Tenant,
-  ): 'paid' | 'pending' | 'overdue' => {
-    const pending = getTenantPending(tenant);
+  ):
+    | 'paid'
+    | 'pending'
+    | 'overdue' => {
+    const pending =
+      getTenantPending(tenant);
 
-    if (pending <= 0) return 'paid';
+    if (pending <= 0) {
+      return 'paid';
+    }
 
-    const day = new Date().getDate();
+    const day =
+      new Date().getDate();
 
-    if (day > Number(tenant.due_date || 31)) {
+    if (
+      day >
+      Number(
+        tenant.due_date || 31,
+      )
+    ) {
       return 'overdue';
     }
 
     return 'pending';
   };
 
-  const upcomingDues = useMemo(() => {
-    const currentDay = new Date().getDate();
+  const upcomingDues =
+    useMemo(() => {
+      const currentDay =
+        new Date().getDate();
 
-    return activeTenants
-      .filter(
-        (tenant) =>
-          getTenantPending(tenant) > 0 &&
-          Number(tenant.due_date || 31) >=
-            currentDay,
-      )
-      .sort(
-        (a, b) =>
-          Number(a.due_date || 31) -
-          Number(b.due_date || 31),
-      )
-      .slice(0, 5);
-  }, [activeTenants, paymentTotalsByTenant]);
-
-  const overdueTenants = useMemo(
-    () =>
-      activeTenants.filter(
-        (tenant) =>
-          getTenantStatus(tenant) === 'overdue',
-      ),
-    [activeTenants, paymentTotalsByTenant],
-  );
-
-  const recentPayments = useMemo(
-    () =>
-      [...payments]
+      return activeTenants
+        .filter(
+          (tenant) =>
+            getTenantPending(
+              tenant,
+            ) > 0 &&
+            Number(
+              tenant.due_date || 31,
+            ) >= currentDay,
+        )
         .sort(
           (a, b) =>
-            new Date(
-              b.payment_date,
-            ).getTime() -
-            new Date(
-              a.payment_date,
-            ).getTime(),
-        )
-        .slice(0, 6),
-    [payments],
-  );
-
-  const tenantRooms = rooms.filter(
-    (room) =>
-      !tenantPropertyId ||
-      Number(room.property_id) ===
-        Number(tenantPropertyId),
-  );
-
-  const tenantBeds = beds.filter(
-    (bed) =>
-      !tenantRoomId ||
-      Number(bed.room_id) ===
-        Number(tenantRoomId),
-  );
-
-  const availableBeds = tenantBeds.filter(
-    (bed) => !bed.is_occupied,
-  );
-
-  const filteredTenants = tenants.filter(
-    (tenant) => {
-      const query = normalize(searchQuery);
-
-      const matchesSearch =
-        !query ||
-        normalize(tenant.name).includes(query) ||
-        normalize(tenant.phone).includes(query) ||
-        normalize(
-          tenant.room_number,
-        ).includes(query) ||
-        normalize(
-          tenant.property_name,
-        ).includes(query);
-
-      const status = getTenantStatus(tenant);
-
-      const matchesFilter =
-        tenantFilter === 'all' ||
-        status === tenantFilter;
-
-      const matchesProperty =
-        !propertyFilter ||
-        Number(tenant.property_id) ===
-          Number(propertyFilter);
-
-      return (
-        matchesSearch &&
-        matchesFilter &&
-        matchesProperty
-      );
-    },
-  );
-
-  const filteredPayments = payments.filter(
-    (payment) => {
-      const query = normalize(paymentSearch);
-
-      return (
-        !query ||
-        normalize(payment.tenant_name).includes(
-          query,
-        ) ||
-        normalize(payment.property_name).includes(
-          query,
-        ) ||
-        normalize(payment.room_number).includes(
-          query,
-        ) ||
-        normalize(payment.payment_method).includes(
-          query,
-        ) ||
-        normalize(payment.payment_month).includes(
-          query,
-        ) ||
-        normalize(payment.invoice_number).includes(
-          query,
-        )
-      );
-    },
-  );
-
-  const filteredInvoices = invoices.filter(
-    (invoice) => {
-      const query = normalize(invoiceSearch);
-
-      return (
-        !query ||
-        normalize(
-          invoice.invoice_number,
-        ).includes(query) ||
-        normalize(invoice.tenant_name).includes(
-          query,
-        ) ||
-        normalize(invoice.month).includes(query) ||
-        normalize(invoice.status).includes(query) ||
-        normalize(
-          invoice.delivery_status,
-        ).includes(query)
-      );
-    },
-  );
-
-  const financeSummary = useMemo<FinanceSummary>(() => {
-    const validInvoices = invoices.filter(
-      (invoice) =>
-        normalize(invoice.status) !== 'cancelled',
-    );
-
-    const expected = validInvoices.reduce(
-      (sum, invoice) =>
-        sum + Number(invoice.amount || 0),
-      0,
-    );
-
-    const collected = validInvoices.reduce(
-      (sum, invoice) =>
-        sum + Number(invoice.paid_amount || 0),
-      0,
-    );
-
-    const pending = validInvoices.reduce(
-      (sum, invoice) =>
-        sum +
-        Math.max(
-          Number(invoice.balance_amount ?? invoice.amount ?? 0),
-          0,
-        ),
-      0,
-    );
-
-    const overdue = validInvoices
-      .filter(
-        (invoice) =>
-          normalize(invoice.status) === 'overdue',
-      )
-      .reduce(
-        (sum, invoice) =>
-          sum +
-          Math.max(
             Number(
-              invoice.balance_amount ??
-                invoice.amount ??
+              a.due_date || 31,
+            ) -
+            Number(
+              b.due_date || 31,
+            ),
+        )
+        .slice(0, 5);
+    }, [
+      activeTenants,
+      paymentTotalsByTenant,
+    ]);
+
+  const overdueTenants =
+    useMemo(
+      () =>
+        activeTenants.filter(
+          (tenant) =>
+            getTenantStatus(
+              tenant,
+            ) === 'overdue',
+        ),
+      [
+        activeTenants,
+        paymentTotalsByTenant,
+      ],
+    );
+
+  const recentPayments =
+    useMemo(
+      () =>
+        [...payments]
+          .sort(
+            (a, b) =>
+              new Date(
+                b.payment_date,
+              ).getTime() -
+              new Date(
+                a.payment_date,
+              ).getTime(),
+          )
+          .slice(0, 6),
+      [payments],
+    );
+
+  const tenantRooms =
+    rooms.filter(
+      (room) =>
+        !tenantPropertyId ||
+        Number(
+          room.property_id,
+        ) ===
+          Number(
+            tenantPropertyId,
+          ),
+    );
+
+  const tenantBeds =
+    beds.filter(
+      (bed) =>
+        !tenantRoomId ||
+        Number(
+          bed.room_id,
+        ) ===
+          Number(
+            tenantRoomId,
+          ),
+    );
+
+  const availableBeds =
+    tenantBeds.filter(
+      (bed) =>
+        !bed.is_occupied,
+    );
+
+  const filteredTenants =
+    tenants.filter(
+      (tenant) => {
+        const query =
+          normalize(searchQuery);
+
+        const matchesSearch =
+          !query ||
+          normalize(
+            tenant.name,
+          ).includes(query) ||
+          normalize(
+            tenant.phone,
+          ).includes(query) ||
+          normalize(
+            tenant.room_number,
+          ).includes(query) ||
+          normalize(
+            tenant.property_name,
+          ).includes(query);
+
+        const status =
+          getTenantStatus(
+            tenant,
+          );
+
+        const matchesFilter =
+          tenantFilter === 'all' ||
+          status === tenantFilter;
+
+        const matchesProperty =
+          !propertyFilter ||
+          Number(
+            tenant.property_id,
+          ) ===
+            Number(
+              propertyFilter,
+            );
+
+        return (
+          matchesSearch &&
+          matchesFilter &&
+          matchesProperty
+        );
+      },
+    );
+
+  const filteredPayments =
+    payments.filter(
+      (payment) => {
+        const query =
+          normalize(paymentSearch);
+
+        return (
+          !query ||
+          normalize(
+            payment.tenant_name,
+          ).includes(query) ||
+          normalize(
+            payment.property_name,
+          ).includes(query) ||
+          normalize(
+            payment.room_number,
+          ).includes(query) ||
+          normalize(
+            payment.payment_method,
+          ).includes(query) ||
+          normalize(
+            payment.payment_month,
+          ).includes(query) ||
+          normalize(
+            payment.invoice_number,
+          ).includes(query)
+        );
+      },
+    );
+
+  const filteredInvoices =
+    invoices.filter(
+      (invoice) => {
+        const query =
+          normalize(invoiceSearch);
+
+        return (
+          !query ||
+          normalize(
+            invoice.invoice_number,
+          ).includes(query) ||
+          normalize(
+            invoice.tenant_name,
+          ).includes(query) ||
+          normalize(
+            invoice.month,
+          ).includes(query) ||
+          normalize(
+            invoice.status,
+          ).includes(query) ||
+          normalize(
+            invoice.delivery_status,
+          ).includes(query)
+        );
+      },
+    );
+
+  const financeSummary =
+    useMemo<FinanceSummary>(() => {
+      const validInvoices =
+        invoices.filter(
+          (invoice) =>
+            normalize(
+              invoice.status,
+            ) !== 'cancelled',
+        );
+
+      const expected =
+        validInvoices.reduce(
+          (sum, invoice) =>
+            sum +
+            Number(
+              invoice.amount || 0,
+            ),
+          0,
+        );
+
+      const collected =
+        validInvoices.reduce(
+          (sum, invoice) =>
+            sum +
+            Number(
+              invoice.paid_amount ||
                 0,
             ),
-            0,
-          ),
-        0,
-      );
+          0,
+        );
 
-    const paidInvoiceCount =
-      validInvoices.filter(
-        (invoice) =>
-          normalize(invoice.status) === 'paid',
-      ).length;
-
-    const overdueInvoiceCount =
-      validInvoices.filter(
-        (invoice) =>
-          normalize(invoice.status) ===
-          'overdue',
-      ).length;
-
-    return {
-      expected,
-      collected,
-      pending,
-      overdue,
-      invoice_count: validInvoices.length,
-      paid_invoice_count: paidInvoiceCount,
-      overdue_invoice_count:
-        overdueInvoiceCount,
-      collection_rate:
-        expected > 0
-          ? Math.min(
-              Math.round(
-                (collected / expected) * 100,
+      const pending =
+        validInvoices.reduce(
+          (sum, invoice) =>
+            sum +
+            Math.max(
+              Number(
+                invoice.balance_amount ??
+                  invoice.amount ??
+                  0,
               ),
-              100,
-            )
-          : 0,
-    };
-  }, [invoices]);
+              0,
+            ),
+          0,
+        );
+
+      const overdue =
+        validInvoices
+          .filter(
+            (invoice) =>
+              normalize(
+                invoice.status,
+              ) === 'overdue',
+          )
+          .reduce(
+            (sum, invoice) =>
+              sum +
+              Math.max(
+                Number(
+                  invoice.balance_amount ??
+                    invoice.amount ??
+                    0,
+                ),
+                0,
+              ),
+            0,
+          );
+
+      const paidInvoiceCount =
+        validInvoices.filter(
+          (invoice) =>
+            normalize(
+              invoice.status,
+            ) === 'paid',
+        ).length;
+
+      const overdueInvoiceCount =
+        validInvoices.filter(
+          (invoice) =>
+            normalize(
+              invoice.status,
+            ) === 'overdue',
+        ).length;
+
+      return {
+        expected,
+        collected,
+        pending,
+        overdue,
+        invoice_count:
+          validInvoices.length,
+        paid_invoice_count:
+          paidInvoiceCount,
+        overdue_invoice_count:
+          overdueInvoiceCount,
+        collection_rate:
+          expected > 0
+            ? Math.min(
+                Math.round(
+                  (collected /
+                    expected) *
+                    100,
+                ),
+                100,
+              )
+            : 0,
+      };
+    }, [invoices]);
 
   const sendWhatsAppReminder = (
     tenant: Tenant,
   ) => {
-    let phone = tenant.phone.replace(
-      /[^0-9]/g,
-      '',
-    );
+    let phone =
+      tenant.phone.replace(
+        /[^0-9]/g,
+        '',
+      );
 
     if (phone.length === 10) {
       phone = `91${phone}`;
     }
 
-    const pending = getTenantPending(tenant);
+    const pending =
+      getTenantPending(tenant);
 
-    const message = encodeURIComponent(
-      `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent.\n\nRoom: ${
-        tenant.room_number || 'N/A'
-      }\nRent: ${money(
-        tenant.monthly_rent,
-      )}\nPaid: ${money(
-        getTenantPaid(tenant.id),
-      )}\nPending: ${money(
-        pending,
-      )}\nDue date: ${tenant.due_date}\n\nThank you.`,
-    );
+    const message =
+      encodeURIComponent(
+        `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent.\n\nRoom: ${
+          tenant.room_number ||
+          'N/A'
+        }\nRent: ${money(
+          tenant.monthly_rent,
+        )}\nPaid: ${money(
+          getTenantPaid(
+            tenant.id,
+          ),
+        )}\nPending: ${money(
+          pending,
+        )}\nDue date: ${
+          tenant.due_date
+        }\n\nThank you.`,
+      );
 
     window.open(
       `https://wa.me/${phone}?text=${message}`,
@@ -1238,100 +1619,131 @@ function App() {
     );
   };
 
-  const sendInvoiceWhatsApp = async (
-    invoice: Invoice,
-  ) => {
-    try {
-      await apiRequest(
-        `/invoices/${invoice.id}/sent`,
-        {
-          method: 'PATCH',
-        },
-      );
+  const sendInvoiceWhatsApp =
+    async (
+      invoice: Invoice,
+    ) => {
+      try {
+        await apiRequest(
+          `/invoices/${invoice.id}/sent`,
+          {
+            method: 'PATCH',
+          },
+        );
 
-      const tenant = tenants.find(
-        (item) =>
-          item.id === invoice.tenant_id,
-      );
+        const tenant =
+          tenants.find(
+            (item) =>
+              item.id ===
+              invoice.tenant_id,
+          );
 
-      if (!tenant) {
-        throw new Error(
-          'Tenant information not found.',
+        if (!tenant) {
+          throw new Error(
+            'Tenant information not found.',
+          );
+        }
+
+        let phone =
+          tenant.phone.replace(
+            /[^0-9]/g,
+            '',
+          );
+
+        if (phone.length === 10) {
+          phone = `91${phone}`;
+        }
+
+        const paid =
+          Number(
+            invoice.paid_amount ||
+              0,
+          );
+
+        /*
+         * balance_amount from the backend
+         * is already the remaining balance.
+         * Do not subtract paid amount from it
+         * again.
+         */
+        const balance =
+          Math.max(
+            Number(
+              invoice.balance_amount ??
+                Number(
+                  invoice.amount ||
+                    0,
+                ) -
+                  paid,
+            ),
+            0,
+          );
+
+        const message =
+          encodeURIComponent(
+            `Hello ${tenant.name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${
+              invoice.invoice_number
+            }\nMonth: ${
+              invoice.month || '-'
+            }\nAmount: ${money(
+              invoice.amount,
+            )}\nPaid: ${money(
+              paid,
+            )}\nBalance: ${money(
+              balance,
+            )}\nDue date: ${formatDate(
+              invoice.due_date,
+            )}\n\nThank you.`,
+          );
+
+        window.open(
+          `https://wa.me/${phone}?text=${message}`,
+          '_blank',
+        );
+
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to send invoice.',
         );
       }
-
-      let phone = tenant.phone.replace(
-        /[^0-9]/g,
-        '',
-      );
-
-      if (phone.length === 10) {
-        phone = `91${phone}`;
-      }
-
-      const paid = Number(
-        invoice.paid_amount || 0,
-      );
-
-      const balance = Math.max(
-        Number(
-          invoice.balance_amount ??
-            invoice.amount,
-        ) - paid,
-        0,
-      );
-
-      const message = encodeURIComponent(
-        `Hello ${tenant.name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${
-          invoice.invoice_number
-        }\nMonth: ${
-          invoice.month || '-'
-        }\nAmount: ${money(
-          invoice.amount,
-        )}\nPaid: ${money(
-          paid,
-        )}\nBalance: ${money(
-          balance,
-        )}\nDue date: ${formatDate(
-          invoice.due_date,
-        )}\n\nThank you.`,
-      );
-
-      window.open(
-        `https://wa.me/${phone}?text=${message}`,
-        '_blank',
-      );
-
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to send invoice.',
-      );
-    }
-  };
+    };
 
   const openTenantDetails = (
     tenant: Tenant,
   ) => {
     setSelectedTenant(tenant);
-    setActiveModal('tenantDetails');
+    setActiveModal(
+      'tenantDetails',
+    );
   };
 
   const openPaymentForTenant = (
     tenant: Tenant,
   ) => {
-    setPaymentTenantId(String(tenant.id));
+    setPaymentTenantId(
+      String(tenant.id),
+    );
+
     setPaymentInvoiceId('');
 
     setPaymentAmount(
       String(
-        getTenantPending(tenant) ||
+        getTenantPending(
+          tenant,
+        ) ||
           tenant.monthly_rent ||
           '',
       ),
     );
+
+    setPaymentMonth(
+      currentMonthName(),
+    );
+
+    setPaymentDate(today());
 
     setActiveModal('payment');
   };
@@ -1340,8 +1752,9 @@ function App() {
     invoice: Invoice,
   ) => {
     if (
-      normalize(invoice.status) ===
-      'cancelled'
+      normalize(
+        invoice.status,
+      ) === 'cancelled'
     ) {
       setError(
         'Cancelled invoices cannot receive payments.',
@@ -1349,19 +1762,34 @@ function App() {
       return;
     }
 
+    const invoiceAmount =
+      Number(
+        invoice.amount || 0,
+      );
+
+    const paidAmount =
+      Number(
+        invoice.paid_amount ||
+          0,
+      );
+
     const balance = Math.max(
       Number(
         invoice.balance_amount ??
-          Number(invoice.amount || 0) -
-            Number(invoice.paid_amount || 0),
+          invoiceAmount -
+            paidAmount,
       ),
       0,
     );
 
     if (balance <= 0) {
-      setError('This invoice is already fully paid.');
+      setError(
+        'This invoice is already fully paid.',
+      );
       return;
     }
+
+    setError('');
 
     setPaymentTenantId(
       String(invoice.tenant_id),
@@ -1371,11 +1799,16 @@ function App() {
       String(invoice.id),
     );
 
-    setPaymentAmount(String(balance));
+    setPaymentAmount(
+      String(balance),
+    );
 
     setPaymentMonth(
-      invoice.month || currentMonthName(),
+      invoice.month ||
+        currentMonthName(),
     );
+
+    setPaymentDate(today());
 
     setActiveModal('payment');
   };
@@ -1386,8 +1819,13 @@ function App() {
     Math.max(
       Number(
         invoice.balance_amount ??
-          Number(invoice.amount || 0) -
-            Number(invoice.paid_amount || 0),
+          Number(
+            invoice.amount || 0,
+          ) -
+            Number(
+              invoice.paid_amount ||
+                0,
+            ),
       ),
       0,
     );
@@ -1455,7 +1893,9 @@ function App() {
                   : 'auth-tab'
               }
               onClick={() => {
-                setAuthMode('login');
+                setAuthMode(
+                  'login',
+                );
                 setAuthError('');
               }}
             >
@@ -1469,7 +1909,9 @@ function App() {
                   : 'auth-tab'
               }
               onClick={() => {
-                setAuthMode('signup');
+                setAuthMode(
+                  'signup',
+                );
                 setAuthError('');
               }}
             >
@@ -1491,7 +1933,9 @@ function App() {
                   placeholder="Full name"
                   value={authName}
                   onChange={(e) =>
-                    setAuthName(e.target.value)
+                    setAuthName(
+                      e.target.value,
+                    )
                   }
                   autoComplete="name"
                 />
@@ -1501,7 +1945,9 @@ function App() {
                   placeholder="Phone number"
                   value={authPhone}
                   onChange={(e) =>
-                    setAuthPhone(e.target.value)
+                    setAuthPhone(
+                      e.target.value,
+                    )
                   }
                   autoComplete="tel"
                 />
@@ -1514,7 +1960,9 @@ function App() {
               placeholder="Email address"
               value={authEmail}
               onChange={(e) =>
-                setAuthEmail(e.target.value)
+                setAuthEmail(
+                  e.target.value,
+                )
               }
               autoComplete="email"
             />
@@ -1525,7 +1973,9 @@ function App() {
               placeholder="Password"
               value={authPassword}
               onChange={(e) =>
-                setAuthPassword(e.target.value)
+                setAuthPassword(
+                  e.target.value,
+                )
               }
               autoComplete={
                 authMode === 'login'
@@ -1588,7 +2038,9 @@ function App() {
           if (activeTenants.length) {
             openModal('payment');
           } else {
-            setActiveTab('tenants');
+            setActiveTab(
+              'tenants',
+            );
           }
         }}
       />
@@ -1606,20 +2058,42 @@ function App() {
             collectedThisMonth={
               collectedThisMonth
             }
-            pendingDues={pendingDues}
-            collectionRate={collectionRate}
-            totalOccupancy={totalOccupancy}
-            activeTenants={activeTenants}
-            occupiedBeds={occupiedBeds}
+            pendingDues={
+              pendingDues
+            }
+            collectionRate={
+              collectionRate
+            }
+            totalOccupancy={
+              totalOccupancy
+            }
+            activeTenants={
+              activeTenants
+            }
+            occupiedBeds={
+              occupiedBeds
+            }
             availableBedCount={
               availableBedCount
             }
-            properties={properties}
-            upcomingDues={upcomingDues}
-            overdueTenants={overdueTenants}
-            recentPayments={recentPayments}
-            getTenantPending={getTenantPending}
-            getTenantPaid={getTenantPaid}
+            properties={
+              properties
+            }
+            upcomingDues={
+              upcomingDues
+            }
+            overdueTenants={
+              overdueTenants
+            }
+            recentPayments={
+              recentPayments
+            }
+            getTenantPending={
+              getTenantPending
+            }
+            getTenantPaid={
+              getTenantPaid
+            }
             openTenantDetails={
               openTenantDetails
             }
@@ -1629,17 +2103,25 @@ function App() {
             openPaymentForTenant={
               openPaymentForTenant
             }
-            openModal={openModal}
-            setActiveTab={setActiveTab}
+            openModal={
+              openModal
+            }
+            setActiveTab={
+              setActiveTab
+            }
           />
         )}
 
         {activeTab === 'properties' && (
           <PropertiesView
-            properties={properties}
+            properties={
+              properties
+            }
             rooms={rooms}
             beds={beds}
-            openModal={openModal}
+            openModal={
+              openModal
+            }
           />
         )}
 
@@ -1647,25 +2129,47 @@ function App() {
           <RoomsView
             rooms={rooms}
             beds={beds}
-            openModal={openModal}
+            openModal={
+              openModal
+            }
           />
         )}
 
         {activeTab === 'tenants' && (
           <TenantsView
-            tenants={filteredTenants}
-            searchQuery={searchQuery}
-            setSearchQuery={setSearchQuery}
-            tenantFilter={tenantFilter}
-            setTenantFilter={setTenantFilter}
-            propertyFilter={propertyFilter}
+            tenants={
+              filteredTenants
+            }
+            searchQuery={
+              searchQuery
+            }
+            setSearchQuery={
+              setSearchQuery
+            }
+            tenantFilter={
+              tenantFilter
+            }
+            setTenantFilter={
+              setTenantFilter
+            }
+            propertyFilter={
+              propertyFilter
+            }
             setPropertyFilter={
               setPropertyFilter
             }
-            properties={properties}
-            openModal={openModal}
-            getTenantStatus={getTenantStatus}
-            getTenantPaid={getTenantPaid}
+            properties={
+              properties
+            }
+            openModal={
+              openModal
+            }
+            getTenantStatus={
+              getTenantStatus
+            }
+            getTenantPaid={
+              getTenantPaid
+            }
             getTenantPending={
               getTenantPending
             }
@@ -1683,52 +2187,84 @@ function App() {
 
         {activeTab === 'payments' && (
           <PaymentsView
-            payments={filteredPayments}
-            search={paymentSearch}
-            setSearch={setPaymentSearch}
-            openModal={openModal}
+            payments={
+              filteredPayments
+            }
+            search={
+              paymentSearch
+            }
+            setSearch={
+              setPaymentSearch
+            }
+            openModal={
+              openModal
+            }
           />
         )}
 
         {activeTab === 'invoices' && (
           <InvoicesView
-            invoices={filteredInvoices}
-            search={invoiceSearch}
-            setSearch={setInvoiceSearch}
-            openModal={openModal}
-            onPay={openPaymentForInvoice}
-            onSend={sendInvoiceWhatsApp}
-            getBalance={getInvoiceBalance}
+            invoices={
+              filteredInvoices
+            }
+            search={
+              invoiceSearch
+            }
+            setSearch={
+              setInvoiceSearch
+            }
+            openModal={
+              openModal
+            }
+            onPay={
+              openPaymentForInvoice
+            }
+            onSend={
+              sendInvoiceWhatsApp
+            }
+            getBalance={
+              getInvoiceBalance
+            }
           />
         )}
 
         {activeTab === 'analytics' && (
           <AnalyticsView
-            properties={properties}
+            properties={
+              properties
+            }
             rooms={rooms}
             beds={beds}
-            tenants={activeTenants}
+            tenants={
+              activeTenants
+            }
             expectedRent={
-              financeSummary.invoice_count > 0
+              financeSummary.invoice_count >
+              0
                 ? financeSummary.expected
                 : expectedRent
             }
             collected={
-              financeSummary.invoice_count > 0
+              financeSummary.invoice_count >
+              0
                 ? financeSummary.collected
                 : collectedThisMonth
             }
             pending={
-              financeSummary.invoice_count > 0
+              financeSummary.invoice_count >
+              0
                 ? financeSummary.pending
                 : pendingDues
             }
             overdue={
               financeSummary.overdue
             }
-            occupancy={totalOccupancy}
+            occupancy={
+              totalOccupancy
+            }
             collectionRate={
-              financeSummary.invoice_count > 0
+              financeSummary.invoice_count >
+              0
                 ? financeSummary.collection_rate
                 : collectionRate
             }
@@ -1737,15 +2273,24 @@ function App() {
       </main>
 
       <BottomNav
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={
+          activeTab
+        }
+        setActiveTab={
+          setActiveTab
+        }
       />
 
       {activeModal !== 'none' && (
-        <ModalOverlay onClose={closeModal}>
-          {activeModal === 'property' && (
+        <ModalOverlay
+          onClose={closeModal}
+        >
+          {activeModal ===
+            'property' && (
             <form
-              onSubmit={handleCreateProperty}
+              onSubmit={
+                handleCreateProperty
+              }
             >
               <ModalTitle
                 title="Add Property"
@@ -1757,29 +2302,40 @@ function App() {
                 placeholder="Property name"
                 value={propName}
                 onChange={(e) =>
-                  setPropName(e.target.value)
+                  setPropName(
+                    e.target.value,
+                  )
                 }
               />
 
               <input
                 className="modal-input"
                 placeholder="Address"
-                value={propAddress}
+                value={
+                  propAddress
+                }
                 onChange={(e) =>
-                  setPropAddress(e.target.value)
+                  setPropAddress(
+                    e.target.value,
+                  )
                 }
               />
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'room' && (
+          {activeModal ===
+            'room' && (
             <form
-              onSubmit={handleCreateRoom}
+              onSubmit={
+                handleCreateRoom
+              }
             >
               <ModalTitle
                 title="Add Room"
@@ -1788,7 +2344,9 @@ function App() {
 
               <select
                 className="modal-input"
-                value={roomPropertyId}
+                value={
+                  roomPropertyId
+                }
                 onChange={(e) =>
                   setRoomPropertyId(
                     e.target.value,
@@ -1799,59 +2357,96 @@ function App() {
                   Select property
                 </option>
 
-                {properties.map((property) => (
-                  <option
-                    key={property.id}
-                    value={property.id}
-                  >
-                    {property.name}
-                  </option>
-                ))}
+                {properties.map(
+                  (
+                    property,
+                  ) => (
+                    <option
+                      key={
+                        property.id
+                      }
+                      value={
+                        property.id
+                      }
+                    >
+                      {
+                        property.name
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <input
                 className="modal-input"
                 placeholder="Room number"
-                value={roomNumber}
+                value={
+                  roomNumber
+                }
                 onChange={(e) =>
-                  setRoomNumber(e.target.value)
+                  setRoomNumber(
+                    e.target.value,
+                  )
                 }
               />
 
               <select
                 className="modal-input"
-                value={sharingType}
+                value={
+                  sharingType
+                }
                 onChange={(e) =>
-                  setSharingType(e.target.value)
+                  setSharingType(
+                    e.target.value,
+                  )
                 }
               >
-                <option>Single</option>
-                <option>Double</option>
-                <option>Triple</option>
-                <option>Four Sharing</option>
-                <option>Other</option>
+                <option>
+                  Single
+                </option>
+                <option>
+                  Double
+                </option>
+                <option>
+                  Triple
+                </option>
+                <option>
+                  Four Sharing
+                </option>
+                <option>
+                  Other
+                </option>
               </select>
 
               <input
                 className="modal-input"
                 type="number"
                 placeholder="Monthly rent"
-                value={roomRent}
+                value={
+                  roomRent
+                }
                 onChange={(e) =>
-                  setRoomRent(e.target.value)
+                  setRoomRent(
+                    e.target.value,
+                  )
                 }
               />
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'bed' && (
+          {activeModal ===
+            'bed' && (
             <form
-              onSubmit={handleCreateBed}
+              onSubmit={
+                handleCreateBed
+              }
             >
               <ModalTitle
                 title="Add Bed"
@@ -1860,45 +2455,69 @@ function App() {
 
               <select
                 className="modal-input"
-                value={bedRoomId}
+                value={
+                  bedRoomId
+                }
                 onChange={(e) =>
-                  setBedRoomId(e.target.value)
+                  setBedRoomId(
+                    e.target.value,
+                  )
                 }
               >
                 <option value="">
                   Select room
                 </option>
 
-                {rooms.map((room) => (
-                  <option
-                    key={room.id}
-                    value={room.id}
-                  >
-                    {room.property_name} · Room{' '}
-                    {room.room_number}
-                  </option>
-                ))}
+                {rooms.map(
+                  (room) => (
+                    <option
+                      key={
+                        room.id
+                      }
+                      value={
+                        room.id
+                      }
+                    >
+                      {
+                        room.property_name
+                      }{' '}
+                      · Room{' '}
+                      {
+                        room.room_number
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <input
                 className="modal-input"
                 placeholder="Bed number"
-                value={bedNumber}
+                value={
+                  bedNumber
+                }
                 onChange={(e) =>
-                  setBedNumber(e.target.value)
+                  setBedNumber(
+                    e.target.value,
+                  )
                 }
               />
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'tenant' && (
+          {activeModal ===
+            'tenant' && (
             <form
-              onSubmit={handleCreateTenant}
+              onSubmit={
+                handleCreateTenant
+              }
             >
               <ModalTitle
                 title="Add Tenant"
@@ -1908,18 +2527,26 @@ function App() {
               <input
                 className="modal-input"
                 placeholder="Tenant name"
-                value={tenantName}
+                value={
+                  tenantName
+                }
                 onChange={(e) =>
-                  setTenantName(e.target.value)
+                  setTenantName(
+                    e.target.value,
+                  )
                 }
               />
 
               <input
                 className="modal-input"
                 placeholder="Phone number"
-                value={tenantPhone}
+                value={
+                  tenantPhone
+                }
                 onChange={(e) =>
-                  setTenantPhone(e.target.value)
+                  setTenantPhone(
+                    e.target.value,
+                  )
                 }
               />
 
@@ -1927,89 +2554,139 @@ function App() {
                 className="modal-input"
                 type="email"
                 placeholder="Email (optional)"
-                value={tenantEmail}
+                value={
+                  tenantEmail
+                }
                 onChange={(e) =>
-                  setTenantEmail(e.target.value)
+                  setTenantEmail(
+                    e.target.value,
+                  )
                 }
               />
 
               <select
                 className="modal-input"
-                value={tenantPropertyId}
+                value={
+                  tenantPropertyId
+                }
                 onChange={(e) => {
                   setTenantPropertyId(
                     e.target.value,
                   );
-                  setTenantRoomId('');
-                  setTenantBedId('');
+                  setTenantRoomId(
+                    '',
+                  );
+                  setTenantBedId(
+                    '',
+                  );
                 }}
               >
                 <option value="">
                   Select property
                 </option>
 
-                {properties.map((property) => (
-                  <option
-                    key={property.id}
-                    value={property.id}
-                  >
-                    {property.name}
-                  </option>
-                ))}
+                {properties.map(
+                  (
+                    property,
+                  ) => (
+                    <option
+                      key={
+                        property.id
+                      }
+                      value={
+                        property.id
+                      }
+                    >
+                      {
+                        property.name
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <select
                 className="modal-input"
-                value={tenantRoomId}
+                value={
+                  tenantRoomId
+                }
                 onChange={(e) => {
                   setTenantRoomId(
                     e.target.value,
                   );
-                  setTenantBedId('');
+                  setTenantBedId(
+                    '',
+                  );
                 }}
               >
                 <option value="">
                   Select room
                 </option>
 
-                {tenantRooms.map((room) => (
-                  <option
-                    key={room.id}
-                    value={room.id}
-                  >
-                    Room {room.room_number}
-                  </option>
-                ))}
+                {tenantRooms.map(
+                  (room) => (
+                    <option
+                      key={
+                        room.id
+                      }
+                      value={
+                        room.id
+                      }
+                    >
+                      Room{' '}
+                      {
+                        room.room_number
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <select
                 className="modal-input"
-                value={tenantBedId}
+                value={
+                  tenantBedId
+                }
                 onChange={(e) =>
-                  setTenantBedId(e.target.value)
+                  setTenantBedId(
+                    e.target.value,
+                  )
                 }
               >
                 <option value="">
                   Select available bed
                 </option>
 
-                {availableBeds.map((bed) => (
-                  <option
-                    key={bed.id}
-                    value={bed.id}
-                  >
-                    Bed {bed.bed_number}
-                  </option>
-                ))}
+                {availableBeds.map(
+                  (bed) => (
+                    <option
+                      key={
+                        bed.id
+                      }
+                      value={
+                        bed.id
+                      }
+                    >
+                      Bed{' '}
+                      {
+                        bed.bed_number
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <input
                 className="modal-input"
                 type="number"
                 placeholder="Monthly rent"
-                value={tenantRent}
+                value={
+                  tenantRent
+                }
                 onChange={(e) =>
-                  setTenantRent(e.target.value)
+                  setTenantRent(
+                    e.target.value,
+                  )
                 }
               />
 
@@ -2019,9 +2696,13 @@ function App() {
                 min="1"
                 max="31"
                 placeholder="Rent due day"
-                value={tenantDueDate}
+                value={
+                  tenantDueDate
+                }
                 onChange={(e) =>
-                  setTenantDueDate(e.target.value)
+                  setTenantDueDate(
+                    e.target.value,
+                  )
                 }
               />
 
@@ -2029,16 +2710,22 @@ function App() {
                 className="modal-input"
                 type="number"
                 placeholder="Security deposit"
-                value={tenantDeposit}
+                value={
+                  tenantDeposit
+                }
                 onChange={(e) =>
-                  setTenantDeposit(e.target.value)
+                  setTenantDeposit(
+                    e.target.value,
+                  )
                 }
               />
 
               <input
                 className="modal-input"
                 type="date"
-                value={tenantMoveInDate}
+                value={
+                  tenantMoveInDate
+                }
                 onChange={(e) =>
                   setTenantMoveInDate(
                     e.target.value,
@@ -2048,14 +2735,19 @@ function App() {
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'payment' && (
+          {activeModal ===
+            'payment' && (
             <form
-              onSubmit={handleRecordPayment}
+              onSubmit={
+                handleRecordPayment
+              }
             >
               <ModalTitle
                 title="Record Payment"
@@ -2068,17 +2760,27 @@ function App() {
 
               <select
                 className="modal-input"
-                value={paymentTenantId}
+                value={
+                  paymentTenantId
+                }
                 onChange={(e) => {
-                  const id = e.target.value;
+                  const id =
+                    e.target.value;
 
-                  setPaymentTenantId(id);
-                  setPaymentInvoiceId('');
-
-                  const tenant = tenants.find(
-                    (item) =>
-                      item.id === Number(id),
+                  setPaymentTenantId(
+                    id,
                   );
+
+                  setPaymentInvoiceId(
+                    '',
+                  );
+
+                  const tenant =
+                    tenants.find(
+                      (item) =>
+                        item.id ===
+                        Number(id),
+                    );
 
                   if (tenant) {
                     setPaymentAmount(
@@ -2090,6 +2792,14 @@ function App() {
                           '',
                       ),
                     );
+
+                    setPaymentMonth(
+                      currentMonthName(),
+                    );
+
+                    setPaymentDate(
+                      today(),
+                    );
                   }
                 }}
               >
@@ -2097,40 +2807,61 @@ function App() {
                   Select tenant
                 </option>
 
-                {activeTenants.map((tenant) => (
-                  <option
-                    key={tenant.id}
-                    value={tenant.id}
-                  >
-                    {tenant.name} ·{' '}
-                    {money(
-                      getTenantPending(
-                        tenant,
-                      ) ||
-                        tenant.monthly_rent,
-                    )}
-                  </option>
-                ))}
+                {activeTenants.map(
+                  (tenant) => (
+                    <option
+                      key={
+                        tenant.id
+                      }
+                      value={
+                        tenant.id
+                      }
+                    >
+                      {
+                        tenant.name
+                      }{' '}
+                      ·{' '}
+                      {money(
+                        getTenantPending(
+                          tenant,
+                        ) ||
+                          tenant.monthly_rent,
+                      )}
+                    </option>
+                  ),
+                )}
               </select>
 
               {paymentTenantId && (
                 <select
                   className="modal-input"
-                  value={paymentInvoiceId}
+                  value={
+                    paymentInvoiceId
+                  }
                   onChange={(e) => {
-                    const id = e.target.value;
+                    const id =
+                      e.target
+                        .value;
 
-                    setPaymentInvoiceId(id);
+                    setPaymentInvoiceId(
+                      id,
+                    );
 
                     if (id) {
                       const invoice =
                         invoices.find(
-                          (item) =>
+                          (
+                            item,
+                          ) =>
                             item.id ===
-                            Number(id),
+                            Number(
+                              id,
+                            ),
                         );
 
-                      if (invoice) {
+                      if (
+                        invoice
+                      ) {
                         setPaymentAmount(
                           String(
                             getInvoiceBalance(
@@ -2144,6 +2875,35 @@ function App() {
                             currentMonthName(),
                         );
                       }
+                    } else {
+                      const tenant =
+                        tenants.find(
+                          (
+                            item,
+                          ) =>
+                            item.id ===
+                            Number(
+                              paymentTenantId,
+                            ),
+                        );
+
+                      if (
+                        tenant
+                      ) {
+                        setPaymentAmount(
+                          String(
+                            getTenantPending(
+                              tenant,
+                            ) ||
+                              tenant.monthly_rent ||
+                              '',
+                          ),
+                        );
+
+                        setPaymentMonth(
+                          currentMonthName(),
+                        );
+                      }
                     }
                   }}
                 >
@@ -2153,40 +2913,58 @@ function App() {
 
                   {invoices
                     .filter(
-                      (invoice) =>
+                      (
+                        invoice,
+                      ) =>
                         invoice.tenant_id ===
                           Number(
                             paymentTenantId,
                           ) &&
                         normalize(
                           invoice.status,
-                        ) !== 'cancelled' &&
+                        ) !==
+                          'cancelled' &&
                         getInvoiceBalance(
                           invoice,
                         ) > 0,
                     )
-                    .map((invoice) => (
-                      <option
-                        key={invoice.id}
-                        value={invoice.id}
-                      >
-                        {invoice.invoice_number} ·{' '}
-                        {money(
-                          getInvoiceBalance(
-                            invoice,
-                          ),
-                        )}{' '}
-                        balance
-                      </option>
-                    ))}
+                    .map(
+                      (
+                        invoice,
+                      ) => (
+                        <option
+                          key={
+                            invoice.id
+                          }
+                          value={
+                            invoice.id
+                          }
+                        >
+                          {
+                            invoice.invoice_number
+                          }{' '}
+                          ·{' '}
+                          {money(
+                            getInvoiceBalance(
+                              invoice,
+                            ),
+                          )}{' '}
+                          balance
+                        </option>
+                      ),
+                    )}
                 </select>
               )}
 
               <input
                 className="modal-input"
                 type="number"
+                min="0"
+                step="0.01"
                 placeholder="Amount"
-                value={paymentAmount}
+                value={
+                  paymentAmount
+                }
                 onChange={(e) =>
                   setPaymentAmount(
                     e.target.value,
@@ -2197,7 +2975,9 @@ function App() {
               <input
                 className="modal-input"
                 type="date"
-                value={paymentDate}
+                value={
+                  paymentDate
+                }
                 onChange={(e) =>
                   setPaymentDate(
                     e.target.value,
@@ -2207,24 +2987,38 @@ function App() {
 
               <select
                 className="modal-input"
-                value={paymentMethod}
+                value={
+                  paymentMethod
+                }
                 onChange={(e) =>
                   setPaymentMethod(
                     e.target.value,
                   )
                 }
               >
-                <option>UPI</option>
-                <option>Cash</option>
-                <option>Bank Transfer</option>
-                <option>Card</option>
-                <option>Other</option>
+                <option>
+                  UPI
+                </option>
+                <option>
+                  Cash
+                </option>
+                <option>
+                  Bank Transfer
+                </option>
+                <option>
+                  Card
+                </option>
+                <option>
+                  Other
+                </option>
               </select>
 
               <input
                 className="modal-input"
                 placeholder="Payment month"
-                value={paymentMonth}
+                value={
+                  paymentMonth
+                }
                 onChange={(e) =>
                   setPaymentMonth(
                     e.target.value,
@@ -2234,14 +3028,19 @@ function App() {
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'invoice' && (
+          {activeModal ===
+            'invoice' && (
             <form
-              onSubmit={handleCreateInvoice}
+              onSubmit={
+                handleCreateInvoice
+              }
             >
               <ModalTitle
                 title="Create Invoice"
@@ -2250,15 +3049,24 @@ function App() {
 
               <select
                 className="modal-input"
-                value={invoiceTenantId}
+                value={
+                  invoiceTenantId
+                }
                 onChange={(e) => {
-                  const id = e.target.value;
-                  setInvoiceTenantId(id);
+                  const id =
+                    e.target
+                      .value;
 
-                  const tenant = tenants.find(
-                    (item) =>
-                      item.id === Number(id),
+                  setInvoiceTenantId(
+                    id,
                   );
+
+                  const tenant =
+                    tenants.find(
+                      (item) =>
+                        item.id ===
+                        Number(id),
+                    );
 
                   if (tenant) {
                     setInvoiceAmount(
@@ -2274,21 +3082,33 @@ function App() {
                   Select tenant
                 </option>
 
-                {activeTenants.map((tenant) => (
-                  <option
-                    key={tenant.id}
-                    value={tenant.id}
-                  >
-                    {tenant.name}
-                  </option>
-                ))}
+                {activeTenants.map(
+                  (tenant) => (
+                    <option
+                      key={
+                        tenant.id
+                      }
+                      value={
+                        tenant.id
+                      }
+                    >
+                      {
+                        tenant.name
+                      }
+                    </option>
+                  ),
+                )}
               </select>
 
               <input
                 className="modal-input"
                 type="number"
+                min="0"
+                step="0.01"
                 placeholder="Invoice amount"
-                value={invoiceAmount}
+                value={
+                  invoiceAmount
+                }
                 onChange={(e) =>
                   setInvoiceAmount(
                     e.target.value,
@@ -2299,7 +3119,9 @@ function App() {
               <input
                 className="modal-input"
                 placeholder="Month"
-                value={invoiceMonth}
+                value={
+                  invoiceMonth
+                }
                 onChange={(e) =>
                   setInvoiceMonth(
                     e.target.value,
@@ -2310,7 +3132,9 @@ function App() {
               <input
                 className="modal-input"
                 type="date"
-                value={invoiceDueDate}
+                value={
+                  invoiceDueDate
+                }
                 onChange={(e) =>
                   setInvoiceDueDate(
                     e.target.value,
@@ -2320,16 +3144,23 @@ function App() {
 
               <ModalButtons
                 saving={saving}
-                onCancel={closeModal}
+                onCancel={
+                  closeModal
+                }
               />
             </form>
           )}
 
-          {activeModal === 'tenantDetails' &&
+          {activeModal ===
+            'tenantDetails' &&
             selectedTenant && (
               <TenantDetails
-                tenant={selectedTenant}
-                payments={selectedTenantPayments}
+                tenant={
+                  selectedTenant
+                }
+                payments={
+                  selectedTenantPayments
+                }
                 paid={getTenantPaid(
                   selectedTenant.id,
                 )}
@@ -2339,7 +3170,9 @@ function App() {
                 status={getTenantStatus(
                   selectedTenant,
                 )}
-                onClose={closeModal}
+                onClose={
+                  closeModal
+                }
                 onPayment={() =>
                   openPaymentForTenant(
                     selectedTenant,
@@ -2370,7 +3203,9 @@ function Header({
   return (
     <header className="app-header">
       <div className="brand-wrap">
-        <div className="brand-logo">P</div>
+        <div className="brand-logo">
+          P
+        </div>
 
         <div>
           <h1 className="brand-title">
@@ -2438,13 +3273,27 @@ function Dashboard({
   upcomingDues: Tenant[];
   overdueTenants: Tenant[];
   recentPayments: Payment[];
-  getTenantPending: (tenant: Tenant) => number;
-  getTenantPaid: (id: number) => number;
-  openTenantDetails: (tenant: Tenant) => void;
-  sendWhatsAppReminder: (tenant: Tenant) => void;
-  openPaymentForTenant: (tenant: Tenant) => void;
-  openModal: (modal: Modal) => void;
-  setActiveTab: (tab: Tab) => void;
+  getTenantPending: (
+    tenant: Tenant,
+  ) => number;
+  getTenantPaid: (
+    id: number,
+  ) => number;
+  openTenantDetails: (
+    tenant: Tenant,
+  ) => void;
+  sendWhatsAppReminder: (
+    tenant: Tenant,
+  ) => void;
+  openPaymentForTenant: (
+    tenant: Tenant,
+  ) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
+  setActiveTab: (
+    tab: Tab,
+  ) => void;
 }) {
   return (
     <div className="view-container">
@@ -2466,11 +3315,13 @@ function Dashboard({
 
         <div className="hero-meta">
           <span>
-            {totalOccupancy}% occupancy
+            {totalOccupancy}%
+            occupancy
           </span>
           <span>•</span>
           <span>
-            {activeTenants.length} active tenants
+            {activeTenants.length}{' '}
+            active tenants
           </span>
         </div>
 
@@ -2485,7 +3336,10 @@ function Dashboard({
 
         <div className="hero-bottom">
           <span>
-            {money(collectedThisMonth)} collected
+            {money(
+              collectedThisMonth,
+            )}{' '}
+            collected
           </span>
 
           <strong>
@@ -2497,25 +3351,34 @@ function Dashboard({
       <div className="metrics-grid">
         <Metric
           icon="💰"
-          value={money(collectedThisMonth)}
+          value={money(
+            collectedThisMonth,
+          )}
           label="Collected"
         />
 
         <Metric
           icon="⏳"
-          value={money(pendingDues)}
+          value={money(
+            pendingDues,
+          )}
           label="Pending"
         />
 
         <Metric
           icon="🛏️"
-          value={`${occupiedBeds}/${occupiedBeds + availableBedCount}`}
+          value={`${occupiedBeds}/${
+            occupiedBeds +
+            availableBedCount
+          }`}
           label="Beds Occupied"
         />
 
         <Metric
           icon="🏠"
-          value={String(properties.length)}
+          value={String(
+            properties.length,
+          )}
           label="Properties"
         />
       </div>
@@ -2529,41 +3392,68 @@ function Dashboard({
         <QuickAction
           icon="🏠"
           label="Property"
-          onClick={() => openModal('property')}
+          onClick={() =>
+            openModal(
+              'property',
+            )
+          }
         />
+
         <QuickAction
           icon="🚪"
           label="Room"
-          onClick={() => openModal('room')}
+          onClick={() =>
+            openModal('room')
+          }
         />
+
         <QuickAction
           icon="🛏️"
           label="Bed"
-          onClick={() => openModal('bed')}
+          onClick={() =>
+            openModal('bed')
+          }
         />
+
         <QuickAction
           icon="👤"
           label="Tenant"
-          onClick={() => openModal('tenant')}
+          onClick={() =>
+            openModal(
+              'tenant',
+            )
+          }
         />
+
         <QuickAction
           icon="₹"
           label="Payment"
-          onClick={() => openModal('payment')}
+          onClick={() =>
+            openModal(
+              'payment',
+            )
+          }
         />
+
         <QuickAction
           icon="🧾"
           label="Invoice"
-          onClick={() => openModal('invoice')}
+          onClick={() =>
+            openModal(
+              'invoice',
+            )
+          }
         />
       </div>
 
-      {overdueTenants.length > 0 && (
+      {overdueTenants.length >
+        0 && (
         <>
           <SectionHeading
             title="Needs Attention"
             subtitle={`${overdueTenants.length} rent payment${
-              overdueTenants.length > 1
+              overdueTenants.length >
+              1
                 ? 's'
                 : ''
             } overdue`}
@@ -2577,38 +3467,44 @@ function Dashboard({
             <div className="alert-content">
               {overdueTenants
                 .slice(0, 3)
-                .map((tenant) => (
-                  <div
-                    className="alert-row"
-                    key={tenant.id}
-                  >
-                    <div>
-                      <strong>
-                        {tenant.name}
-                      </strong>
-
-                      <span>
-                        {money(
-                          getTenantPending(
-                            tenant,
-                          ),
-                        )}{' '}
-                        pending
-                      </span>
-                    </div>
-
-                    <button
-                      className="mini-action"
-                      onClick={() =>
-                        sendWhatsAppReminder(
-                          tenant,
-                        )
+                .map(
+                  (tenant) => (
+                    <div
+                      className="alert-row"
+                      key={
+                        tenant.id
                       }
                     >
-                      WhatsApp
-                    </button>
-                  </div>
-                ))}
+                      <div>
+                        <strong>
+                          {
+                            tenant.name
+                          }
+                        </strong>
+
+                        <span>
+                          {money(
+                            getTenantPending(
+                              tenant,
+                            ),
+                          )}{' '}
+                          pending
+                        </span>
+                      </div>
+
+                      <button
+                        className="mini-action"
+                        onClick={() =>
+                          sendWhatsAppReminder(
+                            tenant,
+                          )
+                        }
+                      >
+                        WhatsApp
+                      </button>
+                    </div>
+                  ),
+                )}
             </div>
           </div>
         </>
@@ -2621,7 +3517,9 @@ function Dashboard({
           <button
             className="text-btn"
             onClick={() =>
-              setActiveTab('tenants')
+              setActiveTab(
+                'tenants',
+              )
             }
           >
             View all
@@ -2629,7 +3527,8 @@ function Dashboard({
         }
       />
 
-      {upcomingDues.length === 0 ? (
+      {upcomingDues.length ===
+      0 ? (
         <EmptyCard
           icon="🎉"
           title="All caught up"
@@ -2637,40 +3536,59 @@ function Dashboard({
         />
       ) : (
         <div className="list-card">
-          {upcomingDues.map((tenant) => (
-            <div
-              className="list-row"
-              key={tenant.id}
-              onClick={() =>
-                openTenantDetails(tenant)
-              }
-            >
-              <div className="avatar">
-                {getInitials(tenant.name)}
-              </div>
-
-              <div className="list-main">
-                <strong>{tenant.name}</strong>
-
-                <span>
-                  Room {tenant.room_number || '-'} ·
-                  Due {tenant.due_date}
-                </span>
-              </div>
-
-              <div className="list-side">
-                <strong>
-                  {money(
-                    getTenantPending(tenant),
+          {upcomingDues.map(
+            (tenant) => (
+              <div
+                className="list-row"
+                key={
+                  tenant.id
+                }
+                onClick={() =>
+                  openTenantDetails(
+                    tenant,
+                  )
+                }
+              >
+                <div className="avatar">
+                  {getInitials(
+                    tenant.name,
                   )}
-                </strong>
+                </div>
 
-                <span className="status pending">
-                  Pending
-                </span>
+                <div className="list-main">
+                  <strong>
+                    {
+                      tenant.name
+                    }
+                  </strong>
+
+                  <span>
+                    Room{' '}
+                    {tenant.room_number ||
+                      '-'}{' '}
+                    · Due{' '}
+                    {
+                      tenant.due_date
+                    }
+                  </span>
+                </div>
+
+                <div className="list-side">
+                  <strong>
+                    {money(
+                      getTenantPending(
+                        tenant,
+                      ),
+                    )}
+                  </strong>
+
+                  <span className="status pending">
+                    Pending
+                  </span>
+                </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
 
@@ -2681,7 +3599,9 @@ function Dashboard({
           <button
             className="text-btn"
             onClick={() =>
-              setActiveTab('payments')
+              setActiveTab(
+                'payments',
+              )
             }
           >
             View all
@@ -2689,7 +3609,8 @@ function Dashboard({
         }
       />
 
-      {recentPayments.length === 0 ? (
+      {recentPayments.length ===
+      0 ? (
         <EmptyCard
           icon="₹"
           title="No payments yet"
@@ -2697,40 +3618,49 @@ function Dashboard({
         />
       ) : (
         <div className="list-card">
-          {recentPayments.map((payment) => (
-            <div
-              className="list-row"
-              key={payment.id}
-            >
-              <div className="avatar payment-avatar">
-                ₹
+          {recentPayments.map(
+            (payment) => (
+              <div
+                className="list-row"
+                key={
+                  payment.id
+                }
+              >
+                <div className="avatar payment-avatar">
+                  ₹
+                </div>
+
+                <div className="list-main">
+                  <strong>
+                    {payment.tenant_name ||
+                      'Tenant'}
+                  </strong>
+
+                  <span>
+                    {
+                      payment.payment_method
+                    }{' '}
+                    ·{' '}
+                    {formatDate(
+                      payment.payment_date,
+                    )}
+                  </span>
+                </div>
+
+                <div className="list-side">
+                  <strong>
+                    {money(
+                      payment.amount,
+                    )}
+                  </strong>
+
+                  <span className="status paid">
+                    Paid
+                  </span>
+                </div>
               </div>
-
-              <div className="list-main">
-                <strong>
-                  {payment.tenant_name ||
-                    'Tenant'}
-                </strong>
-
-                <span>
-                  {payment.payment_method} ·{' '}
-                  {formatDate(
-                    payment.payment_date,
-                  )}
-                </span>
-              </div>
-
-              <div className="list-side">
-                <strong>
-                  {money(payment.amount)}
-                </strong>
-
-                <span className="status paid">
-                  Paid
-                </span>
-              </div>
-            </div>
-          ))}
+            ),
+          )}
         </div>
       )}
 
@@ -2739,7 +3669,8 @@ function Dashboard({
         subtitle="Property overview"
       />
 
-      {properties.length === 0 ? (
+      {properties.length ===
+      0 ? (
         <EmptyCard
           icon="🏠"
           title="No properties"
@@ -2748,7 +3679,9 @@ function Dashboard({
             <button
               className="btn-primary"
               onClick={() =>
-                openModal('property')
+                openModal(
+                  'property',
+                )
               }
             >
               Add Property
@@ -2756,60 +3689,74 @@ function Dashboard({
           }
         />
       ) : (
-        properties.map((property) => (
-          <div
-            className="glass-card"
-            key={property.id}
-          >
-            <div className="glass-header">
-              <div>
-                <h3>{property.name}</h3>
-                <p>
-                  {property.address ||
-                    'No address added'}
-                </p>
+        properties.map(
+          (property) => (
+            <div
+              className="glass-card"
+              key={
+                property.id
+              }
+            >
+              <div className="glass-header">
+                <div>
+                  <h3>
+                    {
+                      property.name
+                    }
+                  </h3>
+
+                  <p>
+                    {property.address ||
+                      'No address added'}
+                  </p>
+                </div>
+
+                <span className="badge badge-emerald">
+                  {property.occupancy_rate ||
+                    0}
+                  %
+                </span>
               </div>
 
-              <span className="badge badge-emerald">
-                {property.occupancy_rate ||
-                  0}
-                %
-              </span>
+              <div className="metrics-row">
+                <MiniMetric
+                  label="Rooms"
+                  value={
+                    property.room_count
+                  }
+                />
+
+                <MiniMetric
+                  label="Beds"
+                  value={
+                    property.bed_count ||
+                    0
+                  }
+                />
+
+                <MiniMetric
+                  label="Occupied"
+                  value={
+                    property.occupied_bed_count ||
+                    0
+                  }
+                />
+              </div>
+
+              <div className="glass-footer">
+                <span>
+                  Monthly Revenue
+                </span>
+
+                <strong>
+                  {money(
+                    property.monthly_revenue,
+                  )}
+                </strong>
+              </div>
             </div>
-
-            <div className="metrics-row">
-              <MiniMetric
-                label="Rooms"
-                value={property.room_count}
-              />
-
-              <MiniMetric
-                label="Beds"
-                value={
-                  property.bed_count || 0
-                }
-              />
-
-              <MiniMetric
-                label="Occupied"
-                value={
-                  property.occupied_bed_count ||
-                  0
-                }
-              />
-            </div>
-
-            <div className="glass-footer">
-              <span>Monthly Revenue</span>
-
-              <strong>
-                {money(
-                  property.monthly_revenue,
-                )}
-              </strong>
-            </div>
-          </div>
-        ))
+          ),
+        )
       )}
     </div>
   );
@@ -2824,7 +3771,9 @@ function PropertiesView({
   properties: Property[];
   rooms: Room[];
   beds: Bed[];
-  openModal: (modal: Modal) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
 }) {
   return (
     <div className="view-container">
@@ -2835,7 +3784,9 @@ function PropertiesView({
           <button
             className="btn-primary"
             onClick={() =>
-              openModal('property')
+              openModal(
+                'property',
+              )
             }
           >
             + Property
@@ -2843,74 +3794,97 @@ function PropertiesView({
         }
       />
 
-      {properties.map((property) => {
-        const propertyRooms = rooms.filter(
-          (room) =>
-            room.property_id === property.id,
-        );
+      {properties.map(
+        (property) => {
+          const propertyRooms =
+            rooms.filter(
+              (room) =>
+                room.property_id ===
+                property.id,
+            );
 
-        const propertyBeds = beds.filter(
-          (bed) =>
-            bed.property_id === property.id,
-        );
+          const propertyBeds =
+            beds.filter(
+              (bed) =>
+                bed.property_id ===
+                property.id,
+            );
 
-        const occupied = propertyBeds.filter(
-          (bed) => bed.is_occupied,
-        ).length;
+          const occupied =
+            propertyBeds.filter(
+              (bed) =>
+                bed.is_occupied,
+            ).length;
 
-        return (
-          <div
-            className="glass-card"
-            key={property.id}
-          >
-            <div className="glass-header">
-              <div>
-                <h3>{property.name}</h3>
+          return (
+            <div
+              className="glass-card"
+              key={
+                property.id
+              }
+            >
+              <div className="glass-header">
+                <div>
+                  <h3>
+                    {
+                      property.name
+                    }
+                  </h3>
 
-                <p>
-                  {property.address ||
-                    'No address'}
-                </p>
+                  <p>
+                    {property.address ||
+                      'No address'}
+                  </p>
+                </div>
+
+                <span className="badge badge-emerald">
+                  {property.occupancy_rate ||
+                    0}
+                  %
+                </span>
               </div>
 
-              <span className="badge badge-emerald">
-                {property.occupancy_rate ||
-                  0}
-                %
-              </span>
+              <div className="metrics-row">
+                <MiniMetric
+                  label="Rooms"
+                  value={
+                    propertyRooms.length
+                  }
+                />
+
+                <MiniMetric
+                  label="Beds"
+                  value={
+                    propertyBeds.length
+                  }
+                />
+
+                <MiniMetric
+                  label="Occupied"
+                  value={
+                    occupied
+                  }
+                />
+              </div>
+
+              <div className="glass-footer">
+                <span>
+                  Monthly Revenue
+                </span>
+
+                <strong>
+                  {money(
+                    property.monthly_revenue,
+                  )}
+                </strong>
+              </div>
             </div>
+          );
+        },
+      )}
 
-            <div className="metrics-row">
-              <MiniMetric
-                label="Rooms"
-                value={propertyRooms.length}
-              />
-
-              <MiniMetric
-                label="Beds"
-                value={propertyBeds.length}
-              />
-
-              <MiniMetric
-                label="Occupied"
-                value={occupied}
-              />
-            </div>
-
-            <div className="glass-footer">
-              <span>Monthly Revenue</span>
-
-              <strong>
-                {money(
-                  property.monthly_revenue,
-                )}
-              </strong>
-            </div>
-          </div>
-        );
-      })}
-
-      {properties.length === 0 && (
+      {properties.length ===
+        0 && (
         <EmptyCard
           icon="🏠"
           title="No properties yet"
@@ -2919,7 +3893,9 @@ function PropertiesView({
             <button
               className="btn-primary"
               onClick={() =>
-                openModal('property')
+                openModal(
+                  'property',
+                )
               }
             >
               Add Property
@@ -2938,7 +3914,9 @@ function RoomsView({
 }: {
   rooms: Room[];
   beds: Bed[];
-  openModal: (modal: Modal) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
 }) {
   return (
     <div className="view-container">
@@ -2949,14 +3927,20 @@ function RoomsView({
           <div className="header-button-group">
             <button
               className="btn-secondary"
-              onClick={() => openModal('bed')}
+              onClick={() =>
+                openModal('bed')
+              }
             >
               + Bed
             </button>
 
             <button
               className="btn-primary"
-              onClick={() => openModal('room')}
+              onClick={() =>
+                openModal(
+                  'room',
+                )
+              }
             >
               + Room
             </button>
@@ -2964,88 +3948,111 @@ function RoomsView({
         }
       />
 
-      {rooms.map((room) => {
-        const roomBeds = beds.filter(
-          (bed) => bed.room_id === room.id,
-        );
+      {rooms.map(
+        (room) => {
+          const roomBeds =
+            beds.filter(
+              (bed) =>
+                bed.room_id ===
+                room.id,
+            );
 
-        return (
-          <div
-            className="glass-card"
-            key={room.id}
-          >
-            <div className="glass-header">
-              <div>
-                <h3>
-                  Room {room.room_number}
-                </h3>
+          return (
+            <div
+              className="glass-card"
+              key={
+                room.id
+              }
+            >
+              <div className="glass-header">
+                <div>
+                  <h3>
+                    Room{' '}
+                    {
+                      room.room_number
+                    }
+                  </h3>
 
-                <p>
-                  {room.property_name ||
-                    'Property'}
-                </p>
+                  <p>
+                    {room.property_name ||
+                      'Property'}
+                  </p>
+                </div>
+
+                <span className="badge">
+                  {
+                    room.sharing_type
+                  }
+                </span>
               </div>
 
-              <span className="badge">
-                {room.sharing_type}
-              </span>
-            </div>
+              <div className="metrics-row">
+                <MiniMetric
+                  label="Rent"
+                  value={money(
+                    room.rent_amount,
+                  )}
+                />
 
-            <div className="metrics-row">
-              <MiniMetric
-                label="Rent"
-                value={money(
-                  room.rent_amount,
-                )}
-              />
+                <MiniMetric
+                  label="Beds"
+                  value={
+                    roomBeds.length
+                  }
+                />
 
-              <MiniMetric
-                label="Beds"
-                value={roomBeds.length}
-              />
+                <MiniMetric
+                  label="Occupied"
+                  value={
+                    roomBeds.filter(
+                      (bed) =>
+                        bed.is_occupied,
+                    ).length
+                  }
+                />
+              </div>
 
-              <MiniMetric
-                label="Occupied"
-                value={
-                  roomBeds.filter(
-                    (bed) =>
-                      bed.is_occupied,
-                  ).length
-                }
-              />
-            </div>
-
-            <div className="bed-list">
-              {roomBeds.length === 0 ? (
-                <span className="muted">
-                  No beds added yet
-                </span>
-              ) : (
-                roomBeds.map((bed) => (
-                  <span
-                    className={
-                      bed.is_occupied
-                        ? 'bed-chip occupied'
-                        : 'bed-chip available'
-                    }
-                    key={bed.id}
-                  >
-                    Bed {bed.bed_number}
-
-                    <small>
-                      {bed.is_occupied
-                        ? 'Occupied'
-                        : 'Available'}
-                    </small>
+              <div className="bed-list">
+                {roomBeds.length ===
+                0 ? (
+                  <span className="muted">
+                    No beds added yet
                   </span>
-                ))
-              )}
-            </div>
-          </div>
-        );
-      })}
+                ) : (
+                  roomBeds.map(
+                    (bed) => (
+                      <span
+                        className={
+                          bed.is_occupied
+                            ? 'bed-chip occupied'
+                            : 'bed-chip available'
+                        }
+                        key={
+                          bed.id
+                        }
+                      >
+                        Bed{' '}
+                        {
+                          bed.bed_number
+                        }
 
-      {rooms.length === 0 && (
+                        <small>
+                          {bed.is_occupied
+                            ? 'Occupied'
+                            : 'Available'}
+                        </small>
+                      </span>
+                    ),
+                  )
+                )}
+              </div>
+            </div>
+          );
+        },
+      )}
+
+      {rooms.length ===
+        0 && (
         <EmptyCard
           icon="🚪"
           title="No rooms yet"
@@ -3053,7 +4060,11 @@ function RoomsView({
           action={
             <button
               className="btn-primary"
-              onClick={() => openModal('room')}
+              onClick={() =>
+                openModal(
+                  'room',
+                )
+              }
             >
               Add Room
             </button>
@@ -3083,7 +4094,9 @@ function TenantsView({
 }: {
   tenants: Tenant[];
   searchQuery: string;
-  setSearchQuery: (value: string) => void;
+  setSearchQuery: (
+    value: string,
+  ) => void;
   tenantFilter:
     | 'all'
     | 'paid'
@@ -3097,29 +4110,53 @@ function TenantsView({
       | 'overdue',
   ) => void;
   propertyFilter: string;
-  setPropertyFilter: (value: string) => void;
+  setPropertyFilter: (
+    value: string,
+  ) => void;
   properties: Property[];
-  openModal: (modal: Modal) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
   getTenantStatus: (
     tenant: Tenant,
-  ) => 'paid' | 'pending' | 'overdue';
-  getTenantPaid: (id: number) => number;
-  getTenantPending: (tenant: Tenant) => number;
-  openTenantDetails: (tenant: Tenant) => void;
-  sendWhatsAppReminder: (tenant: Tenant) => void;
-  openPaymentForTenant: (tenant: Tenant) => void;
+  ) =>
+    | 'paid'
+    | 'pending'
+    | 'overdue';
+  getTenantPaid: (
+    id: number,
+  ) => number;
+  getTenantPending: (
+    tenant: Tenant,
+  ) => number;
+  openTenantDetails: (
+    tenant: Tenant,
+  ) => void;
+  sendWhatsAppReminder: (
+    tenant: Tenant,
+  ) => void;
+  openPaymentForTenant: (
+    tenant: Tenant,
+  ) => void;
 }) {
   return (
     <div className="view-container">
       <PageHeader
         title="Tenants"
         subtitle={`${tenants.length} tenant${
-          tenants.length !== 1 ? 's' : ''
+          tenants.length !==
+          1
+            ? 's'
+            : ''
         } shown`}
         action={
           <button
             className="btn-primary"
-            onClick={() => openModal('tenant')}
+            onClick={() =>
+              openModal(
+                'tenant',
+              )
+            }
           >
             + Tenant
           </button>
@@ -3129,9 +4166,13 @@ function TenantsView({
       <input
         className="search-input"
         placeholder="Search name, phone, room or property..."
-        value={searchQuery}
+        value={
+          searchQuery
+        }
         onChange={(e) =>
-          setSearchQuery(e.target.value)
+          setSearchQuery(
+            e.target.value,
+          )
         }
       />
 
@@ -3140,152 +4181,231 @@ function TenantsView({
           [
             ['all', 'All'],
             ['paid', 'Paid'],
-            ['pending', 'Pending'],
-            ['overdue', 'Overdue'],
+            [
+              'pending',
+              'Pending',
+            ],
+            [
+              'overdue',
+              'Overdue',
+            ],
           ] as const
-        ).map(([value, label]) => (
-          <button
-            key={value}
-            className={
-              tenantFilter === value
-                ? 'filter-pill active'
-                : 'filter-pill'
-            }
-            onClick={() =>
-              setTenantFilter(value)
-            }
-          >
-            {label}
-          </button>
-        ))}
+        ).map(
+          ([
+            value,
+            label,
+          ]) => (
+            <button
+              key={
+                value
+              }
+              className={
+                tenantFilter ===
+                value
+                  ? 'filter-pill active'
+                  : 'filter-pill'
+              }
+              onClick={() =>
+                setTenantFilter(
+                  value,
+                )
+              }
+            >
+              {label}
+            </button>
+          ),
+        )}
       </div>
 
       <select
         className="modal-input compact-input"
-        value={propertyFilter}
+        value={
+          propertyFilter
+        }
         onChange={(e) =>
-          setPropertyFilter(e.target.value)
+          setPropertyFilter(
+            e.target.value,
+          )
         }
       >
         <option value="">
           All properties
         </option>
 
-        {properties.map((property) => (
-          <option
-            key={property.id}
-            value={property.id}
-          >
-            {property.name}
-          </option>
-        ))}
-      </select>
-
-      {tenants.map((tenant) => {
-        const status = getTenantStatus(tenant);
-        const paid = getTenantPaid(tenant.id);
-        const pending =
-          getTenantPending(tenant);
-
-        return (
-          <div
-            className="glass-card tenant-card"
-            key={tenant.id}
-          >
-            <div
-              className="clickable-header"
-              onClick={() =>
-                openTenantDetails(tenant)
+        {properties.map(
+          (property) => (
+            <option
+              key={
+                property.id
+              }
+              value={
+                property.id
               }
             >
-              <div className="avatar large">
-                {getInitials(tenant.name)}
-              </div>
+              {
+                property.name
+              }
+            </option>
+          ),
+        )}
+      </select>
 
-              <div className="tenant-main">
-                <h3>{tenant.name}</h3>
+      {tenants.map(
+        (tenant) => {
+          const status =
+            getTenantStatus(
+              tenant,
+            );
 
-                <p>{tenant.phone}</p>
+          const paid =
+            getTenantPaid(
+              tenant.id,
+            );
 
-                <span>
-                  {tenant.property_name ||
-                    'Property'}{' '}
-                  · Room{' '}
-                  {tenant.room_number || '-'} · Bed{' '}
-                  {tenant.bed_number || '-'}
-                </span>
-              </div>
+          const pending =
+            getTenantPending(
+              tenant,
+            );
 
-              <StatusBadge status={status} />
-            </div>
-
-            <div className="tenant-finance">
-              <div>
-                <span>Monthly Rent</span>
-
-                <strong>
-                  {money(
-                    tenant.monthly_rent,
+          return (
+            <div
+              className="glass-card tenant-card"
+              key={
+                tenant.id
+              }
+            >
+              <div
+                className="clickable-header"
+                onClick={() =>
+                  openTenantDetails(
+                    tenant,
+                  )
+                }
+              >
+                <div className="avatar large">
+                  {getInitials(
+                    tenant.name,
                   )}
-                </strong>
+                </div>
+
+                <div className="tenant-main">
+                  <h3>
+                    {
+                      tenant.name
+                    }
+                  </h3>
+
+                  <p>
+                    {
+                      tenant.phone
+                    }
+                  </p>
+
+                  <span>
+                    {tenant.property_name ||
+                      'Property'}{' '}
+                    · Room{' '}
+                    {tenant.room_number ||
+                      '-'}{' '}
+                    · Bed{' '}
+                    {tenant.bed_number ||
+                      '-'}
+                  </span>
+                </div>
+
+                <StatusBadge
+                  status={
+                    status
+                  }
+                />
               </div>
 
-              <div>
-                <span>Paid</span>
+              <div className="tenant-finance">
+                <div>
+                  <span>
+                    Monthly Rent
+                  </span>
 
-                <strong className="success-text">
-                  {money(paid)}
-                </strong>
+                  <strong>
+                    {money(
+                      tenant.monthly_rent,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Paid
+                  </span>
+
+                  <strong className="success-text">
+                    {money(
+                      paid,
+                    )}
+                  </strong>
+                </div>
+
+                <div>
+                  <span>
+                    Pending
+                  </span>
+
+                  <strong
+                    className={
+                      pending >
+                      0
+                        ? 'danger-text'
+                        : 'success-text'
+                    }
+                  >
+                    {money(
+                      pending,
+                    )}
+                  </strong>
+                </div>
               </div>
 
-              <div>
-                <span>Pending</span>
-
-                <strong
-                  className={
-                    pending > 0
-                      ? 'danger-text'
-                      : 'success-text'
+              <div className="tenant-actions">
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    openTenantDetails(
+                      tenant,
+                    )
                   }
                 >
-                  {money(pending)}
-                </strong>
+                  Details
+                </button>
+
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    sendWhatsAppReminder(
+                      tenant,
+                    )
+                  }
+                >
+                  WhatsApp
+                </button>
+
+                <button
+                  className="btn-primary"
+                  onClick={() =>
+                    openPaymentForTenant(
+                      tenant,
+                    )
+                  }
+                >
+                  Pay
+                </button>
               </div>
             </div>
+          );
+        },
+      )}
 
-            <div className="tenant-actions">
-              <button
-                className="btn-secondary"
-                onClick={() =>
-                  openTenantDetails(tenant)
-                }
-              >
-                Details
-              </button>
-
-              <button
-                className="btn-secondary"
-                onClick={() =>
-                  sendWhatsAppReminder(tenant)
-                }
-              >
-                WhatsApp
-              </button>
-
-              <button
-                className="btn-primary"
-                onClick={() =>
-                  openPaymentForTenant(tenant)
-                }
-              >
-                Pay
-              </button>
-            </div>
-          </div>
-        );
-      })}
-
-      {tenants.length === 0 && (
+      {tenants.length ===
+        0 && (
         <EmptyCard
           icon="👥"
           title="No tenants found"
@@ -3293,7 +4413,11 @@ function TenantsView({
           action={
             <button
               className="btn-primary"
-              onClick={() => openModal('tenant')}
+              onClick={() =>
+                openModal(
+                  'tenant',
+                )
+              }
             >
               Add Tenant
             </button>
@@ -3312,24 +4436,38 @@ function PaymentsView({
 }: {
   payments: Payment[];
   search: string;
-  setSearch: (value: string) => void;
-  openModal: (modal: Modal) => void;
+  setSearch: (
+    value: string,
+  ) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
 }) {
-  const total = payments.reduce(
-    (sum, payment) =>
-      sum + Number(payment.amount || 0),
-    0,
-  );
+  const total =
+    payments.reduce(
+      (sum, payment) =>
+        sum +
+        Number(
+          payment.amount || 0,
+        ),
+      0,
+    );
 
   return (
     <div className="view-container">
       <PageHeader
         title="Payments"
-        subtitle={`${money(total)} shown`}
+        subtitle={`${money(
+          total,
+        )} shown`}
         action={
           <button
             className="btn-primary"
-            onClick={() => openModal('payment')}
+            onClick={() =>
+              openModal(
+                'payment',
+              )
+            }
           >
             + Payment
           </button>
@@ -3339,89 +4477,105 @@ function PaymentsView({
       <input
         className="search-input"
         placeholder="Search tenant, invoice, property, month or method..."
-        value={search}
+        value={
+          search
+        }
         onChange={(e) =>
-          setSearch(e.target.value)
+          setSearch(
+            e.target.value,
+          )
         }
       />
 
       <div className="summary-strip">
         <span>
-          {payments.length} transactions
+          {
+            payments.length
+          }{' '}
+          transactions
         </span>
 
-        <strong>{money(total)}</strong>
+        <strong>
+          {money(total)}
+        </strong>
       </div>
 
-      {payments.map((payment) => (
-        <div
-          className="glass-card"
-          key={payment.id}
-        >
-          <div className="glass-header">
-            <div className="avatar-title-wrap">
-              <div className="avatar">
-                {getInitials(
-                  payment.tenant_name ||
-                    'Tenant',
+      {payments.map(
+        (payment) => (
+          <div
+            className="glass-card"
+            key={
+              payment.id
+            }
+          >
+            <div className="glass-header">
+              <div className="avatar-title-wrap">
+                <div className="avatar">
+                  {getInitials(
+                    payment.tenant_name ||
+                      'Tenant',
+                  )}
+                </div>
+
+                <div>
+                  <h3>
+                    {payment.tenant_name ||
+                      'Tenant'}
+                  </h3>
+
+                  <p>
+                    {payment.property_name ||
+                      'Property'}{' '}
+                    · Room{' '}
+                    {payment.room_number ||
+                      '-'}
+                  </p>
+                </div>
+              </div>
+
+              <strong className="amount-tag">
+                {money(
+                  payment.amount,
                 )}
-              </div>
-
-              <div>
-                <h3>
-                  {payment.tenant_name ||
-                    'Tenant'}
-                </h3>
-
-                <p>
-                  {payment.property_name ||
-                    'Property'}{' '}
-                  · Room{' '}
-                  {payment.room_number ||
-                    '-'}
-                </p>
-              </div>
+              </strong>
             </div>
 
-            <strong className="amount-tag">
-              {money(payment.amount)}
-            </strong>
+            <div className="metrics-row">
+              <MiniMetric
+                label="Invoice"
+                value={
+                  payment.invoice_number ||
+                  'General Payment'
+                }
+              />
+
+              <MiniMetric
+                label="Month"
+                value={
+                  payment.payment_month
+                }
+              />
+
+              <MiniMetric
+                label="Method"
+                value={
+                  payment.payment_method
+                }
+              />
+
+              <MiniMetric
+                label="Date"
+                value={formatDate(
+                  payment.payment_date,
+                )}
+              />
+            </div>
           </div>
+        ),
+      )}
 
-          <div className="metrics-row">
-            <MiniMetric
-              label="Invoice"
-              value={
-                payment.invoice_number ||
-                'General Payment'
-              }
-            />
-
-            <MiniMetric
-              label="Month"
-              value={
-                payment.payment_month
-              }
-            />
-
-            <MiniMetric
-              label="Method"
-              value={
-                payment.payment_method
-              }
-            />
-
-            <MiniMetric
-              label="Date"
-              value={formatDate(
-                payment.payment_date,
-              )}
-            />
-          </div>
-        </div>
-      ))}
-
-      {payments.length === 0 && (
+      {payments.length ===
+        0 && (
         <EmptyCard
           icon="₹"
           title="No payments found"
@@ -3443,23 +4597,40 @@ function InvoicesView({
 }: {
   invoices: Invoice[];
   search: string;
-  setSearch: (value: string) => void;
-  openModal: (modal: Modal) => void;
-  onPay: (invoice: Invoice) => void;
-  onSend: (invoice: Invoice) => void;
-  getBalance: (invoice: Invoice) => number;
+  setSearch: (
+    value: string,
+  ) => void;
+  openModal: (
+    modal: Modal,
+  ) => void;
+  onPay: (
+    invoice: Invoice,
+  ) => void;
+  onSend: (
+    invoice: Invoice,
+  ) => void;
+  getBalance: (
+    invoice: Invoice,
+  ) => number;
 }) {
   return (
     <div className="view-container">
       <PageHeader
         title="Invoices"
         subtitle={`${invoices.length} invoice${
-          invoices.length !== 1 ? 's' : ''
+          invoices.length !==
+          1
+            ? 's'
+            : ''
         }`}
         action={
           <button
             className="btn-primary"
-            onClick={() => openModal('invoice')}
+            onClick={() =>
+              openModal(
+                'invoice',
+              )
+            }
           >
             + Invoice
           </button>
@@ -3469,146 +4640,187 @@ function InvoicesView({
       <input
         className="search-input"
         placeholder="Search invoice, tenant, month or status..."
-        value={search}
+        value={
+          search
+        }
         onChange={(e) =>
-          setSearch(e.target.value)
+          setSearch(
+            e.target.value,
+          )
         }
       />
 
-      {invoices.map((invoice) => {
-        const balance = getBalance(invoice);
-        const paid = Number(
-          invoice.paid_amount || 0,
-        );
+      {invoices.map(
+        (invoice) => {
+          const balance =
+            getBalance(
+              invoice,
+            );
 
-        const percentage = Math.min(
-          Math.round(
+          const paid =
             Number(
-              invoice.payment_percentage ??
-                (Number(invoice.amount) > 0
-                  ? (paid /
-                      Number(invoice.amount)) *
-                    100
-                  : 0),
-            ),
-          ),
-          100,
-        );
+              invoice.paid_amount ||
+                0,
+            );
 
-        const status = normalize(
-          invoice.status,
-        );
+          const percentage =
+            Math.min(
+              Math.round(
+                Number(
+                  invoice.payment_percentage ??
+                    (Number(
+                      invoice.amount,
+                    ) > 0
+                      ? (paid /
+                          Number(
+                            invoice.amount,
+                          )) *
+                        100
+                      : 0),
+                ),
+              ),
+              100,
+            );
 
-        return (
-          <div
-            className="glass-card"
-            key={invoice.id}
-          >
-            <div className="glass-header">
-              <div>
-                <h3>
-                  {invoice.invoice_number}
-                </h3>
+          const status =
+            normalize(
+              invoice.status,
+            );
 
-                <p>
-                  {invoice.tenant_name ||
-                    'Tenant'}
-                </p>
+          return (
+            <div
+              className="glass-card"
+              key={
+                invoice.id
+              }
+            >
+              <div className="glass-header">
+                <div>
+                  <h3>
+                    {
+                      invoice.invoice_number
+                    }
+                  </h3>
+
+                  <p>
+                    {invoice.tenant_name ||
+                      'Tenant'}
+                  </p>
+                </div>
+
+                <StatusBadge
+                  status={
+                    invoice.status ||
+                    'Pending'
+                  }
+                />
               </div>
 
-              <StatusBadge
-                status={
-                  invoice.status || 'Pending'
-                }
-              />
-            </div>
+              <div className="metrics-row">
+                <MiniMetric
+                  label="Invoice Amount"
+                  value={money(
+                    invoice.amount,
+                  )}
+                />
 
-            <div className="metrics-row">
-              <MiniMetric
-                label="Invoice Amount"
-                value={money(
-                  invoice.amount,
-                )}
-              />
+                <MiniMetric
+                  label="Paid"
+                  value={money(
+                    paid,
+                  )}
+                />
 
-              <MiniMetric
-                label="Paid"
-                value={money(paid)}
-              />
+                <MiniMetric
+                  label="Balance"
+                  value={money(
+                    balance,
+                  )}
+                />
 
-              <MiniMetric
-                label="Balance"
-                value={money(balance)}
-              />
+                <MiniMetric
+                  label="Due"
+                  value={formatDate(
+                    invoice.due_date,
+                  )}
+                />
+              </div>
 
-              <MiniMetric
-                label="Due"
-                value={formatDate(
-                  invoice.due_date,
-                )}
-              />
-            </div>
+              <div className="glass-footer">
+                <span>
+                  {invoice.month ||
+                    '-'}{' '}
+                  · {percentage}%
+                  paid
+                </span>
 
-            <div className="glass-footer">
-              <span>
-                {invoice.month || '-'} ·{' '}
-                {percentage}% paid
-              </span>
+                <span
+                  className={
+                    normalize(
+                      invoice.delivery_status,
+                    ) ===
+                    'sent'
+                      ? 'status paid'
+                      : 'status pending'
+                  }
+                >
+                  {invoice.delivery_status ||
+                    'Not Sent'}
+                </span>
+              </div>
 
-              <span
-                className={
-                  normalize(
+              <div className="progress-bar-bg">
+                <div
+                  className="progress-bar-fill"
+                  style={{
+                    width: `${percentage}%`,
+                  }}
+                />
+              </div>
+
+              <div className="tenant-actions">
+                {status !==
+                  'paid' &&
+                  status !==
+                    'cancelled' && (
+                    <button
+                      className="btn-primary"
+                      onClick={() =>
+                        onPay(
+                          invoice,
+                        )
+                      }
+                    >
+                      Pay{' '}
+                      {money(
+                        balance,
+                      )}
+                    </button>
+                  )}
+
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    onSend(
+                      invoice,
+                    )
+                  }
+                >
+                  {normalize(
                     invoice.delivery_status,
-                  ) === 'sent'
-                    ? 'status paid'
-                    : 'status pending'
-                }
-              >
-                {invoice.delivery_status ||
-                  'Not Sent'}
-              </span>
+                  ) ===
+                  'sent'
+                    ? 'Send Again'
+                    : 'WhatsApp Invoice'}
+                </button>
+              </div>
             </div>
+          );
+        },
+      )}
 
-            <div className="progress-bar-bg">
-              <div
-                className="progress-bar-fill"
-                style={{
-                  width: `${percentage}%`,
-                }}
-              />
-            </div>
-
-            <div className="tenant-actions">
-              {status !== 'paid' &&
-                status !== 'cancelled' && (
-                  <button
-                    className="btn-primary"
-                    onClick={() =>
-                      onPay(invoice)
-                    }
-                  >
-                    Pay {money(balance)}
-                  </button>
-                )}
-
-              <button
-                className="btn-secondary"
-                onClick={() =>
-                  onSend(invoice)
-                }
-              >
-                {normalize(
-                  invoice.delivery_status,
-                ) === 'sent'
-                  ? 'Send Again'
-                  : 'WhatsApp Invoice'}
-              </button>
-            </div>
-          </div>
-        );
-      })}
-
-      {invoices.length === 0 && (
+      {invoices.length ===
+        0 && (
         <EmptyCard
           icon="🧾"
           title="No invoices found"
@@ -3617,7 +4829,9 @@ function InvoicesView({
             <button
               className="btn-primary"
               onClick={() =>
-                openModal('invoice')
+                openModal(
+                  'invoice',
+                )
               }
             >
               Create Invoice
@@ -3662,25 +4876,33 @@ function AnalyticsView({
       <div className="metrics-grid">
         <Metric
           icon="💰"
-          value={money(expectedRent)}
+          value={money(
+            expectedRent,
+          )}
           label="Expected Rent"
         />
 
         <Metric
           icon="✅"
-          value={money(collected)}
+          value={money(
+            collected,
+          )}
           label="Collected"
         />
 
         <Metric
           icon="⏳"
-          value={money(pending)}
+          value={money(
+            pending,
+          )}
           label="Pending"
         />
 
         <Metric
           icon="⚠️"
-          value={money(overdue)}
+          value={money(
+            overdue,
+          )}
           label="Overdue"
         />
       </div>
@@ -3694,13 +4916,17 @@ function AnalyticsView({
 
         <Metric
           icon="🏠"
-          value={String(properties.length)}
+          value={String(
+            properties.length,
+          )}
           label="Properties"
         />
 
         <Metric
           icon="👥"
-          value={String(tenants.length)}
+          value={String(
+            tenants.length,
+          )}
           label="Active Tenants"
         />
 
@@ -3712,29 +4938,38 @@ function AnalyticsView({
       </div>
 
       <div className="glass-card">
-        <h3>Portfolio Summary</h3>
+        <h3>
+          Portfolio Summary
+        </h3>
 
         <div className="analytics-list">
           <AnalyticsRow
             label="Properties"
-            value={properties.length}
+            value={
+              properties.length
+            }
           />
 
           <AnalyticsRow
             label="Rooms"
-            value={rooms.length}
+            value={
+              rooms.length
+            }
           />
 
           <AnalyticsRow
             label="Beds"
-            value={beds.length}
+            value={
+              beds.length
+            }
           />
 
           <AnalyticsRow
             label="Occupied Beds"
             value={
               beds.filter(
-                (bed) => bed.is_occupied,
+                (bed) =>
+                  bed.is_occupied,
               ).length
             }
           />
@@ -3743,14 +4978,17 @@ function AnalyticsView({
             label="Available Beds"
             value={
               beds.filter(
-                (bed) => !bed.is_occupied,
+                (bed) =>
+                  !bed.is_occupied,
               ).length
             }
           />
 
           <AnalyticsRow
             label="Active Tenants"
-            value={tenants.length}
+            value={
+              tenants.length
+            }
           />
 
           <AnalyticsRow
@@ -3761,7 +4999,9 @@ function AnalyticsView({
       </div>
 
       <div className="glass-card">
-        <h3>Collection Health</h3>
+        <h3>
+          Collection Health
+        </h3>
 
         <div className="large-progress">
           <div
@@ -3773,11 +5013,15 @@ function AnalyticsView({
 
         <div className="collection-health">
           <span>
-            {collectionRate}% collected
+            {collectionRate}%
+            collected
           </span>
 
           <strong>
-            {money(pending)} pending
+            {money(
+              pending,
+            )}{' '}
+            pending
           </strong>
         </div>
       </div>
@@ -3799,7 +5043,10 @@ function TenantDetails({
   payments: Payment[];
   paid: number;
   pending: number;
-  status: 'paid' | 'pending' | 'overdue';
+  status:
+    | 'paid'
+    | 'pending'
+    | 'overdue';
   onClose: () => void;
   onPayment: () => void;
   onWhatsApp: () => void;
@@ -3808,36 +5055,48 @@ function TenantDetails({
     <div className="tenant-detail">
       <div className="detail-profile">
         <div className="avatar profile-avatar">
-          {getInitials(tenant.name)}
+          {getInitials(
+            tenant.name,
+          )}
         </div>
 
         <div>
-          <h2>{tenant.name}</h2>
-          <p>{tenant.phone}</p>
+          <h2>
+            {tenant.name}
+          </h2>
+
+          <p>
+            {tenant.phone}
+          </p>
         </div>
 
-        <StatusBadge status={status} />
+        <StatusBadge
+          status={status}
+        />
       </div>
 
       <div className="detail-grid">
         <DetailItem
           label="Property"
           value={
-            tenant.property_name || '-'
+            tenant.property_name ||
+            '-'
           }
         />
 
         <DetailItem
           label="Room"
           value={
-            tenant.room_number || '-'
+            tenant.room_number ||
+            '-'
           }
         />
 
         <DetailItem
           label="Bed"
           value={
-            tenant.bed_number || '-'
+            tenant.bed_number ||
+            '-'
           }
         />
 
@@ -3856,7 +5115,8 @@ function TenantDetails({
         <DetailItem
           label="Deposit"
           value={money(
-            tenant.deposit_amount || 0,
+            tenant.deposit_amount ||
+              0,
           )}
         />
 
@@ -3869,13 +5129,17 @@ function TenantDetails({
 
         <DetailItem
           label="Email"
-          value={tenant.email || '-'}
+          value={
+            tenant.email || '-'
+          }
         />
       </div>
 
       <div className="finance-panel">
         <div>
-          <span>Paid this month</span>
+          <span>
+            Paid this month
+          </span>
 
           <strong className="success-text">
             {money(paid)}
@@ -3883,7 +5147,9 @@ function TenantDetails({
         </div>
 
         <div>
-          <span>Pending</span>
+          <span>
+            Pending
+          </span>
 
           <strong
             className={
@@ -3900,14 +5166,18 @@ function TenantDetails({
       <div className="detail-actions">
         <button
           className="btn-secondary"
-          onClick={onWhatsApp}
+          onClick={
+            onWhatsApp
+          }
         >
           WhatsApp
         </button>
 
         <button
           className="btn-primary"
-          onClick={onPayment}
+          onClick={
+            onPayment
+          }
         >
           Record Payment
         </button>
@@ -3916,20 +5186,28 @@ function TenantDetails({
       <div className="detail-section">
         <div className="section-heading">
           <div>
-            <h3>Payment History</h3>
+            <h3>
+              Payment History
+            </h3>
 
             <p>
-              {payments.length} payment
-              {payments.length !== 1
+              {
+                payments.length
+              }{' '}
+              payment
+              {payments.length !==
+              1
                 ? 's'
                 : ''}
             </p>
           </div>
         </div>
 
-        {payments.length === 0 ? (
+        {payments.length ===
+        0 ? (
           <div className="small-empty">
-            No payments recorded yet.
+            No payments recorded
+            yet.
           </div>
         ) : (
           payments
@@ -3943,46 +5221,60 @@ function TenantDetails({
                   a.payment_date,
                 ).getTime(),
             )
-            .map((payment) => (
-              <div
-                className="history-row"
-                key={payment.id}
-              >
-                <div>
-                  <strong>
-                    {money(payment.amount)}
-                  </strong>
+            .map(
+              (payment) => (
+                <div
+                  className="history-row"
+                  key={
+                    payment.id
+                  }
+                >
+                  <div>
+                    <strong>
+                      {money(
+                        payment.amount,
+                      )}
+                    </strong>
 
-                  <span>
-                    {payment.payment_month}
-                  </span>
-
-                  {payment.invoice_number && (
                     <span>
-                      {payment.invoice_number}
+                      {
+                        payment.payment_month
+                      }
                     </span>
-                  )}
-                </div>
 
-                <div>
-                  <strong>
-                    {payment.payment_method}
-                  </strong>
-
-                  <span>
-                    {formatDate(
-                      payment.payment_date,
+                    {payment.invoice_number && (
+                      <span>
+                        {
+                          payment.invoice_number
+                        }
+                      </span>
                     )}
-                  </span>
+                  </div>
+
+                  <div>
+                    <strong>
+                      {
+                        payment.payment_method
+                      }
+                    </strong>
+
+                    <span>
+                      {formatDate(
+                        payment.payment_date,
+                      )}
+                    </span>
+                  </div>
                 </div>
-              </div>
-            ))
+              ),
+            )
         )}
       </div>
 
       <button
         className="btn-secondary full-btn"
-        onClick={onClose}
+        onClick={
+          onClose
+        }
       >
         Close
       </button>
@@ -3995,35 +5287,72 @@ function BottomNav({
   setActiveTab,
 }: {
   activeTab: Tab;
-  setActiveTab: (tab: Tab) => void;
+  setActiveTab: (
+    tab: Tab,
+  ) => void;
 }) {
   const items: [
     Tab,
     string,
     string,
   ][] = [
-    ['dashboard', '⌂', 'Home'],
-    ['properties', '🏠', 'Properties'],
-    ['rooms', '🚪', 'Rooms'],
-    ['tenants', '👥', 'Tenants'],
-    ['payments', '₹', 'Payments'],
-    ['invoices', '🧾', 'Invoices'],
-    ['analytics', '📊', 'Analytics'],
+    [
+      'dashboard',
+      '⌂',
+      'Home',
+    ],
+    [
+      'properties',
+      '🏠',
+      'Properties',
+    ],
+    [
+      'rooms',
+      '🚪',
+      'Rooms',
+    ],
+    [
+      'tenants',
+      '👥',
+      'Tenants',
+    ],
+    [
+      'payments',
+      '₹',
+      'Payments',
+    ],
+    [
+      'invoices',
+      '🧾',
+      'Invoices',
+    ],
+    [
+      'analytics',
+      '📊',
+      'Analytics',
+    ],
   ];
 
   return (
     <nav className="bottom-nav">
       {items.map(
-        ([tab, icon, label]) => (
+        ([
+          tab,
+          icon,
+          label,
+        ]) => (
           <button
             key={tab}
             className={
-              activeTab === tab
+              activeTab ===
+              tab
                 ? 'nav-item active'
                 : 'nav-item'
             }
             onClick={() =>
-              setActiveTab(tab)
+              setActiveTab(
+                tab,
+              )
             }
           >
             <span className="nav-icon">
@@ -4050,7 +5379,9 @@ function ModalOverlay({
   return (
     <div
       className="modal-backdrop"
-      onClick={onClose}
+      onClick={
+        onClose
+      }
     >
       <div
         className="modal-card"
@@ -4074,7 +5405,9 @@ function ModalTitle({
   return (
     <div className="modal-title">
       <h2>{title}</h2>
-      <p>{subtitle}</p>
+      <p>
+        {subtitle}
+      </p>
     </div>
   );
 }
@@ -4091,8 +5424,12 @@ function ModalButtons({
       <button
         type="button"
         className="btn-secondary"
-        onClick={onCancel}
-        disabled={saving}
+        onClick={
+          onCancel
+        }
+        disabled={
+          saving
+        }
       >
         Cancel
       </button>
@@ -4100,9 +5437,13 @@ function ModalButtons({
       <button
         type="submit"
         className="btn-primary"
-        disabled={saving}
+        disabled={
+          saving
+        }
       >
-        {saving ? 'Saving...' : 'Save'}
+        {saving
+          ? 'Saving...'
+          : 'Save'}
       </button>
     </div>
   );
@@ -4120,8 +5461,13 @@ function PageHeader({
   return (
     <div className="page-header">
       <div>
-        <h2>{title}</h2>
-        <p>{subtitle}</p>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {subtitle}
+        </p>
       </div>
 
       {action}
@@ -4141,8 +5487,13 @@ function SectionHeading({
   return (
     <div className="section-heading">
       <div>
-        <h2>{title}</h2>
-        <p>{subtitle}</p>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {subtitle}
+        </p>
       </div>
 
       {action}
@@ -4188,10 +5539,17 @@ function QuickAction({
   return (
     <button
       className="quick-action"
-      onClick={onClick}
+      onClick={
+        onClick
+      }
     >
-      <span>{icon}</span>
-      <small>{label}</small>
+      <span>
+        {icon}
+      </span>
+
+      <small>
+        {label}
+      </small>
     </button>
   );
 }
@@ -4205,8 +5563,13 @@ function MiniMetric({
 }) {
   return (
     <div className="mini-metric">
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -4216,7 +5579,8 @@ function StatusBadge({
 }: {
   status: string;
 }) {
-  const normalized = normalize(status);
+  const normalized =
+    normalize(status);
 
   return (
     <span
@@ -4237,8 +5601,13 @@ function DetailItem({
 }) {
   return (
     <div className="detail-item">
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -4252,8 +5621,13 @@ function AnalyticsRow({
 }) {
   return (
     <div className="analytics-row">
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {value}
+      </strong>
     </div>
   );
 }
@@ -4277,8 +5651,13 @@ function EmptyCard({
         </div>
       )}
 
-      <h3>{title}</h3>
-      <p>{text}</p>
+      <h3>
+        {title}
+      </h3>
+
+      <p>
+        {text}
+      </p>
 
       {action}
     </div>
@@ -4286,7 +5665,9 @@ function EmptyCard({
 }
 
 ReactDOM.createRoot(
-  document.getElementById('root')!,
+  document.getElementById(
+    'root',
+  )!,
 ).render(
   <React.StrictMode>
     <App />
