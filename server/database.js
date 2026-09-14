@@ -14,13 +14,18 @@ export const pool = new Pool({
       : false,
 });
 
-export const query = (text, params) => pool.query(text, params);
+export const query = (text, params) =>
+  pool.query(text, params);
 
 export async function initializeDatabase() {
   const client = await pool.connect();
 
   try {
     await client.query('BEGIN');
+
+    // =====================================================
+    // BASE TABLES
+    // =====================================================
 
     await client.query(`
       CREATE TABLE IF NOT EXISTS properties (
@@ -94,7 +99,243 @@ export async function initializeDatabase() {
         status VARCHAR(20) DEFAULT 'Pending',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
 
+    // =====================================================
+    // DATABASE MIGRATIONS
+    // =====================================================
+    // IMPORTANT:
+    // CREATE TABLE IF NOT EXISTS does NOT modify old tables.
+    // These ALTER statements upgrade existing Peacely DBs.
+    // =====================================================
+
+    // Properties
+    await client.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
+    `);
+
+    // Rooms
+    await client.query(`
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS sharing_type VARCHAR(50)
+        DEFAULT 'Single';
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS rent_amount NUMERIC(10, 2)
+        DEFAULT 0;
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Beds
+    await client.query(`
+      ALTER TABLE beds
+      ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN
+        DEFAULT FALSE;
+    `);
+
+    // -----------------------------------------------------
+    // OLD DATABASES MAY HAVE "occupied"
+    // -----------------------------------------------------
+    // Copy the old value into the new standard column.
+    // -----------------------------------------------------
+
+    const occupiedColumn = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public'
+        AND table_name = 'beds'
+        AND column_name = 'occupied';
+    `);
+
+    if (occupiedColumn.rows.length > 0) {
+      await client.query(`
+        UPDATE beds
+        SET is_occupied = COALESCE(occupied, FALSE)
+        WHERE is_occupied IS NULL
+           OR is_occupied = FALSE;
+      `);
+    }
+
+    // Tenants
+    await client.query(`
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS email VARCHAR(255)
+        DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS room_id INTEGER;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS bed_id INTEGER;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS monthly_rent NUMERIC(10, 2)
+        DEFAULT 0;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS due_date INTEGER
+        DEFAULT 5;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(10, 2)
+        DEFAULT 0;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS move_in_date DATE;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS move_out_date DATE;
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20)
+        DEFAULT 'Active';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Payments
+    await client.query(`
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS payment_date DATE
+        DEFAULT CURRENT_DATE;
+
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50)
+        DEFAULT 'UPI';
+
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS payment_month VARCHAR(50)
+        DEFAULT '';
+
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS notes TEXT
+        DEFAULT '';
+
+      ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Invoices
+    await client.query(`
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS month VARCHAR(50);
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS status VARCHAR(20)
+        DEFAULT 'Pending';
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS created_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // =====================================================
+    // CONSTRAINTS / FOREIGN KEYS
+    // =====================================================
+
+    await client.query(`
+      DO $$
+      BEGIN
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'rooms_property_id_fkey'
+        ) THEN
+          ALTER TABLE rooms
+          ADD CONSTRAINT rooms_property_id_fkey
+          FOREIGN KEY (property_id)
+          REFERENCES properties(id)
+          ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'beds_room_id_fkey'
+        ) THEN
+          ALTER TABLE beds
+          ADD CONSTRAINT beds_room_id_fkey
+          FOREIGN KEY (room_id)
+          REFERENCES rooms(id)
+          ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'tenants_property_id_fkey'
+        ) THEN
+          ALTER TABLE tenants
+          ADD CONSTRAINT tenants_property_id_fkey
+          FOREIGN KEY (property_id)
+          REFERENCES properties(id)
+          ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'tenants_room_id_fkey'
+        ) THEN
+          ALTER TABLE tenants
+          ADD CONSTRAINT tenants_room_id_fkey
+          FOREIGN KEY (room_id)
+          REFERENCES rooms(id)
+          ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'tenants_bed_id_fkey'
+        ) THEN
+          ALTER TABLE tenants
+          ADD CONSTRAINT tenants_bed_id_fkey
+          FOREIGN KEY (bed_id)
+          REFERENCES beds(id)
+          ON DELETE SET NULL;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'payments_tenant_id_fkey'
+        ) THEN
+          ALTER TABLE payments
+          ADD CONSTRAINT payments_tenant_id_fkey
+          FOREIGN KEY (tenant_id)
+          REFERENCES tenants(id)
+          ON DELETE CASCADE;
+        END IF;
+
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'invoices_tenant_id_fkey'
+        ) THEN
+          ALTER TABLE invoices
+          ADD CONSTRAINT invoices_tenant_id_fkey
+          FOREIGN KEY (tenant_id)
+          REFERENCES tenants(id)
+          ON DELETE CASCADE;
+        END IF;
+
+      END $$;
+    `);
+
+    // =====================================================
+    // INDEXES
+    // =====================================================
+
+    await client.query(`
       CREATE INDEX IF NOT EXISTS idx_rooms_property_id
         ON rooms(property_id);
 
@@ -117,32 +358,19 @@ export async function initializeDatabase() {
         ON invoices(tenant_id);
     `);
 
-    /*
-      Safe upgrades for databases created by the earlier
-      Peacely version.
-    */
-
-    await client.query(`
-      ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS bed_id INTEGER
-      REFERENCES beds(id) ON DELETE SET NULL;
-
-      ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS move_in_date DATE;
-
-      ALTER TABLE tenants
-      ADD COLUMN IF NOT EXISTS move_out_date DATE;
-
-      ALTER TABLE invoices
-      ADD COLUMN IF NOT EXISTS month VARCHAR(50);
-    `);
-
     await client.query('COMMIT');
 
-    console.log('PostgreSQL database initialized successfully.');
+    console.log(
+      'PostgreSQL database initialized and migrated successfully.'
+    );
   } catch (error) {
     await client.query('ROLLBACK');
-    console.error('Database initialization failed:', error);
+
+    console.error(
+      'Database initialization failed:',
+      error
+    );
+
     throw error;
   } finally {
     client.release();
