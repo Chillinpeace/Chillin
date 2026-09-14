@@ -130,14 +130,12 @@ export async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS owner_id INTEGER;
     `);
 
-    // Remove any old users.id relationship.
     await dropForeignKeysForColumn(
       client,
       'properties',
       'owner_id',
     );
 
-    // Existing invalid owner IDs become NULL.
     await client.query(`
       UPDATE properties
       SET owner_id = NULL
@@ -164,7 +162,6 @@ export async function initializeDatabase() {
       );
     `);
 
-    // Repair an old rooms table instead of recreating it.
     await client.query(`
       ALTER TABLE rooms
       ADD COLUMN IF NOT EXISTS property_id INTEGER;
@@ -229,7 +226,6 @@ export async function initializeDatabase() {
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
-    // Support older "occupied" column if it exists.
     const hasOldOccupied = await columnExists(
       client,
       'beds',
@@ -321,6 +317,7 @@ export async function initializeDatabase() {
         payment_method VARCHAR(50) DEFAULT 'UPI',
         payment_month VARCHAR(50) DEFAULT '',
         notes TEXT DEFAULT '',
+        invoice_id INTEGER,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -350,6 +347,9 @@ export async function initializeDatabase() {
         DEFAULT '';
 
       ALTER TABLE payments
+      ADD COLUMN IF NOT EXISTS invoice_id INTEGER;
+
+      ALTER TABLE payments
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
@@ -366,8 +366,11 @@ export async function initializeDatabase() {
         amount NUMERIC(10,2) NOT NULL,
         month VARCHAR(50),
         due_date DATE NOT NULL,
-        status VARCHAR(20) DEFAULT 'Pending',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        status VARCHAR(30) DEFAULT 'Pending',
+        paid_amount NUMERIC(10,2) DEFAULT 0,
+        delivery_status VARCHAR(20) DEFAULT 'Not Sent',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
@@ -389,12 +392,45 @@ export async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS due_date DATE;
 
       ALTER TABLE invoices
-      ADD COLUMN IF NOT EXISTS status VARCHAR(20)
+      ADD COLUMN IF NOT EXISTS status VARCHAR(30)
         DEFAULT 'Pending';
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(10,2)
+        DEFAULT 0;
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS delivery_status VARCHAR(20)
+        DEFAULT 'Not Sent';
 
       ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS updated_at
+        TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // Normalize any NULL values introduced by older versions.
+    await client.query(`
+      UPDATE invoices
+      SET paid_amount = 0
+      WHERE paid_amount IS NULL;
+
+      UPDATE invoices
+      SET delivery_status = 'Not Sent'
+      WHERE delivery_status IS NULL
+         OR delivery_status = '';
+
+      UPDATE invoices
+      SET status = 'Pending'
+      WHERE status IS NULL
+         OR status = '';
+      
+      UPDATE invoices
+      SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)
+      WHERE updated_at IS NULL;
     `);
 
     // =====================================================
@@ -467,6 +503,12 @@ export async function initializeDatabase() {
       client,
       'payments',
       'tenant_id',
+    );
+
+    await dropForeignKeysForColumn(
+      client,
+      'payments',
+      'invoice_id',
     );
 
     await dropForeignKeysForColumn(
@@ -544,6 +586,15 @@ export async function initializeDatabase() {
         FROM tenants t
         WHERE t.id = i.tenant_id
       );
+
+      UPDATE payments pay
+      SET invoice_id = NULL
+      WHERE invoice_id IS NOT NULL
+        AND NOT EXISTS (
+          SELECT 1
+          FROM invoices i
+          WHERE i.id = pay.invoice_id
+        );
     `);
 
     // =====================================================
@@ -658,6 +709,21 @@ export async function initializeDatabase() {
     if (
       !(await constraintExists(
         client,
+        'payments_invoice_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE payments
+        ADD CONSTRAINT payments_invoice_id_fkey
+        FOREIGN KEY (invoice_id)
+        REFERENCES invoices(id)
+        ON DELETE SET NULL;
+      `);
+    }
+
+    if (
+      !(await constraintExists(
+        client,
         'invoices_tenant_id_fkey',
       ))
     ) {
@@ -704,8 +770,17 @@ export async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_payments_tenant_id
         ON payments(tenant_id);
 
+      CREATE INDEX IF NOT EXISTS idx_payments_invoice_id
+        ON payments(invoice_id);
+
       CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id
         ON invoices(tenant_id);
+
+      CREATE INDEX IF NOT EXISTS idx_invoices_status
+        ON invoices(status);
+
+      CREATE INDEX IF NOT EXISTS idx_invoices_due_date
+        ON invoices(due_date);
 
       CREATE INDEX IF NOT EXISTS idx_sessions_owner_id
         ON sessions(owner_id);
