@@ -33,6 +33,24 @@ interface Payment {
   status: 'Completed' | 'Processing';
 }
 
+const DEFAULT_PROPERTIES: Property[] = [
+  { id: 1, name: 'Apex Luxury Suites', address: '102 Indiranagar, Bengaluru', room_count: 12, tenant_count: 11, occupancy_rate: 92, monthly_revenue: 185000 },
+  { id: 2, name: 'Sereno Heights PG', address: '45 Electronic City, Bengaluru', room_count: 20, tenant_count: 18, occupancy_rate: 90, monthly_revenue: 216000 },
+  { id: 3, name: 'Urban Living Co-Stay', address: '88 Koramangala, Bengaluru', room_count: 8, tenant_count: 8, occupancy_rate: 100, monthly_revenue: 120000 }
+];
+
+const DEFAULT_TENANTS: Tenant[] = [
+  { id: 1, name: 'Aarav Sharma', phone: '+919876543210', room_number: '301', monthly_rent: 18000, status: 'Paid', property_name: 'Apex Luxury Suites', due_date: '05 Sep' },
+  { id: 2, name: 'Rhea Sen', phone: '+919812345678', room_number: '104', monthly_rent: 15000, status: 'Pending', property_name: 'Sereno Heights PG', due_date: '10 Sep' },
+  { id: 3, name: 'Vikram Malhotra', phone: '+919988776655', room_number: '202', monthly_rent: 22000, status: 'Overdue', property_name: 'Urban Living Co-Stay', due_date: '01 Sep' },
+  { id: 4, name: 'Ananya Gupta', phone: '+919765432109', room_number: '108', monthly_rent: 16500, status: 'Paid', property_name: 'Sereno Heights PG', due_date: '05 Sep' }
+];
+
+const DEFAULT_PAYMENTS: Payment[] = [
+  { id: 101, tenant_name: 'Aarav Sharma', amount: 18000, payment_method: 'UPI (GPay)', payment_month: 'September 2026', date: '04 Sep, 2026', status: 'Completed' },
+  { id: 102, tenant_name: 'Ananya Gupta', amount: 16500, payment_method: 'Bank Transfer', payment_month: 'September 2026', date: '05 Sep, 2026', status: 'Completed' }
+];
+
 function App() {
   const [activeTab, setActiveTab] = useState<'dashboard' | 'properties' | 'tenants' | 'payments' | 'analytics'>('dashboard');
   const [searchQuery, setSearchQuery] = useState('');
@@ -47,41 +65,32 @@ function App() {
   const [tenantRent, setTenantRent] = useState('');
   const [paymentAmount, setPaymentAmount] = useState('');
 
-  const [properties, setProperties] = useState<Property[]>([
-    { id: 1, name: 'Apex Luxury Suites', address: '102 Indiranagar, Bengaluru', room_count: 12, tenant_count: 11, occupancy_rate: 92, monthly_revenue: 185000 },
-    { id: 2, name: 'Sereno Heights PG', address: '45 Electronic City, Bengaluru', room_count: 20, tenant_count: 18, occupancy_rate: 90, monthly_revenue: 216000 },
-    { id: 3, name: 'Urban Living Co-Stay', address: '88 Koramangala, Bengaluru', room_count: 8, tenant_count: 8, occupancy_rate: 100, monthly_revenue: 120000 }
-  ]);
+  const [properties, setProperties] = useState<Property[]>(() => {
+    const saved = localStorage.getItem('peacely_properties');
+    return saved ? JSON.parse(saved) : DEFAULT_PROPERTIES;
+  });
 
-  const [tenants, setTenants] = useState<Tenant[]>([
-    { id: 1, name: 'Aarav Sharma', phone: '+919876543210', room_number: '301', monthly_rent: 18000, status: 'Paid', property_name: 'Apex Luxury Suites', due_date: '05 Sep' },
-    { id: 2, name: 'Rhea Sen', phone: '+919812345678', room_number: '104', monthly_rent: 15000, status: 'Pending', property_name: 'Sereno Heights PG', due_date: '10 Sep' },
-    { id: 3, name: 'Vikram Malhotra', phone: '+919988776655', room_number: '202', monthly_rent: 22000, status: 'Overdue', property_name: 'Urban Living Co-Stay', due_date: '01 Sep' },
-    { id: 4, name: 'Ananya Gupta', phone: '+919765432109', room_number: '108', monthly_rent: 16500, status: 'Paid', property_name: 'Sereno Heights PG', due_date: '05 Sep' }
-  ]);
+  const [tenants, setTenants] = useState<Tenant[]>(() => {
+    const saved = localStorage.getItem('peacely_tenants');
+    return saved ? JSON.parse(saved) : DEFAULT_TENANTS;
+  });
 
-  const [payments, setPayments] = useState<Payment[]>([
-    { id: 101, tenant_name: 'Aarav Sharma', amount: 18000, payment_method: 'UPI (GPay)', payment_month: 'September 2026', date: '04 Sep, 2026', status: 'Completed' },
-    { id: 102, tenant_name: 'Ananya Gupta', amount: 16500, payment_method: 'Bank Transfer', payment_month: 'September 2026', date: '05 Sep, 2026', status: 'Completed' }
-  ]);
+  const [payments, setPayments] = useState<Payment[]>(() => {
+    const saved = localStorage.getItem('peacely_payments');
+    return saved ? JSON.parse(saved) : DEFAULT_PAYMENTS;
+  });
 
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [pRes, tRes, payRes] = await Promise.all([
-          fetch('/api/properties'),
-          fetch('/api/tenants'),
-          fetch('/api/payments')
-        ]);
-        if (pRes.ok) setProperties(await pRes.json());
-        if (tRes.ok) setTenants(await tRes.json());
-        if (payRes.ok) setPayments(await payRes.json());
-      } catch (e) {
-        // Fallback to local memory if server offline
-      }
-    }
-    fetchData();
-  }, []);
+    localStorage.setItem('peacely_properties', JSON.stringify(properties));
+  }, [properties]);
+
+  useEffect(() => {
+    localStorage.setItem('peacely_tenants', JSON.stringify(tenants));
+  }, [tenants]);
+
+  useEffect(() => {
+    localStorage.setItem('peacely_payments', JSON.stringify(payments));
+  }, [payments]);
 
   const sendWhatsAppReminder = (tenant: Tenant) => {
     const cleanPhone = tenant.phone.replace(/[^0-9]/g, '');
@@ -89,6 +98,51 @@ function App() {
       `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent payment of ₹${tenant.monthly_rent.toLocaleString()} for Room ${tenant.room_number} (${tenant.property_name}), which was due on ${tenant.due_date}.\n\nPlease let us know once paid.`
     );
     window.open(`https://wa.me/${cleanPhone}?text=${message}`, '_blank');
+  };
+
+  const printReceipt = (payment: Payment) => {
+    const win = window.open('', '_blank');
+    if (!win) return;
+    win.document.write(`
+      <html>
+        <head>
+          <title>Rent Receipt #${payment.id}</title>
+          <style>
+            body { font-family: -apple-system, sans-serif; padding: 40px; background: #fafafa; color: #111; }
+            .card { max-width: 440px; margin: 0 auto; background: #fff; padding: 32px; border-radius: 16px; border: 1px solid #eee; box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+            .brand { font-size: 22px; font-weight: 800; color: #10b981; margin-bottom: 4px; }
+            .subtitle { font-size: 12px; color: #666; margin-bottom: 24px; text-transform: uppercase; letter-spacing: 1px; }
+            .row { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+            .label { color: #666; }
+            .value { font-weight: 600; }
+            .amount-box { margin: 20px 0; padding: 16px; background: #ecfdf5; border-radius: 12px; text-align: center; }
+            .amount-title { font-size: 12px; color: #047857; text-transform: uppercase; }
+            .amount-val { font-size: 28px; font-weight: 800; color: #065f46; margin-top: 4px; }
+            .footer { text-align: center; margin-top: 24px; font-size: 11px; color: #888; }
+          </style>
+        </head>
+        <body>
+          <div class="card">
+            <div class="brand">Peacely</div>
+            <div class="subtitle">Official Payment Receipt</div>
+            <div class="row"><span class="label">Receipt ID</span><span class="value">#REC-${payment.id}</span></div>
+            <div class="row"><span class="label">Date</span><span class="value">${payment.date}</span></div>
+            <div class="row"><span class="label">Tenant Name</span><span class="value">${payment.tenant_name}</span></div>
+            <div class="row"><span class="label">Billing Period</span><span class="value">${payment.payment_month}</span></div>
+            <div class="row"><span class="label">Payment Method</span><span class="value">${payment.payment_method}</span></div>
+            <div class="amount-box">
+              <div class="amount-title">Amount Received</div>
+              <div class="amount-val">₹${payment.amount.toLocaleString()}</div>
+            </div>
+            <div class="footer">Thank you for your payment! Keep this receipt for your records.</div>
+          </div>
+          <script>
+            window.onload = () => { window.print(); };
+          </script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   };
 
   const handleCreateProperty = (e: React.FormEvent) => {
@@ -133,17 +187,18 @@ function App() {
     e.preventDefault();
     if (!paymentAmount) return;
     const newPay: Payment = {
-      id: Date.now(),
+      id: Math.floor(100 + Math.random() * 900),
       tenant_name: tenants[0]?.name || 'Tenant',
       amount: Number(paymentAmount),
       payment_method: 'UPI Instant',
-      payment_month: 'Current Month',
+      payment_month: 'September 2026',
       date: 'Today',
       status: 'Completed'
     };
     setPayments([newPay, ...payments]);
     setPaymentAmount('');
     setActiveModal('none');
+    printReceipt(newPay);
   };
 
   const totalRevenue = properties.reduce((acc, p) => acc + p.monthly_revenue, 0);
@@ -353,7 +408,9 @@ function App() {
                 </div>
                 <div className="glass-footer">
                   <span className="card-subtext">{p.payment_month}</span>
-                  <span className="badge badge-emerald">{p.status}</span>
+                  <button className="text-btn" onClick={() => printReceipt(p)}>
+                    📄 Receipt
+                  </button>
                 </div>
               </div>
             ))}
@@ -427,7 +484,7 @@ function App() {
                 <input type="number" placeholder="Amount Received (₹)" className="modal-input" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} required />
                 <div className="modal-actions">
                   <button type="button" className="btn-secondary" onClick={() => setActiveModal('none')}>Cancel</button>
-                  <button type="submit" className="btn-primary">Record Payment</button>
+                  <button type="submit" className="btn-primary">Record & Print</button>
                 </div>
               </form>
             )}
