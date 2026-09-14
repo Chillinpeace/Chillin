@@ -14,7 +14,9 @@ export const pool = new Pool({
       : false,
 });
 
-export const query = (text, params) => pool.query(text, params);
+export const query = (text, params) => {
+  return pool.query(text, params);
+};
 
 export async function initializeDatabase() {
   const client = await pool.connect();
@@ -23,7 +25,22 @@ export async function initializeDatabase() {
     await client.query('BEGIN');
 
     // =====================================================
-    // 1. CORE TABLES
+    // 1. OWNERS
+    // =====================================================
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS owners (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        phone VARCHAR(30) DEFAULT '',
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // =====================================================
+    // 2. CORE PEACELY TABLES
     // =====================================================
 
     await client.query(`
@@ -94,7 +111,7 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 2. EXISTING DATABASE MIGRATIONS
+    // 3. EXISTING TABLE MIGRATIONS
     // =====================================================
 
     await client.query(`
@@ -186,7 +203,7 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 3. OLD BED COLUMN MIGRATION
+    // 4. OLD BED COLUMN SUPPORT
     // =====================================================
 
     const occupiedColumn = await client.query(`
@@ -206,60 +223,23 @@ export async function initializeDatabase() {
     }
 
     // =====================================================
-    // 4. AUTH TABLES
+    // 5. PROPERTIES -> OWNERS
     // =====================================================
 
     await client.query(`
-      CREATE TABLE IF NOT EXISTS owners (
-        id SERIAL PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        email VARCHAR(255) NOT NULL UNIQUE,
-        password_hash TEXT NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS sessions (
-        id SERIAL PRIMARY KEY,
-        owner_id INTEGER NOT NULL,
-        token TEXT NOT NULL UNIQUE,
-        expires_at TIMESTAMPTZ NOT NULL,
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
-      );
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
     `);
 
-    // =====================================================
-    // 5. IMPORTANT AUTH MIGRATION
-    //
-    // Some older Peacely database versions created an
-    // owner_id column on properties pointing to users.
-    //
-    // We remove ANY old foreign key attached to
-    // properties.owner_id before creating the new one.
-    // =====================================================
+    // Remove ALL old foreign keys attached to properties.owner_id.
+    // This handles the previous users.id relationship safely.
 
-    const ownerColumn = await client.query(`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public'
-        AND table_name = 'properties'
-        AND column_name = 'owner_id';
-    `);
-
-    if (ownerColumn.rows.length === 0) {
-      await client.query(`
-        ALTER TABLE properties
-        ADD COLUMN owner_id INTEGER;
-      `);
-    }
-
-    // Remove every foreign key currently attached to
-    // properties.owner_id.
     await client.query(`
       DO $$
       DECLARE
-        constraint_record RECORD;
+        fk RECORD;
       BEGIN
-        FOR constraint_record IN
+        FOR fk IN
           SELECT con.conname
           FROM pg_constraint con
           JOIN pg_class rel
@@ -273,20 +253,16 @@ export async function initializeDatabase() {
         LOOP
           EXECUTE format(
             'ALTER TABLE properties DROP CONSTRAINT IF EXISTS %I',
-            constraint_record.conname
+            fk.conname
           );
         END LOOP;
       END
       $$;
     `);
 
-    // =====================================================
-    // 6. CLEAN INVALID OWNER REFERENCES
-    //
-    // If a previous failed migration left owner_id values
-    // such as 1 but there is no matching owner, make them
-    // NULL rather than deleting the property.
-    // =====================================================
+    // Any owner_id left from an old/failed migration that
+    // doesn't exist in owners becomes NULL.
+    // The property itself is NOT deleted.
 
     await client.query(`
       UPDATE properties
@@ -300,57 +276,72 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 7. CREATE CORRECT OWNER FOREIGN KEY
+    // 6. RECREATE SESSIONS TABLE SAFELY
+    // =====================================================
+    //
+    // IMPORTANT:
+    //
+    // The existing sessions table came from an older
+    // version of Peacely and has incompatible columns/indexes.
+    //
+    // Sessions contain ONLY login sessions.
+    // Recreating this table does NOT affect:
+    // properties
+    // rooms
+    // beds
+    // tenants
+    // payments
+    // invoices
+    //
     // =====================================================
 
     await client.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'properties_owner_id_fkey'
-        ) THEN
-          ALTER TABLE properties
-          ADD CONSTRAINT properties_owner_id_fkey
-          FOREIGN KEY (owner_id)
-          REFERENCES owners(id)
-          ON DELETE CASCADE;
-        END IF;
-      END
-      $$;
+      DROP TABLE IF EXISTS sessions CASCADE;
+    `);
+
+    await client.query(`
+      CREATE TABLE sessions (
+        id SERIAL PRIMARY KEY,
+        owner_id INTEGER NOT NULL,
+        token_hash VARCHAR(128) UNIQUE NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // =====================================================
-    // 8. SESSION FOREIGN KEY
+    // 7. CORRECT AUTH FOREIGN KEYS
     // =====================================================
 
     await client.query(`
-      DO $$
-      BEGIN
-        IF NOT EXISTS (
-          SELECT 1
-          FROM pg_constraint
-          WHERE conname = 'sessions_owner_id_fkey'
-        ) THEN
-          ALTER TABLE sessions
-          ADD CONSTRAINT sessions_owner_id_fkey
-          FOREIGN KEY (owner_id)
-          REFERENCES owners(id)
-          ON DELETE CASCADE;
-        END IF;
-      END
-      $$;
+      ALTER TABLE properties
+      ADD CONSTRAINT properties_owner_id_fkey
+      FOREIGN KEY (owner_id)
+      REFERENCES owners(id)
+      ON DELETE CASCADE;
+    `);
+
+    await client.query(`
+      ALTER TABLE sessions
+      ADD CONSTRAINT sessions_owner_id_fkey
+      FOREIGN KEY (owner_id)
+      REFERENCES owners(id)
+      ON DELETE CASCADE;
     `);
 
     // =====================================================
-    // 9. CORE FOREIGN KEYS
+    // 8. CORE FOREIGN KEYS
     // =====================================================
+
+    // Remove old versions first where necessary.
 
     await client.query(`
       DO $$
+      DECLARE
+        fk RECORD;
       BEGIN
 
+        -- rooms -> properties
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -363,6 +354,7 @@ export async function initializeDatabase() {
           ON DELETE CASCADE;
         END IF;
 
+        -- beds -> rooms
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -375,6 +367,7 @@ export async function initializeDatabase() {
           ON DELETE CASCADE;
         END IF;
 
+        -- tenants -> properties
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -387,6 +380,7 @@ export async function initializeDatabase() {
           ON DELETE CASCADE;
         END IF;
 
+        -- tenants -> rooms
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -399,6 +393,7 @@ export async function initializeDatabase() {
           ON DELETE SET NULL;
         END IF;
 
+        -- tenants -> beds
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -411,6 +406,7 @@ export async function initializeDatabase() {
           ON DELETE SET NULL;
         END IF;
 
+        -- payments -> tenants
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -423,6 +419,7 @@ export async function initializeDatabase() {
           ON DELETE CASCADE;
         END IF;
 
+        -- invoices -> tenants
         IF NOT EXISTS (
           SELECT 1
           FROM pg_constraint
@@ -440,7 +437,7 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 10. INDEXES
+    // 9. INDEXES
     // =====================================================
 
     await client.query(`
@@ -450,8 +447,8 @@ export async function initializeDatabase() {
       CREATE INDEX IF NOT EXISTS idx_sessions_owner_id
         ON sessions(owner_id);
 
-      CREATE INDEX IF NOT EXISTS idx_sessions_token
-        ON sessions(token);
+      CREATE INDEX IF NOT EXISTS idx_sessions_token_hash
+        ON sessions(token_hash);
 
       CREATE INDEX IF NOT EXISTS idx_rooms_property_id
         ON rooms(property_id);
@@ -476,8 +473,56 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
+    // 10. ASSIGN EXISTING PROPERTIES
+    // =====================================================
+    //
+    // If exactly one owner exists, all currently unassigned
+    // properties belong to that first owner.
+    //
+    // Existing property records are preserved.
+    //
+
+    const ownerCountResult = await client.query(`
+      SELECT COUNT(*)::INTEGER AS count
+      FROM owners;
+    `);
+
+    const ownerCount =
+      ownerCountResult.rows[0]?.count || 0;
+
+    if (ownerCount === 1) {
+      const firstOwnerResult = await client.query(`
+        SELECT id
+        FROM owners
+        ORDER BY id ASC
+        LIMIT 1;
+      `);
+
+      if (firstOwnerResult.rows.length > 0) {
+        const firstOwnerId =
+          firstOwnerResult.rows[0].id;
+
+        await client.query(
+          `
+            UPDATE properties
+            SET owner_id = $1
+            WHERE owner_id IS NULL;
+          `,
+          [firstOwnerId]
+        );
+
+        console.log(
+          `Existing properties assigned to owner ${firstOwnerId}.`
+        );
+      }
+    }
+
+    // =====================================================
     // 11. CLEAN EXPIRED SESSIONS
     // =====================================================
+    //
+    // This is safe because sessions only contain login
+    // information.
 
     await client.query(`
       DELETE FROM sessions
@@ -485,7 +530,7 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // DONE
+    // 12. COMMIT
     // =====================================================
 
     await client.query('COMMIT');
