@@ -1,4 +1,6 @@
 import pg from 'pg';
+import express from 'express';
+import expenseRouter from './expenses.js';
 
 // PostgreSQL can infer the same placeholder as different types when a
 // payment status value is used both as a column value and in a comparison.
@@ -45,6 +47,23 @@ Client.prototype.query = function patchedQuery(config, values, callback) {
     values,
     callback,
   );
+};
+
+// Mount the Phase 4 expense router immediately after the JSON parser in
+// server/index.js. This keeps it ahead of the frontend catch-all without
+// modifying the large production route file.
+const originalUse = express.application.use;
+let expenseRouterMounted = false;
+
+express.application.use = function patchedUse(...args) {
+  const result = originalUse.apply(this, args);
+
+  if (!expenseRouterMounted) {
+    originalUse.call(this, '/api', expenseRouter);
+    expenseRouterMounted = true;
+  }
+
+  return result;
 };
 
 await import('./index.js');
