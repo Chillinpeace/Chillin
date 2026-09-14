@@ -353,6 +353,7 @@ export async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
+
     // =====================================================
     // 7. INVOICES
     // =====================================================
@@ -419,7 +420,6 @@ export async function initializeDatabase() {
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
-    // Normalize any NULL values introduced by older versions.
     await client.query(`
       UPDATE invoices
       SET paid_amount = 0
@@ -448,7 +448,6 @@ export async function initializeDatabase() {
       WHERE status = 'Paid'
         AND paid_at IS NULL;
     `);
-    
 
     // =====================================================
     // 8. SESSIONS
@@ -590,19 +589,9 @@ export async function initializeDatabase() {
           WHERE b.id = t.bed_id
         );
 
-      DELETE FROM payments pay
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM tenants t
-        WHERE t.id = pay.tenant_id
-      );
-
-      DELETE FROM invoices i
-      WHERE NOT EXISTS (
-        SELECT 1
-        FROM tenants t
-        WHERE t.id = i.tenant_id
-      );
+      -- Preserve historical financial records. Never delete payments or invoices
+      -- during startup migrations. Orphaned records are left intact and their
+      -- foreign-key constraints are created only when the data is compatible.
 
       UPDATE payments pay
       SET invoice_id = NULL
@@ -708,7 +697,17 @@ export async function initializeDatabase() {
       `);
     }
 
+    const orphanPaymentTenants = await client.query(`
+      SELECT 1
+      FROM payments pay
+      LEFT JOIN tenants t
+        ON t.id = pay.tenant_id
+      WHERE t.id IS NULL
+      LIMIT 1
+    `);
+
     if (
+      orphanPaymentTenants.rows.length === 0 &&
       !(await constraintExists(
         client,
         'payments_tenant_id_fkey',
@@ -738,7 +737,17 @@ export async function initializeDatabase() {
       `);
     }
 
+    const orphanInvoiceTenants = await client.query(`
+      SELECT 1
+      FROM invoices i
+      LEFT JOIN tenants t
+        ON t.id = i.tenant_id
+      WHERE t.id IS NULL
+      LIMIT 1
+    `);
+
     if (
+      orphanInvoiceTenants.rows.length === 0 &&
       !(await constraintExists(
         client,
         'invoices_tenant_id_fkey',
