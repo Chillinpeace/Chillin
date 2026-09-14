@@ -14,23 +14,115 @@
     return url.includes('/api/');
   };
 
-  window.fetch = async (...args) => {
+  const getRequestUrl = (request) =>
+    typeof request === 'string' ? request : request?.url || '';
+
+  const preparePaymentRequest = async (args) => {
     const request = args[0];
-    const method = (args[1]?.method || (typeof Request !== 'undefined' && request instanceof Request ? request.method : 'GET') || 'GET').toUpperCase();
+    const options = args[1] || {};
+    const url = getRequestUrl(request);
+    const method = (
+      options.method ||
+      (typeof Request !== 'undefined' && request instanceof Request
+        ? request.method
+        : 'GET') ||
+      'GET'
+    ).toUpperCase();
+
+    if (method !== 'POST' || !url.split('?')[0].endsWith('/api/payments')) {
+      return args;
+    }
+
+    let body;
+    try {
+      body = typeof options.body === 'string'
+        ? JSON.parse(options.body)
+        : null;
+    } catch {
+      return args;
+    }
+
+    if (!body || !body.tenant_id || body.invoice_id) {
+      return args;
+    }
+
+    try {
+      const invoiceResponse = await originalFetch('/api/invoices', {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+
+      if (!invoiceResponse.ok) return args;
+
+      const invoicePayload = await invoiceResponse.json().catch(() => null);
+      const invoiceList = Array.isArray(invoicePayload)
+        ? invoicePayload
+        : Array.isArray(invoicePayload?.invoices)
+          ? invoicePayload.invoices
+          : [];
+
+      const tenantId = Number(body.tenant_id);
+      const availableInvoice = invoiceList
+        .filter((invoice) => {
+          const balance = Number(
+            invoice.balance_amount ??
+              Number(invoice.amount || 0) - Number(invoice.paid_amount || 0),
+          );
+
+          return (
+            Number(invoice.tenant_id) === tenantId &&
+            String(invoice.status || '').toLowerCase() !== 'cancelled' &&
+            balance > 0
+          );
+        })
+        .sort((a, b) => Number(a.id) - Number(b.id))[0];
+
+      if (!availableInvoice) return args;
+
+      const patchedBody = {
+        ...body,
+        invoice_id: Number(availableInvoice.id),
+      };
+
+      return [
+        request,
+        {
+          ...options,
+          body: JSON.stringify(patchedBody),
+        },
+      ];
+    } catch (error) {
+      console.error('[Peacely] Unable to auto-link payment invoice:', error);
+      return args;
+    }
+  };
+
+  window.fetch = async (...inputArgs) => {
+    const preparedArgs = await preparePaymentRequest(inputArgs);
+    const request = preparedArgs[0];
+    const options = preparedArgs[1] || {};
+    const method = (
+      options.method ||
+      (typeof Request !== 'undefined' && request instanceof Request
+        ? request.method
+        : 'GET') ||
+      'GET'
+    ).toUpperCase();
 
     let response;
     try {
-      response = await originalFetch(...args);
+      response = await originalFetch(...preparedArgs);
     } catch (error) {
       if (method === 'GET' && isApiRequest(request)) {
         await new Promise((resolve) => setTimeout(resolve, 350));
-        response = await originalFetch(...args);
+        response = await originalFetch(...preparedArgs);
       } else {
         throw error;
       }
     }
 
-    const url = typeof request === 'string' ? request : request?.url || '';
+    const url = getRequestUrl(request);
     const pathname = url.split('?')[0];
     const key = collectionKeys[pathname];
 
