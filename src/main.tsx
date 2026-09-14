@@ -1,559 +1,3770 @@
-:root {
-  --bg-deep: #0b0e14;
-  --card-glass: rgba(22, 27, 38, 0.75);
-  --card-border: rgba(255, 255, 255, 0.08);
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --emerald-accent: #10b981;
-  --emerald-glow: rgba(16, 185, 129, 0.15);
-  --amber-accent: #f59e0b;
-  --rose-accent: #f43f5e;
-  --radius-xl: 20px;
-  --radius-full: 9999px;
-  --font-stack: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-  font-family: var(--font-stack);
-  -webkit-tap-highlight-color: transparent;
-}
-
-body {
-  background-color: var(--bg-deep);
-  color: var(--text-main);
-  display: flex;
-  justify-content: center;
-  align-items: flex-start;
-  min-height: 100vh;
-  overflow-x: hidden;
-}
-
-.mobile-shell {
-  width: 100%;
-  max-width: 430px;
-  min-height: 100vh;
-  background: var(--bg-deep);
-  padding: 16px 16px 100px 16px;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-}
-
-.app-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 0 20px 0;
-}
-
-.brand-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.brand-logo {
-  width: 40px;
-  height: 40px;
-  background: linear-gradient(135deg, #10b981, #059669);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 800;
-  font-size: 20px;
-  color: #ffffff;
-  box-shadow: 0 4px 20px var(--emerald-glow);
-}
-
-.brand-title {
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-}
-
-.brand-subtitle {
-  font-size: 11px;
-  color: var(--text-muted);
-  font-weight: 500;
-}
-
-.avatar-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--card-border);
-  color: var(--text-main);
-  padding: 8px 14px;
-  border-radius: var(--radius-full);
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-}
-
-.plus-icon {
-  color: var(--emerald-accent);
-  font-weight: 700;
-}
-
-.content-area {
-  flex: 1;
-}
-
-.view-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.view-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 4px;
-}
-
-.hero-card {
-  background: linear-gradient(135deg, rgba(30, 41, 59, 0.8), rgba(15, 23, 42, 0.9));
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-xl);
-  padding: 22px;
-  position: relative;
-  overflow: hidden;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
-}
-
-.hero-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.tag-light {
-  font-size: 12px;
-  color: var(--text-muted);
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.live-indicator {
-  font-size: 11px;
-  color: var(--emerald-accent);
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 600;
-}
-
-.pulse-dot {
-  width: 6px;
-  height: 6px;
-  background-color: var(--emerald-accent);
-  border-radius: 50%;
-  box-shadow: 0 0 8px var(--emerald-accent);
-}
-
-.hero-value {
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -1px;
-  color: #ffffff;
-  margin-bottom: 8px;
-}
-
-.hero-meta {
-  font-size: 12px;
-  color: var(--text-muted);
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  margin-bottom: 16px;
-}
-
-.divider {
-  opacity: 0.4;
-}
-
-.progress-bar-bg {
-  width: 100%;
-  height: 6px;
-  background: rgba(255, 255, 255, 0.08);
-  border-radius: var(--radius-full);
-  overflow: hidden;
-}
-
-.progress-bar-fill {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981, #34d399);
-  border-radius: var(--radius-full);
-}
-
-.metrics-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.metric-tile {
-  background: var(--card-glass);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-xl);
-  padding: 16px;
-  backdrop-filter: blur(12px);
-}
-
-.tile-icon {
-  font-size: 18px;
-  margin-bottom: 8px;
-}
-
-.tile-value {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 2px;
-}
-
-.tile-label {
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
-.section-title-wrap {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-top: 8px;
-}
-
-.section-title-wrap h2 {
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.actions-dock {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
-}
-
-.dock-btn {
-  background: var(--card-glass);
-  border: 1px solid var(--card-border);
-  border-radius: 16px;
-  padding: 14px 8px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-main);
-  font-size: 11px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.dock-icon {
-  font-size: 20px;
-}
-
-.glass-card {
-  background: var(--card-glass);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-xl);
-  padding: 16px;
-  backdrop-filter: blur(12px);
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.glass-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-}
-
-.card-heading {
-  font-size: 15px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.card-subtext {
-  font-size: 12px;
-  color: var(--text-muted);
-}
-
-.glass-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-  padding-top: 10px;
-}
-
-.accent-text {
-  color: var(--emerald-accent);
-  font-weight: 600;
-}
-
-.badge {
-  padding: 4px 10px;
-  border-radius: var(--radius-full);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.badge-emerald {
-  background: var(--emerald-glow);
-  color: var(--emerald-accent);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-}
-
-.badge-amber {
-  background: rgba(245, 158, 11, 0.15);
-  color: var(--amber-accent);
-  border: 1px solid rgba(245, 158, 11, 0.3);
-}
-
-.badge-rose {
-  background: rgba(244, 63, 94, 0.15);
-  color: var(--rose-accent);
-  border: 1px solid rgba(244, 63, 94, 0.3);
-}
-
-.filter-block {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.search-input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-full);
-  padding: 12px 18px;
-  color: var(--text-main);
-  font-size: 13px;
-  outline: none;
-}
-
-.pills-row {
-  display: flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.filter-pill {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--card-border);
-  color: var(--text-muted);
-  padding: 6px 14px;
-  border-radius: var(--radius-full);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.filter-pill.active {
-  background: var(--emerald-accent);
-  color: #000000;
-  border-color: var(--emerald-accent);
-}
-
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(6px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 200;
-}
-
-.modal-card {
-  width: 100%;
-  max-width: 360px;
-  background: #161b26;
-  border: 1px solid var(--card-border);
-  border-radius: var(--radius-xl);
-  padding: 24px;
-}
-
-.modal-card h3 {
-  font-size: 18px;
-  margin-bottom: 16px;
-}
-
-.modal-input {
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--card-border);
-  border-radius: 12px;
-  padding: 12px;
-  color: var(--text-main);
-  font-size: 14px;
-  margin-bottom: 12px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 10px;
-  margin-top: 8px;
-}
-
-.btn-primary {
-  flex: 1;
-  background: var(--emerald-accent);
-  color: #000000;
-  font-weight: 700;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-secondary {
-  flex: 1;
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--text-main);
-  font-weight: 600;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  cursor: pointer;
-}
-
-.btn-primary-sm {
-  background: var(--emerald-accent);
-  color: #000000;
-  font-weight: 700;
-  padding: 8px 14px;
-  border-radius: var(--radius-full);
-  border: none;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.text-btn {
-  background: none;
-  border: none;
-  color: var(--emerald-accent);
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.avatar-title-wrap {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.user-avatar {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 700;
-  color: var(--emerald-accent);
-}
-
-.amount-tag {
-  font-size: 16px;
-  font-weight: 700;
-  color: var(--emerald-accent);
-}
-
-.metrics-row {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.mini-label {
-  font-size: 10px;
-  color: var(--text-muted);
-}
-
-.mini-val {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.distribution-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.dist-meta {
-  display: flex;
-  justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
-}
-
-.glass-nav {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 398px;
-  height: 64px;
-  background: rgba(18, 22, 31, 0.85);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: space-around;
-  padding: 0 8px;
-  box-shadow: 0 16px 36px rgba(0, 0, 0, 0.5);
-  z-index: 100;
-}
-
-.nav-item {
-  background: none;
-  border: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  color: var(--text-muted);
-  cursor: pointer;
-  padding: 8px 12px;
-  border-radius: var(--radius-full);
-  transition: all 0.2s ease;
-}
-
-.nav-icon {
-  font-size: 18px;
-}
-
-.nav-label {
-  font-size: 10px;
-  font-weight: 600;
-}
-
-.nav-item.active {
-  color: var(--emerald-accent);
-}
+import React, { useEffect, useMemo, useState } from 'react';
+import ReactDOM from 'react-dom/client';
+import './style.css';
+
+interface Owner {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  created_at?: string;
+}
+
+interface Property {
+  id: number;
+  name: string;
+  address: string;
+  room_count: number;
+  bed_count?: number;
+  occupied_bed_count?: number;
+  tenant_count: number;
+  occupancy_rate?: number;
+  monthly_revenue: number;
+}
+
+interface Room {
+  id: number;
+  property_id: number;
+  room_number: string;
+  sharing_type: string;
+  rent_amount: number;
+  property_name?: string;
+  bed_count?: number;
+  occupied_bed_count?: number;
+}
+
+interface Bed {
+  id: number;
+  room_id: number;
+  bed_number: string;
+  is_occupied: boolean;
+  room_number?: string;
+  property_id?: number;
+  property_name?: string;
+  tenant_id?: number;
+  tenant_name?: string;
+}
+
+interface Tenant {
+  id: number;
+  name: string;
+  phone: string;
+  email?: string;
+  property_id: number;
+  property_name?: string;
+  room_id?: number;
+  room_number?: string;
+  bed_id?: number;
+  bed_number?: string;
+  monthly_rent: number;
+  due_date: number;
+  deposit_amount?: number;
+  move_in_date?: string;
+  move_out_date?: string;
+  status: string;
+}
+
+interface Payment {
+  id: number;
+  tenant_id: number;
+  tenant_name?: string;
+  amount: number;
+  payment_date: string;
+  payment_method: string;
+  payment_month: string;
+  notes?: string;
+  property_name?: string;
+  room_number?: string;
+}
+
+interface Invoice {
+  id: number;
+  invoice_number: string;
+  tenant_id: number;
+  tenant_name?: string;
+  amount: number;
+  month?: string;
+  due_date: string;
+  status: string;
+}
+
+type Tab =
+  | 'dashboard'
+  | 'properties'
+  | 'rooms'
+  | 'tenants'
+  | 'payments'
+  | 'invoices'
+  | 'analytics';
+
+type Modal =
+  | 'none'
+  | 'property'
+  | 'room'
+  | 'bed'
+  | 'tenant'
+  | 'payment'
+  | 'invoice'
+  | 'tenantDetails';
+
+const API = '/api';
+
+const money = (value: number) =>
+  `₹${Number(value || 0).toLocaleString('en-IN')}`;
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const currentMonthName = () =>
+  new Date().toLocaleString('en-IN', {
+    month: 'long',
+    year: 'numeric',
+  });
+
+const normalize = (value: unknown) =>
+  String(value || '').trim().toLowerCase();
+
+const formatDate = (value?: string) => {
+  if (!value) return '-';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const getInitials = (name: string) =>
+  name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase())
+    .join('') || 'P';
+
+async function apiRequest<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  const response = await fetch(`${API}${endpoint}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error || `Request failed: ${response.status}`,
+    );
+  }
+
+  return data as T;
+}
+
+function App() {
+  const [authenticated, setAuthenticated] =
+    useState<boolean | null>(null);
+
+  const [owner, setOwner] = useState<Owner | null>(null);
+
+  const [authMode, setAuthMode] =
+    useState<'login' | 'signup'>('login');
+
+  const [authName, setAuthName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [authPassword, setAuthPassword] = useState('');
+  const [authError, setAuthError] = useState('');
+  const [authSaving, setAuthSaving] = useState(false);
+
+  const [activeTab, setActiveTab] =
+    useState<Tab>('dashboard');
+
+  const [properties, setProperties] =
+    useState<Property[]>([]);
+  const [rooms, setRooms] = useState<Room[]>([]);
+  const [beds, setBeds] = useState<Bed[]>([]);
+  const [tenants, setTenants] =
+    useState<Tenant[]>([]);
+  const [payments, setPayments] =
+    useState<Payment[]>([]);
+  const [invoices, setInvoices] =
+    useState<Invoice[]>([]);
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const [activeModal, setActiveModal] =
+    useState<Modal>('none');
+
+  const [selectedTenant, setSelectedTenant] =
+    useState<Tenant | null>(null);
+
+  const [searchQuery, setSearchQuery] =
+    useState('');
+
+  const [tenantFilter, setTenantFilter] =
+    useState<'all' | 'paid' | 'pending' | 'overdue'>(
+      'all',
+    );
+
+  const [paymentSearch, setPaymentSearch] =
+    useState('');
+
+  const [invoiceSearch, setInvoiceSearch] =
+    useState('');
+
+  const [propertyFilter, setPropertyFilter] =
+    useState('');
+
+  const [propName, setPropName] = useState('');
+  const [propAddress, setPropAddress] = useState('');
+
+  const [roomPropertyId, setRoomPropertyId] =
+    useState('');
+  const [roomNumber, setRoomNumber] = useState('');
+  const [sharingType, setSharingType] =
+    useState('Single');
+  const [roomRent, setRoomRent] = useState('');
+
+  const [bedRoomId, setBedRoomId] = useState('');
+  const [bedNumber, setBedNumber] = useState('');
+
+  const [tenantName, setTenantName] = useState('');
+  const [tenantPhone, setTenantPhone] = useState('');
+  const [tenantEmail, setTenantEmail] = useState('');
+  const [tenantPropertyId, setTenantPropertyId] =
+    useState('');
+  const [tenantRoomId, setTenantRoomId] = useState('');
+  const [tenantBedId, setTenantBedId] = useState('');
+  const [tenantRent, setTenantRent] = useState('');
+  const [tenantDueDate, setTenantDueDate] =
+    useState('5');
+  const [tenantDeposit, setTenantDeposit] =
+    useState('');
+  const [tenantMoveInDate, setTenantMoveInDate] =
+    useState(today());
+
+  const [paymentTenantId, setPaymentTenantId] =
+    useState('');
+  const [paymentAmount, setPaymentAmount] =
+    useState('');
+  const [paymentMethod, setPaymentMethod] =
+    useState('UPI');
+  const [paymentMonth, setPaymentMonth] =
+    useState(currentMonthName());
+  const [paymentDate, setPaymentDate] =
+    useState(today());
+
+  const [invoiceTenantId, setInvoiceTenantId] =
+    useState('');
+  const [invoiceAmount, setInvoiceAmount] =
+    useState('');
+  const [invoiceMonth, setInvoiceMonth] =
+    useState(currentMonthName());
+  const [invoiceDueDate, setInvoiceDueDate] =
+    useState(today());
+
+  const loadAllData = async () => {
+    setLoading(true);
+    setError('');
+
+    const results = await Promise.allSettled([
+      apiRequest<Property[]>('/properties'),
+      apiRequest<Room[]>('/rooms'),
+      apiRequest<Bed[]>('/beds'),
+      apiRequest<Tenant[]>('/tenants'),
+      apiRequest<Payment[]>('/payments'),
+      apiRequest<Invoice[]>('/invoices'),
+    ]);
+
+    const [
+      propertyResult,
+      roomResult,
+      bedResult,
+      tenantResult,
+      paymentResult,
+      invoiceResult,
+    ] = results;
+
+    const errors: string[] = [];
+
+    if (propertyResult.status === 'fulfilled') {
+      setProperties(propertyResult.value || []);
+    } else {
+      setProperties([]);
+      errors.push(
+        `Properties: ${
+          propertyResult.reason instanceof Error
+            ? propertyResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (roomResult.status === 'fulfilled') {
+      setRooms(roomResult.value || []);
+    } else {
+      setRooms([]);
+      errors.push(
+        `Rooms: ${
+          roomResult.reason instanceof Error
+            ? roomResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (bedResult.status === 'fulfilled') {
+      setBeds(bedResult.value || []);
+    } else {
+      setBeds([]);
+      errors.push(
+        `Beds: ${
+          bedResult.reason instanceof Error
+            ? bedResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (tenantResult.status === 'fulfilled') {
+      setTenants(tenantResult.value || []);
+    } else {
+      setTenants([]);
+      errors.push(
+        `Tenants: ${
+          tenantResult.reason instanceof Error
+            ? tenantResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (paymentResult.status === 'fulfilled') {
+      setPayments(paymentResult.value || []);
+    } else {
+      setPayments([]);
+      errors.push(
+        `Payments: ${
+          paymentResult.reason instanceof Error
+            ? paymentResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (invoiceResult.status === 'fulfilled') {
+      setInvoices(invoiceResult.value || []);
+    } else {
+      setInvoices([]);
+      errors.push(
+        `Invoices: ${
+          invoiceResult.reason instanceof Error
+            ? invoiceResult.reason.message
+            : 'Failed'
+        }`,
+      );
+    }
+
+    if (errors.length) {
+      setError(errors.join(' • '));
+    }
+
+    setLoading(false);
+  };
+
+  useEffect(() => {
+    const checkSession = async () => {
+      try {
+        const response = await fetch(
+          `${API}/auth/me`,
+          {
+            credentials: 'include',
+          },
+        );
+
+        const data = await response
+          .json()
+          .catch(() => null);
+
+        if (
+          response.ok &&
+          data?.authenticated &&
+          data?.owner
+        ) {
+          setOwner(data.owner);
+          setAuthenticated(true);
+          await loadAllData();
+        } else {
+          setOwner(null);
+          setAuthenticated(false);
+          setLoading(false);
+        }
+      } catch {
+        setOwner(null);
+        setAuthenticated(false);
+        setLoading(false);
+      }
+    };
+
+    checkSession();
+  }, []);
+
+  const handleLogin = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!authEmail.trim() || !authPassword) {
+      setAuthError(
+        'Email and password are required.',
+      );
+      return;
+    }
+
+    setAuthSaving(true);
+    setAuthError('');
+
+    try {
+      const data = await apiRequest<{
+        owner: Owner;
+      }>('/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({
+          email: authEmail.trim(),
+          password: authPassword,
+        }),
+      });
+
+      setOwner(data.owner);
+      setAuthenticated(true);
+      setAuthPassword('');
+
+      await loadAllData();
+    } catch (err) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to log in.',
+      );
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  const handleSignup = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!authName.trim()) {
+      setAuthError('Name is required.');
+      return;
+    }
+
+    if (!authEmail.trim()) {
+      setAuthError('Email is required.');
+      return;
+    }
+
+    if (authPassword.length < 6) {
+      setAuthError(
+        'Password must be at least 6 characters.',
+      );
+      return;
+    }
+
+    setAuthSaving(true);
+    setAuthError('');
+
+    try {
+      const data = await apiRequest<{
+        owner: Owner;
+      }>('/auth/signup', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: authName.trim(),
+          email: authEmail.trim(),
+          phone: authPhone.trim(),
+          password: authPassword,
+        }),
+      });
+
+      setOwner(data.owner);
+      setAuthenticated(true);
+      setAuthPassword('');
+
+      await loadAllData();
+    } catch (err) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create account.',
+      );
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await fetch(`${API}/auth/logout`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+    } catch {}
+
+    setOwner(null);
+    setAuthenticated(false);
+    setProperties([]);
+    setRooms([]);
+    setBeds([]);
+    setTenants([]);
+    setPayments([]);
+    setInvoices([]);
+    setActiveTab('dashboard');
+  };
+
+  const resetForms = () => {
+    setPropName('');
+    setPropAddress('');
+
+    setRoomPropertyId('');
+    setRoomNumber('');
+    setSharingType('Single');
+    setRoomRent('');
+
+    setBedRoomId('');
+    setBedNumber('');
+
+    setTenantName('');
+    setTenantPhone('');
+    setTenantEmail('');
+    setTenantPropertyId('');
+    setTenantRoomId('');
+    setTenantBedId('');
+    setTenantRent('');
+    setTenantDueDate('5');
+    setTenantDeposit('');
+    setTenantMoveInDate(today());
+
+    setPaymentTenantId('');
+    setPaymentAmount('');
+    setPaymentMethod('UPI');
+    setPaymentMonth(currentMonthName());
+    setPaymentDate(today());
+
+    setInvoiceTenantId('');
+    setInvoiceAmount('');
+    setInvoiceMonth(currentMonthName());
+    setInvoiceDueDate(today());
+  };
+
+  const openModal = (modal: Modal) => {
+    setError('');
+    setActiveModal(modal);
+  };
+
+  const closeModal = () => {
+    if (saving) return;
+    setActiveModal('none');
+    setSelectedTenant(null);
+    setError('');
+  };
+
+  const handleCreateProperty = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!propName.trim()) {
+      setError('Property name is required.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: propName.trim(),
+          address: propAddress.trim(),
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add property.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateRoom = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!roomPropertyId || !roomNumber.trim()) {
+      setError(
+        'Select a property and enter a room number.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(roomPropertyId),
+          room_number: roomNumber.trim(),
+          sharing_type: sharingType,
+          rent_amount: Number(roomRent) || 0,
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add room.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateBed = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!bedRoomId || !bedNumber.trim()) {
+      setError(
+        'Select a room and enter a bed number.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/beds', {
+        method: 'POST',
+        body: JSON.stringify({
+          room_id: Number(bedRoomId),
+          bed_number: bedNumber.trim(),
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add bed.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateTenant = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !tenantName.trim() ||
+      !tenantPhone.trim() ||
+      !tenantPropertyId
+    ) {
+      setError(
+        'Name, phone and property are required.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/tenants', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: tenantName.trim(),
+          phone: tenantPhone.trim(),
+          email: tenantEmail.trim(),
+          property_id: Number(tenantPropertyId),
+          room_id: tenantRoomId
+            ? Number(tenantRoomId)
+            : null,
+          bed_id: tenantBedId
+            ? Number(tenantBedId)
+            : null,
+          monthly_rent: Number(tenantRent) || 0,
+          due_date: Number(tenantDueDate) || 5,
+          deposit_amount:
+            Number(tenantDeposit) || 0,
+          move_in_date:
+            tenantMoveInDate || null,
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add tenant.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRecordPayment = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !paymentTenantId ||
+      !paymentAmount ||
+      Number(paymentAmount) <= 0
+    ) {
+      setError(
+        'Select a tenant and enter a valid amount.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/payments', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(paymentTenantId),
+          amount: Number(paymentAmount),
+          payment_date: paymentDate,
+          payment_method: paymentMethod,
+          payment_month: paymentMonth,
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to record payment.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateInvoice = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !invoiceTenantId ||
+      !invoiceAmount ||
+      Number(invoiceAmount) <= 0
+    ) {
+      setError(
+        'Select a tenant and enter a valid amount.',
+      );
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/invoices', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(invoiceTenantId),
+          amount: Number(invoiceAmount),
+          month: invoiceMonth,
+          due_date: invoiceDueDate,
+          status: 'Pending',
+        }),
+      });
+
+      resetForms();
+      closeModal();
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to create invoice.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const activeTenants = useMemo(
+    () =>
+      tenants.filter(
+        (tenant) =>
+          normalize(tenant.status) === 'active',
+      ),
+    [tenants],
+  );
+
+  const currentMonth = currentMonthName();
+
+  const expectedRent = activeTenants.reduce(
+    (sum, tenant) =>
+      sum + Number(tenant.monthly_rent || 0),
+    0,
+  );
+
+  const collectedThisMonth = payments
+    .filter(
+      (payment) =>
+        normalize(payment.payment_month) ===
+        normalize(currentMonth),
+    )
+    .reduce(
+      (sum, payment) =>
+        sum + Number(payment.amount || 0),
+      0,
+    );
+
+  const pendingDues = Math.max(
+    expectedRent - collectedThisMonth,
+    0,
+  );
+
+  const collectionRate =
+    expectedRent > 0
+      ? Math.min(
+          Math.round(
+            (collectedThisMonth / expectedRent) *
+              100,
+          ),
+          100,
+        )
+      : 0;
+
+  const occupiedBeds = beds.filter(
+    (bed) => Boolean(bed.is_occupied),
+  ).length;
+
+  const availableBedCount =
+    beds.length - occupiedBeds;
+
+  const totalOccupancy =
+    beds.length > 0
+      ? Math.round(
+          (occupiedBeds / beds.length) * 100,
+        )
+      : 0;
+
+  const paymentTotalsByTenant = useMemo(() => {
+    const totals: Record<number, number> = {};
+
+    payments.forEach((payment) => {
+      if (
+        normalize(payment.payment_month) ===
+        normalize(currentMonth)
+      ) {
+        totals[payment.tenant_id] =
+          (totals[payment.tenant_id] || 0) +
+          Number(payment.amount || 0);
+      }
+    });
+
+    return totals;
+  }, [payments, currentMonth]);
+
+  const getTenantPaid = (tenantId: number) =>
+    Number(paymentTotalsByTenant[tenantId] || 0);
+
+  const getTenantPending = (tenant: Tenant) =>
+    Math.max(
+      Number(tenant.monthly_rent || 0) -
+        getTenantPaid(tenant.id),
+      0,
+    );
+
+  const getTenantStatus = (
+    tenant: Tenant,
+  ): 'paid' | 'pending' | 'overdue' => {
+    const pending = getTenantPending(tenant);
+
+    if (pending <= 0) return 'paid';
+
+    const day = new Date().getDate();
+
+    if (day > Number(tenant.due_date || 31)) {
+      return 'overdue';
+    }
+
+    return 'pending';
+  };
+
+  const upcomingDues = useMemo(() => {
+    const currentDay = new Date().getDate();
+
+    return activeTenants
+      .filter(
+        (tenant) =>
+          getTenantPending(tenant) > 0 &&
+          Number(tenant.due_date || 31) >=
+            currentDay,
+      )
+      .sort(
+        (a, b) =>
+          Number(a.due_date || 31) -
+          Number(b.due_date || 31),
+      )
+      .slice(0, 5);
+  }, [activeTenants, paymentTotalsByTenant]);
+
+  const overdueTenants = useMemo(
+    () =>
+      activeTenants.filter(
+        (tenant) =>
+          getTenantStatus(tenant) === 'overdue',
+      ),
+    [activeTenants, paymentTotalsByTenant],
+  );
+
+  const recentPayments = useMemo(
+    () =>
+      [...payments]
+        .sort(
+          (a, b) =>
+            new Date(
+              b.payment_date,
+            ).getTime() -
+            new Date(
+              a.payment_date,
+            ).getTime(),
+        )
+        .slice(0, 6),
+    [payments],
+  );
+
+  const tenantRooms = rooms.filter(
+    (room) =>
+      !tenantPropertyId ||
+      Number(room.property_id) ===
+        Number(tenantPropertyId),
+  );
+
+  const tenantBeds = beds.filter(
+    (bed) =>
+      !tenantRoomId ||
+      Number(bed.room_id) ===
+        Number(tenantRoomId),
+  );
+
+  const availableBeds = tenantBeds.filter(
+    (bed) => !bed.is_occupied,
+  );
+
+  const filteredTenants = tenants.filter(
+    (tenant) => {
+      const query = normalize(searchQuery);
+
+      const matchesSearch =
+        !query ||
+        normalize(tenant.name).includes(query) ||
+        normalize(tenant.phone).includes(query) ||
+        normalize(
+          tenant.room_number,
+        ).includes(query) ||
+        normalize(
+          tenant.property_name,
+        ).includes(query);
+
+      const status = getTenantStatus(tenant);
+
+      const matchesFilter =
+        tenantFilter === 'all' ||
+        status === tenantFilter;
+
+      const matchesProperty =
+        !propertyFilter ||
+        Number(tenant.property_id) ===
+          Number(propertyFilter);
+
+      return (
+        matchesSearch &&
+        matchesFilter &&
+        matchesProperty
+      );
+    },
+  );
+
+  const filteredPayments = payments.filter(
+    (payment) => {
+      const query = normalize(paymentSearch);
+
+      return (
+        !query ||
+        normalize(payment.tenant_name).includes(
+          query,
+        ) ||
+        normalize(payment.property_name).includes(
+          query,
+        ) ||
+        normalize(payment.room_number).includes(
+          query,
+        ) ||
+        normalize(payment.payment_method).includes(
+          query,
+        ) ||
+        normalize(payment.payment_month).includes(
+          query,
+        )
+      );
+    },
+  );
+
+  const filteredInvoices = invoices.filter(
+    (invoice) => {
+      const query = normalize(invoiceSearch);
+
+      return (
+        !query ||
+        normalize(
+          invoice.invoice_number,
+        ).includes(query) ||
+        normalize(invoice.tenant_name).includes(
+          query,
+        ) ||
+        normalize(invoice.month).includes(query) ||
+        normalize(invoice.status).includes(query)
+      );
+    },
+  );
+
+  const sendWhatsAppReminder = (
+    tenant: Tenant,
+  ) => {
+    let phone = tenant.phone.replace(
+      /[^0-9]/g,
+      '',
+    );
+
+    if (phone.length === 10) {
+      phone = `91${phone}`;
+    }
+
+    const pending = getTenantPending(tenant);
+
+    const message = encodeURIComponent(
+      `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent.\n\nRoom: ${
+        tenant.room_number || 'N/A'
+      }\nRent: ${money(
+        tenant.monthly_rent,
+      )}\nPaid: ${money(
+        getTenantPaid(tenant.id),
+      )}\nPending: ${money(
+        pending,
+      )}\nDue date: ${tenant.due_date}\n\nThank you.`,
+    );
+
+    window.open(
+      `https://wa.me/${phone}?text=${message}`,
+      '_blank',
+    );
+  };
+
+  const openTenantDetails = (
+    tenant: Tenant,
+  ) => {
+    setSelectedTenant(tenant);
+    setActiveModal('tenantDetails');
+  };
+
+  const openPaymentForTenant = (
+    tenant: Tenant,
+  ) => {
+    setPaymentTenantId(String(tenant.id));
+    setPaymentAmount(
+      String(
+        getTenantPending(tenant) ||
+          tenant.monthly_rent ||
+          '',
+      ),
+    );
+    setActiveModal('payment');
+  };
+
+  const selectedTenantPayments =
+    selectedTenant
+      ? payments.filter(
+          (payment) =>
+            payment.tenant_id ===
+            selectedTenant.id,
+        )
+      : [];
+
+  if (authenticated === null) {
+    return (
+      <div className="mobile-shell auth-shell">
+        <div className="auth-card glass-card">
+          <div className="brand-logo auth-logo">
+            P
+          </div>
+          <h1 className="auth-title">
+            Peacely
+          </h1>
+          <p className="auth-subtitle">
+            Checking your session...
+          </p>
+          <div className="auth-loader">
+            Connecting securely
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authenticated === false) {
+    return (
+      <div className="mobile-shell auth-shell">
+        <div className="auth-card glass-card">
+          <div className="auth-brand">
+            <div className="brand-logo auth-logo">
+              P
+            </div>
+
+            <h1>Peacely</h1>
+
+            <p>
+              Property & Tenant Management
+            </p>
+          </div>
+
+          {authError && (
+            <div className="error-box">
+              {authError}
+            </div>
+          )}
+
+          <div className="auth-tabs">
+            <button
+              className={
+                authMode === 'login'
+                  ? 'auth-tab active'
+                  : 'auth-tab'
+              }
+              onClick={() => {
+                setAuthMode('login');
+                setAuthError('');
+              }}
+            >
+              Log In
+            </button>
+
+            <button
+              className={
+                authMode === 'signup'
+                  ? 'auth-tab active'
+                  : 'auth-tab'
+              }
+              onClick={() => {
+                setAuthMode('signup');
+                setAuthError('');
+              }}
+            >
+              Sign Up
+            </button>
+          </div>
+
+          <form
+            onSubmit={
+              authMode === 'login'
+                ? handleLogin
+                : handleSignup
+            }
+          >
+            {authMode === 'signup' && (
+              <>
+                <input
+                  className="modal-input"
+                  placeholder="Full name"
+                  value={authName}
+                  onChange={(e) =>
+                    setAuthName(e.target.value)
+                  }
+                  autoComplete="name"
+                />
+
+                <input
+                  className="modal-input"
+                  placeholder="Phone number"
+                  value={authPhone}
+                  onChange={(e) =>
+                    setAuthPhone(e.target.value)
+                  }
+                  autoComplete="tel"
+                />
+              </>
+            )}
+
+            <input
+              className="modal-input"
+              type="email"
+              placeholder="Email address"
+              value={authEmail}
+              onChange={(e) =>
+                setAuthEmail(e.target.value)
+              }
+              autoComplete="email"
+            />
+
+            <input
+              className="modal-input"
+              type="password"
+              placeholder="Password"
+              value={authPassword}
+              onChange={(e) =>
+                setAuthPassword(e.target.value)
+              }
+              autoComplete={
+                authMode === 'login'
+                  ? 'current-password'
+                  : 'new-password'
+              }
+            />
+
+            <button
+              className="btn-primary full-btn"
+              type="submit"
+              disabled={authSaving}
+            >
+              {authSaving
+                ? 'Please wait...'
+                : authMode === 'login'
+                  ? 'Log In'
+                  : 'Create Account'}
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="mobile-shell">
+        <Header
+          owner={owner}
+          onLogout={handleLogout}
+        />
+
+        <main className="content-area">
+          <div className="hero-card">
+            <div className="live-indicator">
+              <span className="pulse-dot" />
+              Loading
+            </div>
+
+            <div className="hero-value">
+              Peacely
+            </div>
+
+            <div className="hero-meta">
+              Loading your property data...
+            </div>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mobile-shell">
+      <Header
+        owner={owner}
+        onLogout={handleLogout}
+        onRecord={() => {
+          if (activeTenants.length) {
+            openModal('payment');
+          } else {
+            setActiveTab('tenants');
+          }
+        }}
+      />
+
+      {error && (
+        <div className="error-box page-error">
+          {error}
+        </div>
+      )}
+
+      <main className="content-area">
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            expectedRent={expectedRent}
+            collectedThisMonth={collectedThisMonth}
+            pendingDues={pendingDues}
+            collectionRate={collectionRate}
+            totalOccupancy={totalOccupancy}
+            activeTenants={activeTenants}
+            occupiedBeds={occupiedBeds}
+            availableBedCount={availableBedCount}
+            properties={properties}
+            upcomingDues={upcomingDues}
+            overdueTenants={overdueTenants}
+            recentPayments={recentPayments}
+            getTenantPending={getTenantPending}
+            getTenantPaid={getTenantPaid}
+            openTenantDetails={openTenantDetails}
+            sendWhatsAppReminder={sendWhatsAppReminder}
+            openPaymentForTenant={openPaymentForTenant}
+            openModal={openModal}
+            setActiveTab={setActiveTab}
+          />
+        )}
+
+        {activeTab === 'properties' && (
+          <PropertiesView
+            properties={properties}
+            rooms={rooms}
+            beds={beds}
+            openModal={openModal}
+          />
+        )}
+
+        {activeTab === 'rooms' && (
+          <RoomsView
+            rooms={rooms}
+            beds={beds}
+            openModal={openModal}
+          />
+        )}
+
+        {activeTab === 'tenants' && (
+          <TenantsView
+            tenants={filteredTenants}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            tenantFilter={tenantFilter}
+            setTenantFilter={setTenantFilter}
+            propertyFilter={propertyFilter}
+            setPropertyFilter={setPropertyFilter}
+            properties={properties}
+            openModal={openModal}
+            getTenantStatus={getTenantStatus}
+            getTenantPaid={getTenantPaid}
+            getTenantPending={getTenantPending}
+            openTenantDetails={openTenantDetails}
+            sendWhatsAppReminder={
+              sendWhatsAppReminder
+            }
+            openPaymentForTenant={
+              openPaymentForTenant
+            }
+          />
+        )}
+
+        {activeTab === 'payments' && (
+          <PaymentsView
+            payments={filteredPayments}
+            search={paymentSearch}
+            setSearch={setPaymentSearch}
+            openModal={openModal}
+          />
+        )}
+
+        {activeTab === 'invoices' && (
+          <InvoicesView
+            invoices={filteredInvoices}
+            search={invoiceSearch}
+            setSearch={setInvoiceSearch}
+            openModal={openModal}
+          />
+        )}
+
+        {activeTab === 'analytics' && (
+          <AnalyticsView
+            properties={properties}
+            rooms={rooms}
+            beds={beds}
+            tenants={activeTenants}
+            expectedRent={expectedRent}
+            collected={collectedThisMonth}
+            pending={pendingDues}
+            occupancy={totalOccupancy}
+            collectionRate={collectionRate}
+          />
+        )}
+      </main>
+
+      <BottomNav
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
+
+      {activeModal !== 'none' && (
+        <ModalOverlay onClose={closeModal}>
+          {activeModal === 'property' && (
+            <form
+              onSubmit={handleCreateProperty}
+            >
+              <ModalTitle
+                title="Add Property"
+                subtitle="Create a property to manage rooms and tenants."
+              />
+
+              <input
+                className="modal-input"
+                placeholder="Property name"
+                value={propName}
+                onChange={(e) =>
+                  setPropName(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                placeholder="Address"
+                value={propAddress}
+                onChange={(e) =>
+                  setPropAddress(e.target.value)
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'room' && (
+            <form
+              onSubmit={handleCreateRoom}
+            >
+              <ModalTitle
+                title="Add Room"
+                subtitle="Add a room inside one of your properties."
+              />
+
+              <select
+                className="modal-input"
+                value={roomPropertyId}
+                onChange={(e) =>
+                  setRoomPropertyId(e.target.value)
+                }
+              >
+                <option value="">
+                  Select property
+                </option>
+
+                {properties.map((property) => (
+                  <option
+                    key={property.id}
+                    value={property.id}
+                  >
+                    {property.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                placeholder="Room number"
+                value={roomNumber}
+                onChange={(e) =>
+                  setRoomNumber(e.target.value)
+                }
+              />
+
+              <select
+                className="modal-input"
+                value={sharingType}
+                onChange={(e) =>
+                  setSharingType(e.target.value)
+                }
+              >
+                <option>Single</option>
+                <option>Double</option>
+                <option>Triple</option>
+                <option>Four Sharing</option>
+                <option>Other</option>
+              </select>
+
+              <input
+                className="modal-input"
+                type="number"
+                placeholder="Monthly rent"
+                value={roomRent}
+                onChange={(e) =>
+                  setRoomRent(e.target.value)
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'bed' && (
+            <form
+              onSubmit={handleCreateBed}
+            >
+              <ModalTitle
+                title="Add Bed"
+                subtitle="Add an individual bed to a room."
+              />
+
+              <select
+                className="modal-input"
+                value={bedRoomId}
+                onChange={(e) =>
+                  setBedRoomId(e.target.value)
+                }
+              >
+                <option value="">
+                  Select room
+                </option>
+
+                {rooms.map((room) => (
+                  <option
+                    key={room.id}
+                    value={room.id}
+                  >
+                    {room.property_name} · Room{' '}
+                    {room.room_number}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                placeholder="Bed number"
+                value={bedNumber}
+                onChange={(e) =>
+                  setBedNumber(e.target.value)
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'tenant' && (
+            <form
+              onSubmit={handleCreateTenant}
+            >
+              <ModalTitle
+                title="Add Tenant"
+                subtitle="Add a resident and assign a room or bed."
+              />
+
+              <input
+                className="modal-input"
+                placeholder="Tenant name"
+                value={tenantName}
+                onChange={(e) =>
+                  setTenantName(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                placeholder="Phone number"
+                value={tenantPhone}
+                onChange={(e) =>
+                  setTenantPhone(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="email"
+                placeholder="Email (optional)"
+                value={tenantEmail}
+                onChange={(e) =>
+                  setTenantEmail(e.target.value)
+                }
+              />
+
+              <select
+                className="modal-input"
+                value={tenantPropertyId}
+                onChange={(e) => {
+                  setTenantPropertyId(
+                    e.target.value,
+                  );
+                  setTenantRoomId('');
+                  setTenantBedId('');
+                }}
+              >
+                <option value="">
+                  Select property
+                </option>
+
+                {properties.map((property) => (
+                  <option
+                    key={property.id}
+                    value={property.id}
+                  >
+                    {property.name}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="modal-input"
+                value={tenantRoomId}
+                onChange={(e) => {
+                  setTenantRoomId(
+                    e.target.value,
+                  );
+                  setTenantBedId('');
+                }}
+              >
+                <option value="">
+                  Select room
+                </option>
+
+                {tenantRooms.map((room) => (
+                  <option
+                    key={room.id}
+                    value={room.id}
+                  >
+                    Room {room.room_number}
+                  </option>
+                ))}
+              </select>
+
+              <select
+                className="modal-input"
+                value={tenantBedId}
+                onChange={(e) =>
+                  setTenantBedId(e.target.value)
+                }
+              >
+                <option value="">
+                  Select available bed
+                </option>
+
+                {availableBeds.map((bed) => (
+                  <option
+                    key={bed.id}
+                    value={bed.id}
+                  >
+                    Bed {bed.bed_number}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                type="number"
+                placeholder="Monthly rent"
+                value={tenantRent}
+                onChange={(e) =>
+                  setTenantRent(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="number"
+                min="1"
+                max="31"
+                placeholder="Rent due day"
+                value={tenantDueDate}
+                onChange={(e) =>
+                  setTenantDueDate(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="number"
+                placeholder="Security deposit"
+                value={tenantDeposit}
+                onChange={(e) =>
+                  setTenantDeposit(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="date"
+                value={tenantMoveInDate}
+                onChange={(e) =>
+                  setTenantMoveInDate(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'payment' && (
+            <form
+              onSubmit={handleRecordPayment}
+            >
+              <ModalTitle
+                title="Record Payment"
+                subtitle="Record a rent payment against a tenant."
+              />
+
+              <select
+                className="modal-input"
+                value={paymentTenantId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setPaymentTenantId(id);
+
+                  const tenant = tenants.find(
+                    (item) =>
+                      item.id === Number(id),
+                  );
+
+                  if (tenant) {
+                    setPaymentAmount(
+                      String(
+                        getTenantPending(
+                          tenant,
+                        ) ||
+                          tenant.monthly_rent ||
+                          '',
+                      ),
+                    );
+                  }
+                }}
+              >
+                <option value="">
+                  Select tenant
+                </option>
+
+                {activeTenants.map((tenant) => (
+                  <option
+                    key={tenant.id}
+                    value={tenant.id}
+                  >
+                    {tenant.name} ·{' '}
+                    {money(
+                      getTenantPending(
+                        tenant,
+                      ) ||
+                        tenant.monthly_rent,
+                    )}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                type="number"
+                placeholder="Amount"
+                value={paymentAmount}
+                onChange={(e) =>
+                  setPaymentAmount(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="date"
+                value={paymentDate}
+                onChange={(e) =>
+                  setPaymentDate(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <select
+                className="modal-input"
+                value={paymentMethod}
+                onChange={(e) =>
+                  setPaymentMethod(
+                    e.target.value,
+                  )
+                }
+              >
+                <option>UPI</option>
+                <option>Cash</option>
+                <option>Bank Transfer</option>
+                <option>Card</option>
+                <option>Other</option>
+              </select>
+
+              <input
+                className="modal-input"
+                placeholder="Payment month"
+                value={paymentMonth}
+                onChange={(e) =>
+                  setPaymentMonth(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'invoice' && (
+            <form
+              onSubmit={handleCreateInvoice}
+            >
+              <ModalTitle
+                title="Create Invoice"
+                subtitle="Create a rent invoice for a tenant."
+              />
+
+              <select
+                className="modal-input"
+                value={invoiceTenantId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  setInvoiceTenantId(id);
+
+                  const tenant = tenants.find(
+                    (item) =>
+                      item.id === Number(id),
+                  );
+
+                  if (tenant) {
+                    setInvoiceAmount(
+                      String(
+                        tenant.monthly_rent ||
+                          '',
+                      ),
+                    );
+                  }
+                }}
+              >
+                <option value="">
+                  Select tenant
+                </option>
+
+                {activeTenants.map((tenant) => (
+                  <option
+                    key={tenant.id}
+                    value={tenant.id}
+                  >
+                    {tenant.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                type="number"
+                placeholder="Invoice amount"
+                value={invoiceAmount}
+                onChange={(e) =>
+                  setInvoiceAmount(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <input
+                className="modal-input"
+                placeholder="Month"
+                value={invoiceMonth}
+                onChange={(e) =>
+                  setInvoiceMonth(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="date"
+                value={invoiceDueDate}
+                onChange={(e) =>
+                  setInvoiceDueDate(
+                    e.target.value,
+                  )
+                }
+              />
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal === 'tenantDetails' &&
+            selectedTenant && (
+              <TenantDetails
+                tenant={selectedTenant}
+                payments={selectedTenantPayments}
+                paid={getTenantPaid(
+                  selectedTenant.id,
+                )}
+                pending={getTenantPending(
+                  selectedTenant,
+                )}
+                status={getTenantStatus(
+                  selectedTenant,
+                )}
+                onClose={closeModal}
+                onPayment={() => {
+                  openPaymentForTenant(
+                    selectedTenant,
+                  );
+                }}
+                onWhatsApp={() =>
+                  sendWhatsAppReminder(
+                    selectedTenant,
+                  )
+                }
+              />
+            )}
+        </ModalOverlay>
+      )}
+    </div>
+  );
+}
+
+function Header({
+  owner,
+  onLogout,
+  onRecord,
+}: {
+  owner: Owner | null;
+  onLogout: () => void;
+  onRecord?: () => void;
+}) {
+  return (
+    <header className="app-header">
+      <div className="brand-wrap">
+        <div className="brand-logo">P</div>
+
+        <div>
+          <h1 className="brand-title">
+            Peacely
+          </h1>
+
+          <p className="brand-subtitle">
+            {owner?.name ||
+              'Property Management'}
+          </p>
+        </div>
+      </div>
+
+      <div className="header-actions">
+        {onRecord && (
+          <button
+            className="avatar-btn"
+            onClick={onRecord}
+          >
+            + Payment
+          </button>
+        )}
+
+        <button
+          className="logout-btn"
+          onClick={onLogout}
+        >
+          Logout
+        </button>
+      </div>
+    </header>
+  );
+}
+
+function Dashboard({
+  expectedRent,
+  collectedThisMonth,
+  pendingDues,
+  collectionRate,
+  totalOccupancy,
+  activeTenants,
+  occupiedBeds,
+  availableBedCount,
+  properties,
+  upcomingDues,
+  overdueTenants,
+  recentPayments,
+  getTenantPending,
+  getTenantPaid,
+  openTenantDetails,
+  sendWhatsAppReminder,
+  openPaymentForTenant,
+  openModal,
+  setActiveTab,
+}: {
+  expectedRent: number;
+  collectedThisMonth: number;
+  pendingDues: number;
+  collectionRate: number;
+  totalOccupancy: number;
+  activeTenants: Tenant[];
+  occupiedBeds: number;
+  availableBedCount: number;
+  properties: Property[];
+  upcomingDues: Tenant[];
+  overdueTenants: Tenant[];
+  recentPayments: Payment[];
+  getTenantPending: (tenant: Tenant) => number;
+  getTenantPaid: (id: number) => number;
+  openTenantDetails: (tenant: Tenant) => void;
+  sendWhatsAppReminder: (tenant: Tenant) => void;
+  openPaymentForTenant: (tenant: Tenant) => void;
+  openModal: (modal: Modal) => void;
+  setActiveTab: (tab: Tab) => void;
+}) {
+  return (
+    <div className="view-container">
+      <div className="hero-card">
+        <div className="hero-header">
+          <span className="tag-light">
+            Expected Monthly Rent
+          </span>
+
+          <span className="live-indicator">
+            <span className="pulse-dot" />
+            Live
+          </span>
+        </div>
+
+        <div className="hero-value">
+          {money(expectedRent)}
+        </div>
+
+        <div className="hero-meta">
+          <span>
+            {totalOccupancy}% occupancy
+          </span>
+          <span>•</span>
+          <span>
+            {activeTenants.length} active tenants
+          </span>
+        </div>
+
+        <div className="progress-bar-bg">
+          <div
+            className="progress-bar-fill"
+            style={{
+              width: `${collectionRate}%`,
+            }}
+          />
+        </div>
+
+        <div className="hero-bottom">
+          <span>
+            {money(collectedThisMonth)} collected
+          </span>
+
+          <strong>
+            {collectionRate}%
+          </strong>
+        </div>
+      </div>
+
+      <div className="metrics-grid">
+        <Metric
+          icon="💰"
+          value={money(collectedThisMonth)}
+          label="Collected"
+        />
+
+        <Metric
+          icon="⏳"
+          value={money(pendingDues)}
+          label="Pending"
+        />
+
+        <Metric
+          icon="🛏️"
+          value={`${occupiedBeds}/${occupiedBeds + availableBedCount}`}
+          label="Beds Occupied"
+        />
+
+        <Metric
+          icon="🏠"
+          value={String(properties.length)}
+          label="Properties"
+        />
+      </div>
+
+      <SectionHeading
+        title="Quick Actions"
+        subtitle="Manage your rental business"
+      />
+
+      <div className="quick-actions">
+        <QuickAction
+          icon="🏠"
+          label="Property"
+          onClick={() => openModal('property')}
+        />
+        <QuickAction
+          icon="🚪"
+          label="Room"
+          onClick={() => openModal('room')}
+        />
+        <QuickAction
+          icon="🛏️"
+          label="Bed"
+          onClick={() => openModal('bed')}
+        />
+        <QuickAction
+          icon="👤"
+          label="Tenant"
+          onClick={() => openModal('tenant')}
+        />
+        <QuickAction
+          icon="₹"
+          label="Payment"
+          onClick={() => openModal('payment')}
+        />
+        <QuickAction
+          icon="🧾"
+          label="Invoice"
+          onClick={() => openModal('invoice')}
+        />
+      </div>
+
+      {overdueTenants.length > 0 && (
+        <>
+          <SectionHeading
+            title="Needs Attention"
+            subtitle={`${overdueTenants.length} rent payment${
+              overdueTenants.length > 1
+                ? 's'
+                : ''
+            } overdue`}
+          />
+
+          <div className="alert-card">
+            <div className="alert-icon">
+              ⚠️
+            </div>
+
+            <div className="alert-content">
+              {overdueTenants
+                .slice(0, 3)
+                .map((tenant) => (
+                  <div
+                    className="alert-row"
+                    key={tenant.id}
+                  >
+                    <div>
+                      <strong>
+                        {tenant.name}
+                      </strong>
+                      <span>
+                        {money(
+                          getTenantPending(
+                            tenant,
+                          ),
+                        )}{' '}
+                        pending
+                      </span>
+                    </div>
+
+                    <button
+                      className="mini-action"
+                      onClick={() =>
+                        sendWhatsAppReminder(
+                          tenant,
+                        )
+                      }
+                    >
+                      WhatsApp
+                    </button>
+                  </div>
+                ))}
+            </div>
+          </div>
+        </>
+      )}
+
+      <SectionHeading
+        title="Upcoming Dues"
+        subtitle="Tenants with unpaid rent"
+        action={
+          <button
+            className="text-btn"
+            onClick={() =>
+              setActiveTab('tenants')
+            }
+          >
+            View all
+          </button>
+        }
+      />
+
+      {upcomingDues.length === 0 ? (
+        <EmptyCard
+          icon="🎉"
+          title="All caught up"
+          text="No upcoming unpaid rent found."
+        />
+      ) : (
+        <div className="list-card">
+          {upcomingDues.map((tenant) => (
+            <div
+              className="list-row"
+              key={tenant.id}
+              onClick={() =>
+                openTenantDetails(tenant)
+              }
+            >
+              <div className="avatar">
+                {getInitials(tenant.name)}
+              </div>
+
+              <div className="list-main">
+                <strong>{tenant.name}</strong>
+
+                <span>
+                  Room {tenant.room_number || '-'} ·
+                  Due {tenant.due_date}
+                </span>
+              </div>
+
+              <div className="list-side">
+                <strong>
+                  {money(
+                    getTenantPending(tenant),
+                  )}
+                </strong>
+
+                <span className="status pending">
+                  Pending
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <SectionHeading
+        title="Recent Payments"
+        subtitle="Latest rent collection"
+        action={
+          <button
+            className="text-btn"
+            onClick={() =>
+              setActiveTab('payments')
+            }
+          >
+            View all
+          </button>
+        }
+      />
+
+      {recentPayments.length === 0 ? (
+        <EmptyCard
+          icon="₹"
+          title="No payments yet"
+          text="Recorded payments will appear here."
+        />
+      ) : (
+        <div className="list-card">
+          {recentPayments.map((payment) => (
+            <div
+              className="list-row"
+              key={payment.id}
+            >
+              <div className="avatar payment-avatar">
+                ₹
+              </div>
+
+              <div className="list-main">
+                <strong>
+                  {payment.tenant_name ||
+                    'Tenant'}
+                </strong>
+
+                <span>
+                  {payment.payment_method} ·{' '}
+                  {formatDate(
+                    payment.payment_date,
+                  )}
+                </span>
+              </div>
+
+              <div className="list-side">
+                <strong>
+                  {money(payment.amount)}
+                </strong>
+                <span className="status paid">
+                  Paid
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <SectionHeading
+        title="Portfolio"
+        subtitle="Property overview"
+      />
+
+      {properties.length === 0 ? (
+        <EmptyCard
+          icon="🏠"
+          title="No properties"
+          text="Add your first property to get started."
+          action={
+            <button
+              className="btn-primary"
+              onClick={() =>
+                openModal('property')
+              }
+            >
+              Add Property
+            </button>
+          }
+        />
+      ) : (
+        properties.map((property) => (
+          <div
+            className="glass-card"
+            key={property.id}
+          >
+            <div className="glass-header">
+              <div>
+                <h3>{property.name}</h3>
+                <p>
+                  {property.address ||
+                    'No address added'}
+                </p>
+              </div>
+
+              <span className="badge badge-emerald">
+                {property.occupancy_rate ||
+                  0}
+                %
+              </span>
+            </div>
+
+            <div className="metrics-row">
+              <MiniMetric
+                label="Rooms"
+                value={property.room_count}
+              />
+              <MiniMetric
+                label="Beds"
+                value={
+                  property.bed_count || 0
+                }
+              />
+              <MiniMetric
+                label="Occupied"
+                value={
+                  property.occupied_bed_count ||
+                  0
+                }
+              />
+            </div>
+
+            <div className="glass-footer">
+              <span>Monthly Revenue</span>
+              <strong>
+                {money(
+                  property.monthly_revenue,
+                )}
+              </strong>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+function PropertiesView({
+  properties,
+  rooms,
+  beds,
+  openModal,
+}: {
+  properties: Property[];
+  rooms: Room[];
+  beds: Bed[];
+  openModal: (modal: Modal) => void;
+}) {
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Properties"
+        subtitle="Manage your rental portfolio"
+        action={
+          <button
+            className="btn-primary"
+            onClick={() => openModal('property')}
+          >
+            + Property
+          </button>
+        }
+      />
+
+      {properties.map((property) => {
+        const propertyRooms = rooms.filter(
+          (room) =>
+            room.property_id === property.id,
+        );
+
+        const propertyBeds = beds.filter(
+          (bed) =>
+            bed.property_id === property.id,
+        );
+
+        const occupied = propertyBeds.filter(
+          (bed) => bed.is_occupied,
+        ).length;
+
+        return (
+          <div
+            className="glass-card"
+            key={property.id}
+          >
+            <div className="glass-header">
+              <div>
+                <h3>{property.name}</h3>
+                <p>
+                  {property.address ||
+                    'No address'}
+                </p>
+              </div>
+
+              <span className="badge badge-emerald">
+                {property.occupancy_rate ||
+                  0}
+                %
+              </span>
+            </div>
+
+            <div className="metrics-row">
+              <MiniMetric
+                label="Rooms"
+                value={propertyRooms.length}
+              />
+
+              <MiniMetric
+                label="Beds"
+                value={propertyBeds.length}
+              />
+
+              <MiniMetric
+                label="Occupied"
+                value={occupied}
+              />
+            </div>
+
+            <div className="glass-footer">
+              <span>Monthly Revenue</span>
+              <strong>
+                {money(
+                  property.monthly_revenue,
+                )}
+              </strong>
+            </div>
+          </div>
+        );
+      })}
+
+      {properties.length === 0 && (
+        <EmptyCard
+          icon="🏠"
+          title="No properties yet"
+          text="Add your first property to begin."
+          action={
+            <button
+              className="btn-primary"
+              onClick={() =>
+                openModal('property')
+              }
+            >
+              Add Property
+            </button>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function RoomsView({
+  rooms,
+  beds,
+  openModal,
+}: {
+  rooms: Room[];
+  beds: Bed[];
+  openModal: (modal: Modal) => void;
+}) {
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Rooms & Beds"
+        subtitle="Manage rooms and bed availability"
+        action={
+          <div className="header-button-group">
+            <button
+              className="btn-secondary"
+              onClick={() => openModal('bed')}
+            >
+              + Bed
+            </button>
+
+            <button
+              className="btn-primary"
+              onClick={() => openModal('room')}
+            >
+              + Room
+            </button>
+          </div>
+        }
+      />
+
+      {rooms.map((room) => {
+        const roomBeds = beds.filter(
+          (bed) => bed.room_id === room.id,
+        );
+
+        return (
+          <div
+            className="glass-card"
+            key={room.id}
+          >
+            <div className="glass-header">
+              <div>
+                <h3>
+                  Room {room.room_number}
+                </h3>
+
+                <p>
+                  {room.property_name ||
+                    'Property'}
+                </p>
+              </div>
+
+              <span className="badge">
+                {room.sharing_type}
+              </span>
+            </div>
+
+            <div className="metrics-row">
+              <MiniMetric
+                label="Rent"
+                value={money(
+                  room.rent_amount,
+                )}
+              />
+
+              <MiniMetric
+                label="Beds"
+                value={roomBeds.length}
+              />
+
+              <MiniMetric
+                label="Occupied"
+                value={
+                  roomBeds.filter(
+                    (bed) =>
+                      bed.is_occupied,
+                  ).length
+                }
+              />
+            </div>
+
+            <div className="bed-list">
+              {roomBeds.length === 0 ? (
+                <span className="muted">
+                  No beds added yet
+                </span>
+              ) : (
+                roomBeds.map((bed) => (
+                  <span
+                    className={
+                      bed.is_occupied
+                        ? 'bed-chip occupied'
+                        : 'bed-chip available'
+                    }
+                    key={bed.id}
+                  >
+                    Bed {bed.bed_number}
+                    <small>
+                      {bed.is_occupied
+                        ? 'Occupied'
+                        : 'Available'}
+                    </small>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        );
+      })}
+
+      {rooms.length === 0 && (
+        <EmptyCard
+          icon="🚪"
+          title="No rooms yet"
+          text="Add a room to start creating beds."
+          action={
+            <button
+              className="btn-primary"
+              onClick={() => openModal('room')}
+            >
+              Add Room
+            </button>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function TenantsView({
+  tenants,
+  searchQuery,
+  setSearchQuery,
+  tenantFilter,
+  setTenantFilter,
+  propertyFilter,
+  setPropertyFilter,
+  properties,
+  openModal,
+  getTenantStatus,
+  getTenantPaid,
+  getTenantPending,
+  openTenantDetails,
+  sendWhatsAppReminder,
+  openPaymentForTenant,
+}: {
+  tenants: Tenant[];
+  searchQuery: string;
+  setSearchQuery: (value: string) => void;
+  tenantFilter:
+    | 'all'
+    | 'paid'
+    | 'pending'
+    | 'overdue';
+  setTenantFilter: (
+    value:
+      | 'all'
+      | 'paid'
+      | 'pending'
+      | 'overdue',
+  ) => void;
+  propertyFilter: string;
+  setPropertyFilter: (value: string) => void;
+  properties: Property[];
+  openModal: (modal: Modal) => void;
+  getTenantStatus: (
+    tenant: Tenant,
+  ) => 'paid' | 'pending' | 'overdue';
+  getTenantPaid: (id: number) => number;
+  getTenantPending: (tenant: Tenant) => number;
+  openTenantDetails: (tenant: Tenant) => void;
+  sendWhatsAppReminder: (tenant: Tenant) => void;
+  openPaymentForTenant: (tenant: Tenant) => void;
+}) {
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Tenants"
+        subtitle={`${tenants.length} tenant${
+          tenants.length !== 1 ? 's' : ''
+        } shown`}
+        action={
+          <button
+            className="btn-primary"
+            onClick={() => openModal('tenant')}
+          >
+            + Tenant
+          </button>
+        }
+      />
+
+      <input
+        className="search-input"
+        placeholder="Search name, phone, room or property..."
+        value={searchQuery}
+        onChange={(e) =>
+          setSearchQuery(e.target.value)
+        }
+      />
+
+      <div className="filter-row">
+        {(
+          [
+            ['all', 'All'],
+            ['paid', 'Paid'],
+            ['pending', 'Pending'],
+            ['overdue', 'Overdue'],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            className={
+              tenantFilter === value
+                ? 'filter-pill active'
+                : 'filter-pill'
+            }
+            onClick={() =>
+              setTenantFilter(value)
+            }
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <select
+        className="modal-input compact-input"
+        value={propertyFilter}
+        onChange={(e) =>
+          setPropertyFilter(e.target.value)
+        }
+      >
+        <option value="">
+          All properties
+        </option>
+
+        {properties.map((property) => (
+          <option
+            key={property.id}
+            value={property.id}
+          >
+            {property.name}
+          </option>
+        ))}
+      </select>
+
+      {tenants.map((tenant) => {
+        const status = getTenantStatus(tenant);
+        const paid = getTenantPaid(tenant.id);
+        const pending = getTenantPending(
+          tenant,
+        );
+
+        return (
+          <div
+            className="glass-card tenant-card"
+            key={tenant.id}
+          >
+            <div
+              className="clickable-header"
+              onClick={() =>
+                openTenantDetails(tenant)
+              }
+            >
+              <div className="avatar large">
+                {getInitials(tenant.name)}
+              </div>
+
+              <div className="tenant-main">
+                <h3>{tenant.name}</h3>
+
+                <p>{tenant.phone}</p>
+
+                <span>
+                  {tenant.property_name ||
+                    'Property'}{' '}
+                  · Room{' '}
+                  {tenant.room_number || '-'} ·
+                  Bed{' '}
+                  {tenant.bed_number || '-'}
+                </span>
+              </div>
+
+              <StatusBadge status={status} />
+            </div>
+
+            <div className="tenant-finance">
+              <div>
+                <span>Monthly Rent</span>
+                <strong>
+                  {money(
+                    tenant.monthly_rent,
+                  )}
+                </strong>
+              </div>
+
+              <div>
+                <span>Paid</span>
+                <strong className="success-text">
+                  {money(paid)}
+                </strong>
+              </div>
+
+              <div>
+                <span>Pending</span>
+                <strong
+                  className={
+                    pending > 0
+                      ? 'danger-text'
+                      : 'success-text'
+                  }
+                >
+                  {money(pending)}
+                </strong>
+              </div>
+            </div>
+
+            <div className="tenant-actions">
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  openTenantDetails(tenant)
+                }
+              >
+                Details
+              </button>
+
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  sendWhatsAppReminder(tenant)
+                }
+              >
+                WhatsApp
+              </button>
+
+              <button
+                className="btn-primary"
+                onClick={() =>
+                  openPaymentForTenant(tenant)
+                }
+              >
+                Pay
+              </button>
+            </div>
+          </div>
+        );
+      })}
+
+      {tenants.length === 0 && (
+        <EmptyCard
+          icon="👥"
+          title="No tenants found"
+          text="Try changing your search or add a new tenant."
+          action={
+            <button
+              className="btn-primary"
+              onClick={() => openModal('tenant')}
+            >
+              Add Tenant
+            </button>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function PaymentsView({
+  payments,
+  search,
+  setSearch,
+  openModal,
+}: {
+  payments: Payment[];
+  search: string;
+  setSearch: (value: string) => void;
+  openModal: (modal: Modal) => void;
+}) {
+  const total = payments.reduce(
+    (sum, payment) =>
+      sum + Number(payment.amount || 0),
+    0,
+  );
+
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Payments"
+        subtitle={`${money(total)} shown`}
+        action={
+          <button
+            className="btn-primary"
+            onClick={() => openModal('payment')}
+          >
+            + Payment
+          </button>
+        }
+      />
+
+      <input
+        className="search-input"
+        placeholder="Search tenant, property, month or method..."
+        value={search}
+        onChange={(e) =>
+          setSearch(e.target.value)
+        }
+      />
+
+      <div className="summary-strip">
+        <span>
+          {payments.length} transactions
+        </span>
+
+        <strong>{money(total)}</strong>
+      </div>
+
+      {payments.map((payment) => (
+        <div
+          className="glass-card"
+          key={payment.id}
+        >
+          <div className="glass-header">
+            <div className="avatar-title-wrap">
+              <div className="avatar">
+                {getInitials(
+                  payment.tenant_name ||
+                    'Tenant',
+                )}
+              </div>
+
+              <div>
+                <h3>
+                  {payment.tenant_name ||
+                    'Tenant'}
+                </h3>
+
+                <p>
+                  {payment.property_name ||
+                    'Property'}{' '}
+                  · Room{' '}
+                  {payment.room_number ||
+                    '-'}
+                </p>
+              </div>
+            </div>
+
+            <strong className="amount-tag">
+              {money(payment.amount)}
+            </strong>
+          </div>
+
+          <div className="metrics-row">
+            <MiniMetric
+              label="Month"
+              value={
+                payment.payment_month
+              }
+            />
+
+            <MiniMetric
+              label="Method"
+              value={
+                payment.payment_method
+              }
+            />
+
+            <MiniMetric
+              label="Date"
+              value={formatDate(
+                payment.payment_date,
+              )}
+            />
+          </div>
+        </div>
+      ))}
+
+      {payments.length === 0 && (
+        <EmptyCard
+          icon="₹"
+          title="No payments found"
+          text="Recorded payments will appear here."
+        />
+      )}
+    </div>
+  );
+}
+
+function InvoicesView({
+  invoices,
+  search,
+  setSearch,
+  openModal,
+}: {
+  invoices: Invoice[];
+  search: string;
+  setSearch: (value: string) => void;
+  openModal: (modal: Modal) => void;
+}) {
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Invoices"
+        subtitle={`${invoices.length} invoice${
+          invoices.length !== 1 ? 's' : ''
+        }`}
+        action={
+          <button
+            className="btn-primary"
+            onClick={() => openModal('invoice')}
+          >
+            + Invoice
+          </button>
+        }
+      />
+
+      <input
+        className="search-input"
+        placeholder="Search invoice, tenant, month or status..."
+        value={search}
+        onChange={(e) =>
+          setSearch(e.target.value)
+        }
+      />
+
+      {invoices.map((invoice) => (
+        <div
+          className="glass-card"
+          key={invoice.id}
+        >
+          <div className="glass-header">
+            <div>
+              <h3>
+                {invoice.invoice_number}
+              </h3>
+
+              <p>
+                {invoice.tenant_name ||
+                  'Tenant'}
+              </p>
+            </div>
+
+            <StatusBadge
+              status={
+                normalize(
+                  invoice.status,
+                ) === 'paid'
+                  ? 'paid'
+                  : 'pending'
+              }
+            />
+          </div>
+
+          <div className="metrics-row">
+            <MiniMetric
+              label="Amount"
+              value={money(invoice.amount)}
+            />
+
+            <MiniMetric
+              label="Month"
+              value={invoice.month || '-'}
+            />
+
+            <MiniMetric
+              label="Due"
+              value={formatDate(
+                invoice.due_date,
+              )}
+            />
+          </div>
+        </div>
+      ))}
+
+      {invoices.length === 0 && (
+        <EmptyCard
+          icon="🧾"
+          title="No invoices found"
+          text="Create your first rent invoice."
+          action={
+            <button
+              className="btn-primary"
+              onClick={() =>
+                openModal('invoice')
+              }
+            >
+              Create Invoice
+            </button>
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+function AnalyticsView({
+  properties,
+  rooms,
+  beds,
+  tenants,
+  expectedRent,
+  collected,
+  pending,
+  occupancy,
+  collectionRate,
+}: {
+  properties: Property[];
+  rooms: Room[];
+  beds: Bed[];
+  tenants: Tenant[];
+  expectedRent: number;
+  collected: number;
+  pending: number;
+  occupancy: number;
+  collectionRate: number;
+}) {
+  return (
+    <div className="view-container">
+      <PageHeader
+        title="Analytics"
+        subtitle="Your rental business at a glance"
+      />
+
+      <div className="metrics-grid">
+        <Metric
+          icon="💰"
+          value={money(expectedRent)}
+          label="Expected Rent"
+        />
+
+        <Metric
+          icon="✅"
+          value={money(collected)}
+          label="Collected"
+        />
+
+        <Metric
+          icon="⏳"
+          value={money(pending)}
+          label="Pending"
+        />
+
+        <Metric
+          icon="📈"
+          value={`${collectionRate}%`}
+          label="Collection Rate"
+        />
+      </div>
+
+      <div className="glass-card">
+        <h3>Portfolio Summary</h3>
+
+        <div className="analytics-list">
+          <AnalyticsRow
+            label="Properties"
+            value={properties.length}
+          />
+
+          <AnalyticsRow
+            label="Rooms"
+            value={rooms.length}
+          />
+
+          <AnalyticsRow
+            label="Beds"
+            value={beds.length}
+          />
+
+          <AnalyticsRow
+            label="Occupied Beds"
+            value={
+              beds.filter(
+                (bed) => bed.is_occupied,
+              ).length
+            }
+          />
+
+          <AnalyticsRow
+            label="Available Beds"
+            value={
+              beds.filter(
+                (bed) => !bed.is_occupied,
+              ).length
+            }
+          />
+
+          <AnalyticsRow
+            label="Active Tenants"
+            value={tenants.length}
+          />
+
+          <AnalyticsRow
+            label="Occupancy"
+            value={`${occupancy}%`}
+          />
+        </div>
+      </div>
+
+      <div className="glass-card">
+        <h3>Collection Health</h3>
+
+        <div className="large-progress">
+          <div
+            style={{
+              width: `${collectionRate}%`,
+            }}
+          />
+        </div>
+
+        <div className="collection-health">
+          <span>
+            {collectionRate}% collected
+          </span>
+
+          <strong>
+            {money(pending)} pending
+          </strong>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TenantDetails({
+  tenant,
+  payments,
+  paid,
+  pending,
+  status,
+  onClose,
+  onPayment,
+  onWhatsApp,
+}: {
+  tenant: Tenant;
+  payments: Payment[];
+  paid: number;
+  pending: number;
+  status: 'paid' | 'pending' | 'overdue';
+  onClose: () => void;
+  onPayment: () => void;
+  onWhatsApp: () => void;
+}) {
+  return (
+    <div className="tenant-detail">
+      <div className="detail-profile">
+        <div className="avatar profile-avatar">
+          {getInitials(tenant.name)}
+        </div>
+
+        <div>
+          <h2>{tenant.name}</h2>
+          <p>{tenant.phone}</p>
+        </div>
+
+        <StatusBadge status={status} />
+      </div>
+
+      <div className="detail-grid">
+        <DetailItem
+          label="Property"
+          value={
+            tenant.property_name || '-'
+          }
+        />
+
+        <DetailItem
+          label="Room"
+          value={
+            tenant.room_number || '-'
+          }
+        />
+
+        <DetailItem
+          label="Bed"
+          value={
+            tenant.bed_number || '-'
+          }
+        />
+
+        <DetailItem
+          label="Monthly Rent"
+          value={money(
+            tenant.monthly_rent,
+          )}
+        />
+
+        <DetailItem
+          label="Due Day"
+          value={`Every ${tenant.due_date}`}
+        />
+
+        <DetailItem
+          label="Deposit"
+          value={money(
+            tenant.deposit_amount || 0,
+          )}
+        />
+
+        <DetailItem
+          label="Move In"
+          value={formatDate(
+            tenant.move_in_date,
+          )}
+        />
+
+        <DetailItem
+          label="Email"
+          value={tenant.email || '-'}
+        />
+      </div>
+
+      <div className="finance-panel">
+        <div>
+          <span>Paid this month</span>
+          <strong className="success-text">
+            {money(paid)}
+          </strong>
+        </div>
+
+        <div>
+          <span>Pending</span>
+          <strong
+            className={
+              pending
+                ? 'danger-text'
+                : 'success-text'
+            }
+          >
+            {money(pending)}
+          </strong>
+        </div>
+      </div>
+
+      <div className="detail-actions">
+        <button
+          className="btn-secondary"
+          onClick={onWhatsApp}
+        >
+          WhatsApp
+        </button>
+
+        <button
+          className="btn-primary"
+          onClick={onPayment}
+        >
+          Record Payment
+        </button>
+      </div>
+
+      <div className="detail-section">
+        <div className="section-heading">
+          <div>
+            <h3>Payment History</h3>
+            <p>
+              {payments.length} payment
+              {payments.length !== 1
+                ? 's'
+                : ''}
+            </p>
+          </div>
+        </div>
+
+        {payments.length === 0 ? (
+          <div className="small-empty">
+            No payments recorded yet.
+          </div>
+        ) : (
+          payments
+            .slice()
+            .sort(
+              (a, b) =>
+                new Date(
+                  b.payment_date,
+                ).getTime() -
+                new Date(
+                  a.payment_date,
+                ).getTime(),
+            )
+            .map((payment) => (
+              <div
+                className="history-row"
+                key={payment.id}
+              >
+                <div>
+                  <strong>
+                    {money(payment.amount)}
+                  </strong>
+
+                  <span>
+                    {payment.payment_month}
+                  </span>
+                </div>
+
+                <div>
+                  <strong>
+                    {payment.payment_method}
+                  </strong>
+
+                  <span>
+                    {formatDate(
+                      payment.payment_date,
+                    )}
+                  </span>
+                </div>
+              </div>
+            ))
+        )}
+      </div>
+
+      <button
+        className="btn-secondary full-btn"
+        onClick={onClose}
+      >
+        Close
+      </button>
+    </div>
+  );
+}
+
+function BottomNav({
+  activeTab,
+  setActiveTab,
+}: {
+  activeTab: Tab;
+  setActiveTab: (tab: Tab) => void;
+}) {
+  const items: [
+    Tab,
+    string,
+    string,
+  ][] = [
+    ['dashboard', '⌂', 'Home'],
+    ['properties', '🏠', 'Properties'],
+    ['rooms', '🚪', 'Rooms'],
+    ['tenants', '👥', 'Tenants'],
+    ['payments', '₹', 'Payments'],
+    ['invoices', '🧾', 'Invoices'],
+    ['analytics', '📊', 'Analytics'],
+  ];
+
+  return (
+    <nav className="bottom-nav">
+      {items.map(
+        ([tab, icon, label]) => (
+          <button
+            key={tab}
+            className={
+              activeTab === tab
+                ? 'nav-item active'
+                : 'nav-item'
+            }
+            onClick={() =>
+              setActiveTab(tab)
+            }
+          >
+            <span className="nav-icon">
+              {icon}
+            </span>
+
+            <small className="nav-label">
+              {label}
+            </small>
+          </button>
+        ),
+      )}
+    </nav>
+  );
+}
+
+function ModalOverlay({
+  children,
+  onClose,
+}: {
+  children: React.ReactNode;
+  onClose: () => void;
+}) {
+  return (
+    <div
+      className="modal-backdrop"
+      onClick={onClose}
+    >
+      <div
+        className="modal-card"
+        onClick={(e) =>
+          e.stopPropagation()
+        }
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function ModalTitle({
+  title,
+  subtitle,
+}: {
+  title: string;
+  subtitle: string;
+}) {
+  return (
+    <div className="modal-title">
+      <h2>{title}</h2>
+      <p>{subtitle}</p>
+    </div>
+  );
+}
+
+function ModalButtons({
+  saving,
+  onCancel,
+}: {
+  saving: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div className="modal-actions">
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={onCancel}
+        disabled={saving}
+      >
+        Cancel
+      </button>
+
+      <button
+        type="submit"
+        className="btn-primary"
+        disabled={saving}
+      >
+        {saving ? 'Saving...' : 'Save'}
+      </button>
+    </div>
+  );
+}
+
+function PageHeader({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="page-header">
+      <div>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+
+      {action}
+    </div>
+  );
+}
+
+function SectionHeading({
+  title,
+  subtitle,
+  action,
+}: {
+  title: string;
+  subtitle: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="section-heading">
+      <div>
+        <h2>{title}</h2>
+        <p>{subtitle}</p>
+      </div>
+
+      {action}
+    </div>
+  );
+}
+
+function Metric({
+  icon,
+  value,
+  label,
+}: {
+  icon: string;
+  value: string;
+  label: string;
+}) {
+  return (
+    <div className="metric-tile">
+      <div className="tile-icon">
+        {icon}
+      </div>
+
+      <div className="tile-value">
+        {value}
+      </div>
+
+      <div className="tile-label">
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function QuickAction({
+  icon,
+  label,
+  onClick,
+}: {
+  icon: string;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      className="quick-action"
+      onClick={onClick}
+    >
+      <span>{icon}</span>
+      <small>{label}</small>
+    </button>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="mini-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function StatusBadge({
+  status,
+}: {
+  status: string;
+}) {
+  return (
+    <span
+      className={`status ${normalize(status)}`}
+    >
+      {status.charAt(0).toUpperCase() +
+        status.slice(1)}
+    </span>
+  );
+}
+
+function DetailItem({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="detail-item">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function AnalyticsRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="analytics-row">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function EmptyCard({
+  icon,
+  title,
+  text,
+  action,
+}: {
+  icon?: string;
+  title: string;
+  text: string;
+  action?: React.ReactNode;
+}) {
+  return (
+    <div className="glass-card empty-card">
+      {icon && (
+        <div className="empty-icon">
+          {icon}
+        </div>
+      )}
+
+      <h3>{title}</h3>
+      <p>{text}</p>
+
+      {action}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(
+  document.getElementById('root')!,
+).render(
+  <React.StrictMode>
+    <App />
+  </React.StrictMode>,
+);
