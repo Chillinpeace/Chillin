@@ -12,6 +12,43 @@ const PORT = process.env.PORT || 8080;
 app.use(express.json());
 
 /* =========================================================
+   AUTO-CONVERT POSTGRES snake_case -> CAMELCASE FOR ALL
+   JSON RESPONSES (the React frontend expects camelCase keys
+   like propertyId, roomNumber, tenantId, dueDate, etc, but
+   Postgres returns property_id, room_number, tenant_id,
+   due_date, etc by default)
+========================================================= */
+
+function toCamel(key) {
+  return key.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+}
+
+function camelCaseKeys(value) {
+  if (Array.isArray(value)) {
+    return value.map(camelCaseKeys);
+  }
+
+  if (value !== null && typeof value === "object" && !(value instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, val]) => [
+        toCamel(key),
+        camelCaseKeys(val),
+      ])
+    );
+  }
+
+  return value;
+}
+
+app.use((req, res, next) => {
+  const originalJson = res.json.bind(res);
+
+  res.json = (data) => originalJson(camelCaseKeys(data));
+
+  next();
+});
+
+/* =========================================================
    HEALTH CHECK
 ========================================================= */
 
@@ -140,6 +177,22 @@ app.post("/api/properties", async (req, res) => {
    ROOMS
 ========================================================= */
 
+// Get all rooms (across every property)
+app.get("/api/rooms", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT *
+      FROM rooms
+      ORDER BY id ASC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get all rooms error:", error);
+    res.status(500).json({ error: "Failed to fetch rooms" });
+  }
+});
+
 // Get rooms for property
 app.get("/api/properties/:propertyId/rooms", async (req, res) => {
   try {
@@ -228,6 +281,24 @@ app.post("/api/properties/:propertyId/rooms", async (req, res) => {
    BEDS
 ========================================================= */
 
+// Get all beds (across every room)
+app.get("/api/beds", async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT
+        *,
+        CASE WHEN occupied THEN 'occupied' ELSE 'vacant' END AS status
+      FROM beds
+      ORDER BY id ASC
+    `);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error("Get all beds error:", error);
+    res.status(500).json({ error: "Failed to fetch beds" });
+  }
+});
+
 // Get beds for room
 app.get("/api/rooms/:roomId/beds", async (req, res) => {
   try {
@@ -235,7 +306,9 @@ app.get("/api/rooms/:roomId/beds", async (req, res) => {
 
     const result = await pool.query(
       `
-      SELECT *
+      SELECT
+        *,
+        CASE WHEN occupied THEN 'occupied' ELSE 'vacant' END AS status
       FROM beds
       WHERE room_id = $1
       ORDER BY id ASC
