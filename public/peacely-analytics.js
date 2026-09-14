@@ -1,27 +1,38 @@
 (() => {
   'use strict';
 
-  const removeAnalyticsUI = () => {
-    const analyticsButtons = [
+  const removeHiddenUI = () => {
+    const controls = [
       ...document.querySelectorAll('button, a, [role="button"]'),
-    ].filter((element) => {
+    ];
+
+    const analyticsControls = controls.filter((element) => {
       const text = String(element.textContent || '').trim();
-      return /^analytics$/i.test(text);
+      return /analytics$/i.test(text) || element.dataset?.tab === 'analytics';
     });
 
-    for (const button of analyticsButtons) {
-      if (button.classList.contains('active')) {
-        const dashboardButton = [
-          ...document.querySelectorAll('button, a, [role="button"]'),
-        ].find((element) => /^dashboard$/i.test(String(element.textContent || '').trim()));
+    for (const control of analyticsControls) {
+      if (control.classList.contains('active')) {
+        const dashboardControl = document.querySelector('[data-tab="dashboard"]') ||
+          [...document.querySelectorAll('button, a, [role="button"]')]
+            .find((element) => /^(?:🏠\s*)?home$/i.test(String(element.textContent || '').trim()));
 
-        if (dashboardButton && dashboardButton !== button) {
-          dashboardButton.click();
+        if (dashboardControl && dashboardControl !== control) {
+          dashboardControl.click();
         }
       }
 
-      button.remove();
+      control.remove();
     }
+
+    const paymentControls = [
+      ...document.querySelectorAll('button, a, [role="button"]'),
+    ].filter((element) => {
+      const text = String(element.textContent || '').replace(/\s+/g, ' ').trim();
+      return /^\+\s*payment$/i.test(text);
+    });
+
+    paymentControls.forEach((element) => element.remove());
 
     document
       .querySelectorAll('.peacely-ops-tab[data-tab="analytics"]')
@@ -41,7 +52,7 @@
     });
   };
 
-  const observer = new MutationObserver(() => removeAnalyticsUI());
+  const observer = new MutationObserver(removeHiddenUI);
   observer.observe(document.documentElement, {
     childList: true,
     subtree: true,
@@ -49,8 +60,9 @@
     attributeFilter: ['class'],
   });
 
-  window.setTimeout(removeAnalyticsUI, 100);
-  window.setTimeout(removeAnalyticsUI, 500);
-  window.setTimeout(removeAnalyticsUI, 1500);
-  window.setInterval(removeAnalyticsUI, 2000);
+  window.setTimeout(removeHiddenUI, 50);
+  window.setTimeout(removeHiddenUI, 150);
+  window.setTimeout(removeHiddenUI, 500);
+  window.setTimeout(removeHiddenUI, 1500);
+  window.setInterval(removeHiddenUI, 2000);
 })();
