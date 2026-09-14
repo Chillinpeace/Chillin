@@ -353,7 +353,6 @@ export async function initializeDatabase() {
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
-
     // =====================================================
     // 7. INVOICES
     // =====================================================
@@ -369,6 +368,8 @@ export async function initializeDatabase() {
         status VARCHAR(30) DEFAULT 'Pending',
         paid_amount NUMERIC(10,2) DEFAULT 0,
         delivery_status VARCHAR(20) DEFAULT 'Not Sent',
+        sent_at TIMESTAMPTZ,
+        paid_at TIMESTAMPTZ,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
@@ -404,6 +405,12 @@ export async function initializeDatabase() {
         DEFAULT 'Not Sent';
 
       ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS sent_at TIMESTAMPTZ;
+
+      ALTER TABLE invoices
+      ADD COLUMN IF NOT EXISTS paid_at TIMESTAMPTZ;
+
+      ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS created_at
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
 
@@ -427,11 +434,21 @@ export async function initializeDatabase() {
       SET status = 'Pending'
       WHERE status IS NULL
          OR status = '';
-      
+
       UPDATE invoices
       SET updated_at = COALESCE(created_at, CURRENT_TIMESTAMP)
       WHERE updated_at IS NULL;
+
+      UPDATE invoices
+      SET sent_at = NULL
+      WHERE delivery_status = 'Not Sent';
+
+      UPDATE invoices
+      SET paid_at = COALESCE(paid_at, CURRENT_TIMESTAMP)
+      WHERE status = 'Paid'
+        AND paid_at IS NULL;
     `);
+    
 
     // =====================================================
     // 8. SESSIONS
