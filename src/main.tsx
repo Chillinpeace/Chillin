@@ -2,6 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import './style.css';
 
+interface Owner {
+  id: number;
+  name: string;
+  email: string;
+  phone?: string;
+  created_at?: string;
+}
+
 interface Property {
   id: number;
   name: string;
@@ -91,19 +99,20 @@ type Tab =
 
 type Modal =
   | 'none'
-  | 'addProperty'
-  | 'addRoom'
-  | 'addBed'
-  | 'addTenant'
-  | 'recordPayment'
-  | 'addInvoice';
+  | 'property'
+  | 'room'
+  | 'bed'
+  | 'tenant'
+  | 'payment'
+  | 'invoice';
 
 const API = '/api';
 
 const money = (value: number) =>
   `₹${Number(value || 0).toLocaleString('en-IN')}`;
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () =>
+  new Date().toISOString().slice(0, 10);
 
 const currentMonthName = () =>
   new Date().toLocaleString('en-IN', {
@@ -111,106 +120,219 @@ const currentMonthName = () =>
     year: 'numeric',
   });
 
+async function apiRequest<T>(
+  endpoint: string,
+  options?: RequestInit,
+): Promise<T> {
+  const response = await fetch(`${API}${endpoint}`, {
+    ...options,
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(options?.headers || {}),
+    },
+  });
+
+  const data = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      data?.error ||
+        `Request failed: ${response.status}`,
+    );
+  }
+
+  return data as T;
+}
+
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('dashboard');
+  /*
+   * =====================================================
+   * AUTHENTICATION
+   * =====================================================
+   */
 
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [rooms, setRooms] = useState<Room[]>([]);
-  const [beds, setBeds] = useState<Bed[]>([]);
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [authenticated, setAuthenticated] =
+    useState<boolean | null>(null);
 
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [owner, setOwner] =
+    useState<Owner | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<
-    'All' | 'Paid' | 'Pending' | 'Overdue'
-  >('All');
+  const [authMode, setAuthMode] =
+    useState<'login' | 'signup'>('login');
 
-  const [activeModal, setActiveModal] = useState<Modal>('none');
+  const [authName, setAuthName] = useState('');
+  const [authEmail, setAuthEmail] = useState('');
+  const [authPhone, setAuthPhone] = useState('');
+  const [authPassword, setAuthPassword] =
+    useState('');
 
-  const [propName, setPropName] = useState('');
-  const [propAddress, setPropAddress] = useState('');
+  const [authError, setAuthError] =
+    useState('');
 
-  const [roomPropertyId, setRoomPropertyId] = useState('');
-  const [roomNumber, setRoomNumber] = useState('');
-  const [sharingType, setSharingType] = useState('Single');
-  const [roomRent, setRoomRent] = useState('');
-
-  const [bedRoomId, setBedRoomId] = useState('');
-  const [bedNumber, setBedNumber] = useState('');
-
-  const [tenantName, setTenantName] = useState('');
-  const [tenantPhone, setTenantPhone] = useState('');
-  const [tenantEmail, setTenantEmail] = useState('');
-  const [tenantPropertyId, setTenantPropertyId] = useState('');
-  const [tenantRoomId, setTenantRoomId] = useState('');
-  const [tenantBedId, setTenantBedId] = useState('');
-  const [tenantRent, setTenantRent] = useState('');
-  const [tenantDueDate, setTenantDueDate] = useState('5');
-  const [tenantDeposit, setTenantDeposit] = useState('');
-  const [tenantMoveInDate, setTenantMoveInDate] = useState(today());
-
-  const [paymentTenantId, setPaymentTenantId] = useState('');
-  const [paymentAmount, setPaymentAmount] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState('UPI');
-  const [paymentMonth, setPaymentMonth] = useState(
-    currentMonthName(),
-  );
-  const [paymentDate, setPaymentDate] = useState(today());
-
-  const [invoiceTenantId, setInvoiceTenantId] = useState('');
-  const [invoiceAmount, setInvoiceAmount] = useState('');
-  const [invoiceMonth, setInvoiceMonth] = useState(
-    currentMonthName(),
-  );
-  const [invoiceDueDate, setInvoiceDueDate] = useState(today());
-
-  const apiRequest = async <T,>(
-    endpoint: string,
-    options?: RequestInit,
-  ): Promise<T> => {
-    const response = await fetch(`${API}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...(options?.headers || {}),
-      },
-    });
-
-    const data = await response.json().catch(() => null);
-
-    if (!response.ok) {
-      throw new Error(
-        data?.error || `Request failed: ${response.status}`,
-      );
-    }
-
-    return data as T;
-  };
+  const [authSaving, setAuthSaving] =
+    useState(false);
 
   /*
-   * Load every data source independently.
-   *
-   * Previously Promise.all() meant that if even one endpoint
-   * failed, all data stayed empty. Promise.allSettled() lets
-   * Peacely display everything that successfully loaded.
+   * =====================================================
+   * APP DATA
+   * =====================================================
    */
+
+  const [activeTab, setActiveTab] =
+    useState<Tab>('dashboard');
+
+  const [properties, setProperties] =
+    useState<Property[]>([]);
+
+  const [rooms, setRooms] =
+    useState<Room[]>([]);
+
+  const [beds, setBeds] =
+    useState<Bed[]>([]);
+
+  const [tenants, setTenants] =
+    useState<Tenant[]>([]);
+
+  const [payments, setPayments] =
+    useState<Payment[]>([]);
+
+  const [invoices, setInvoices] =
+    useState<Invoice[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [saving, setSaving] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [activeModal, setActiveModal] =
+    useState<Modal>('none');
+
+  const [searchQuery, setSearchQuery] =
+    useState('');
+
+  /*
+   * =====================================================
+   * FORM DATA
+   * =====================================================
+   */
+
+  const [propName, setPropName] =
+    useState('');
+
+  const [propAddress, setPropAddress] =
+    useState('');
+
+  const [roomPropertyId, setRoomPropertyId] =
+    useState('');
+
+  const [roomNumber, setRoomNumber] =
+    useState('');
+
+  const [sharingType, setSharingType] =
+    useState('Single');
+
+  const [roomRent, setRoomRent] =
+    useState('');
+
+  const [bedRoomId, setBedRoomId] =
+    useState('');
+
+  const [bedNumber, setBedNumber] =
+    useState('');
+
+  const [tenantName, setTenantName] =
+    useState('');
+
+  const [tenantPhone, setTenantPhone] =
+    useState('');
+
+  const [tenantEmail, setTenantEmail] =
+    useState('');
+
+  const [tenantPropertyId, setTenantPropertyId] =
+    useState('');
+
+  const [tenantRoomId, setTenantRoomId] =
+    useState('');
+
+  const [tenantBedId, setTenantBedId] =
+    useState('');
+
+  const [tenantRent, setTenantRent] =
+    useState('');
+
+  const [tenantDueDate, setTenantDueDate] =
+    useState('5');
+
+  const [tenantDeposit, setTenantDeposit] =
+    useState('');
+
+  const [tenantMoveInDate, setTenantMoveInDate] =
+    useState(today());
+
+  const [paymentTenantId, setPaymentTenantId] =
+    useState('');
+
+  const [paymentAmount, setPaymentAmount] =
+    useState('');
+
+  const [paymentMethod, setPaymentMethod] =
+    useState('UPI');
+
+  const [paymentMonth, setPaymentMonth] =
+    useState(currentMonthName());
+
+  const [paymentDate, setPaymentDate] =
+    useState(today());
+
+  const [invoiceTenantId, setInvoiceTenantId] =
+    useState('');
+
+  const [invoiceAmount, setInvoiceAmount] =
+    useState('');
+
+  const [invoiceMonth, setInvoiceMonth] =
+    useState(currentMonthName());
+
+  const [invoiceDueDate, setInvoiceDueDate] =
+    useState(today());
+
+  /*
+   * =====================================================
+   * LOAD DATA
+   * =====================================================
+   */
+
   const loadAllData = async () => {
     setLoading(true);
     setError('');
 
-    const results = await Promise.allSettled([
-      apiRequest<Property[]>('/properties'),
-      apiRequest<Room[]>('/rooms'),
-      apiRequest<Bed[]>('/beds'),
-      apiRequest<Tenant[]>('/tenants'),
-      apiRequest<Payment[]>('/payments'),
-      apiRequest<Invoice[]>('/invoices'),
-    ]);
+    const results =
+      await Promise.allSettled([
+        apiRequest<Property[]>(
+          '/properties',
+        ),
+        apiRequest<Room[]>(
+          '/rooms',
+        ),
+        apiRequest<Bed[]>(
+          '/beds',
+        ),
+        apiRequest<Tenant[]>(
+          '/tenants',
+        ),
+        apiRequest<Payment[]>(
+          '/payments',
+        ),
+        apiRequest<Invoice[]>(
+          '/invoices',
+        ),
+      ]);
 
     const [
       propertyResult,
@@ -223,89 +345,387 @@ function App() {
 
     const errors: string[] = [];
 
-    if (propertyResult.status === 'fulfilled') {
-      setProperties(propertyResult.value || []);
+    if (
+      propertyResult.status ===
+      'fulfilled'
+    ) {
+      setProperties(
+        propertyResult.value || [],
+      );
     } else {
       setProperties([]);
-
       errors.push(
-        propertyResult.reason instanceof Error
-          ? `Properties: ${propertyResult.reason.message}`
-          : 'Properties failed to load.',
+        `Properties: ${
+          propertyResult.reason instanceof
+          Error
+            ? propertyResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (roomResult.status === 'fulfilled') {
-      setRooms(roomResult.value || []);
+    if (
+      roomResult.status ===
+      'fulfilled'
+    ) {
+      setRooms(
+        roomResult.value || [],
+      );
     } else {
       setRooms([]);
-
       errors.push(
-        roomResult.reason instanceof Error
-          ? `Rooms: ${roomResult.reason.message}`
-          : 'Rooms failed to load.',
+        `Rooms: ${
+          roomResult.reason instanceof
+          Error
+            ? roomResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (bedResult.status === 'fulfilled') {
-      setBeds(bedResult.value || []);
+    if (
+      bedResult.status ===
+      'fulfilled'
+    ) {
+      setBeds(
+        bedResult.value || [],
+      );
     } else {
       setBeds([]);
-
       errors.push(
-        bedResult.reason instanceof Error
-          ? `Beds: ${bedResult.reason.message}`
-          : 'Beds failed to load.',
+        `Beds: ${
+          bedResult.reason instanceof
+          Error
+            ? bedResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (tenantResult.status === 'fulfilled') {
-      setTenants(tenantResult.value || []);
+    if (
+      tenantResult.status ===
+      'fulfilled'
+    ) {
+      setTenants(
+        tenantResult.value || [],
+      );
     } else {
       setTenants([]);
-
       errors.push(
-        tenantResult.reason instanceof Error
-          ? `Tenants: ${tenantResult.reason.message}`
-          : 'Tenants failed to load.',
+        `Tenants: ${
+          tenantResult.reason instanceof
+          Error
+            ? tenantResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (paymentResult.status === 'fulfilled') {
-      setPayments(paymentResult.value || []);
+    if (
+      paymentResult.status ===
+      'fulfilled'
+    ) {
+      setPayments(
+        paymentResult.value || [],
+      );
     } else {
       setPayments([]);
-
       errors.push(
-        paymentResult.reason instanceof Error
-          ? `Payments: ${paymentResult.reason.message}`
-          : 'Payments failed to load.',
+        `Payments: ${
+          paymentResult.reason instanceof
+          Error
+            ? paymentResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (invoiceResult.status === 'fulfilled') {
-      setInvoices(invoiceResult.value || []);
+    if (
+      invoiceResult.status ===
+      'fulfilled'
+    ) {
+      setInvoices(
+        invoiceResult.value || [],
+      );
     } else {
       setInvoices([]);
-
       errors.push(
-        invoiceResult.reason instanceof Error
-          ? `Invoices: ${invoiceResult.reason.message}`
-          : 'Invoices failed to load.',
+        `Invoices: ${
+          invoiceResult.reason instanceof
+          Error
+            ? invoiceResult.reason.message
+            : 'Failed'
+        }`,
       );
     }
 
-    if (errors.length > 0) {
-      console.error('Peacely loading errors:', errors);
+    if (errors.length) {
       setError(errors.join(' • '));
     }
 
     setLoading(false);
   };
 
+  /*
+   * =====================================================
+   * CHECK SESSION
+   * =====================================================
+   */
+
   useEffect(() => {
-    loadAllData();
+    const checkSession =
+      async () => {
+        try {
+          const response =
+            await fetch(
+              `${API}/auth/me`,
+              {
+                credentials:
+                  'include',
+              },
+            );
+
+          const data =
+            await response
+              .json()
+              .catch(() => null);
+
+          if (
+            response.ok &&
+            data?.authenticated &&
+            data?.owner
+          ) {
+            setOwner(data.owner);
+            setAuthenticated(true);
+            await loadAllData();
+          } else {
+            setOwner(null);
+            setAuthenticated(false);
+            setLoading(false);
+          }
+        } catch (err) {
+          console.error(
+            'Session check failed:',
+            err,
+          );
+
+          setOwner(null);
+          setAuthenticated(false);
+          setLoading(false);
+        }
+      };
+
+    checkSession();
   }, []);
+
+  /*
+   * =====================================================
+   * LOGIN
+   * =====================================================
+   */
+
+  const handleLogin = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (
+      !authEmail.trim() ||
+      !authPassword
+    ) {
+      setAuthError(
+        'Email and password are required.',
+      );
+      return;
+    }
+
+    setAuthSaving(true);
+    setAuthError('');
+
+    try {
+      const response =
+        await fetch(
+          `${API}/auth/login`,
+          {
+            method: 'POST',
+            credentials:
+              'include',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              email:
+                authEmail.trim(),
+              password:
+                authPassword,
+            }),
+          },
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            'Invalid email or password.',
+        );
+      }
+
+      setOwner(data.owner);
+      setAuthenticated(true);
+      setAuthPassword('');
+      setAuthError('');
+
+      await loadAllData();
+    } catch (err) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to log in.',
+      );
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  /*
+   * =====================================================
+   * SIGNUP
+   * =====================================================
+   */
+
+  const handleSignup = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!authName.trim()) {
+      setAuthError(
+        'Name is required.',
+      );
+      return;
+    }
+
+    if (!authEmail.trim()) {
+      setAuthError(
+        'Email is required.',
+      );
+      return;
+    }
+
+    if (
+      authPassword.length < 6
+    ) {
+      setAuthError(
+        'Password must be at least 6 characters.',
+      );
+      return;
+    }
+
+    setAuthSaving(true);
+    setAuthError('');
+
+    try {
+      const response =
+        await fetch(
+          `${API}/auth/signup`,
+          {
+            method: 'POST',
+            credentials:
+              'include',
+            headers: {
+              'Content-Type':
+                'application/json',
+            },
+            body: JSON.stringify({
+              name:
+                authName.trim(),
+              email:
+                authEmail.trim(),
+              phone:
+                authPhone.trim(),
+              password:
+                authPassword,
+            }),
+          },
+        );
+
+      const data =
+        await response
+          .json()
+          .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          data?.error ||
+            'Unable to create account.',
+        );
+      }
+
+      setOwner(data.owner);
+      setAuthenticated(true);
+      setAuthPassword('');
+      setAuthError('');
+
+      await loadAllData();
+    } catch (err) {
+      setAuthError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to create account.',
+      );
+    } finally {
+      setAuthSaving(false);
+    }
+  };
+
+  /*
+   * =====================================================
+   * LOGOUT
+   * =====================================================
+   */
+
+  const handleLogout =
+    async () => {
+      try {
+        await fetch(
+          `${API}/auth/logout`,
+          {
+            method: 'POST',
+            credentials:
+              'include',
+          },
+        );
+      } catch (err) {
+        console.error(
+          'Logout failed:',
+          err,
+        );
+      }
+
+      setOwner(null);
+      setAuthenticated(false);
+
+      setProperties([]);
+      setRooms([]);
+      setBeds([]);
+      setTenants([]);
+      setPayments([]);
+      setInvoices([]);
+
+      setActiveTab('dashboard');
+      setError('');
+    };
+
+  /*
+   * =====================================================
+   * FORM RESET
+   * =====================================================
+   */
 
   const resetForms = () => {
     setPropName('');
@@ -328,18 +748,26 @@ function App() {
     setTenantRent('');
     setTenantDueDate('5');
     setTenantDeposit('');
-    setTenantMoveInDate(today());
+    setTenantMoveInDate(
+      today(),
+    );
 
     setPaymentTenantId('');
     setPaymentAmount('');
     setPaymentMethod('UPI');
-    setPaymentMonth(currentMonthName());
+    setPaymentMonth(
+      currentMonthName(),
+    );
     setPaymentDate(today());
 
     setInvoiceTenantId('');
     setInvoiceAmount('');
-    setInvoiceMonth(currentMonthName());
-    setInvoiceDueDate(today());
+    setInvoiceMonth(
+      currentMonthName(),
+    );
+    setInvoiceDueDate(
+      today(),
+    );
   };
 
   const closeModal = () => {
@@ -349,565 +777,429 @@ function App() {
     }
   };
 
-  const handleCreateProperty = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (!propName.trim()) {
-      setError('Property name is required.');
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/properties', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: propName.trim(),
-          address: propAddress.trim(),
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to add property.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateRoom = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (!roomPropertyId || !roomNumber.trim()) {
-      setError(
-        'Select a property and enter a room number.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/rooms', {
-        method: 'POST',
-        body: JSON.stringify({
-          property_id: Number(roomPropertyId),
-          room_number: roomNumber.trim(),
-          sharing_type: sharingType,
-          rent_amount: Number(roomRent) || 0,
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to add room.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateBed = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (!bedRoomId || !bedNumber.trim()) {
-      setError(
-        'Select a room and enter a bed number.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/beds', {
-        method: 'POST',
-        body: JSON.stringify({
-          room_id: Number(bedRoomId),
-          bed_number: bedNumber.trim(),
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to add bed.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateTenant = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (
-      !tenantName.trim() ||
-      !tenantPhone.trim() ||
-      !tenantPropertyId
-    ) {
-      setError(
-        'Name, phone number and property are required.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/tenants', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: tenantName.trim(),
-          phone: tenantPhone.trim(),
-          email: tenantEmail.trim(),
-          property_id: Number(tenantPropertyId),
-          room_id: tenantRoomId
-            ? Number(tenantRoomId)
-            : null,
-          bed_id: tenantBedId
-            ? Number(tenantBedId)
-            : null,
-          monthly_rent: Number(tenantRent) || 0,
-          due_date: Number(tenantDueDate) || 5,
-          deposit_amount: Number(tenantDeposit) || 0,
-          move_in_date: tenantMoveInDate || null,
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to add tenant.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleRecordPayment = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (
-      !paymentTenantId ||
-      !paymentAmount ||
-      Number(paymentAmount) <= 0
-    ) {
-      setError(
-        'Select a tenant and enter a valid amount.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/payments', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenant_id: Number(paymentTenantId),
-          amount: Number(paymentAmount),
-          payment_date: paymentDate,
-          payment_method: paymentMethod,
-          payment_month: paymentMonth,
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to record payment.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleCreateInvoice = async (
-    event: React.FormEvent,
-  ) => {
-    event.preventDefault();
-
-    if (
-      !invoiceTenantId ||
-      !invoiceAmount ||
-      Number(invoiceAmount) <= 0
-    ) {
-      setError(
-        'Select a tenant and enter a valid amount.',
-      );
-      return;
-    }
-
-    setSaving(true);
-    setError('');
-
-    try {
-      await apiRequest('/invoices', {
-        method: 'POST',
-        body: JSON.stringify({
-          tenant_id: Number(invoiceTenantId),
-          amount: Number(invoiceAmount),
-          month: invoiceMonth,
-          due_date: invoiceDueDate,
-          status: 'Pending',
-        }),
-      });
-
-      resetForms();
-      setActiveModal('none');
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Failed to create invoice.',
-      );
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const getTenantPaymentStatus = (
-    tenant: Tenant,
-  ): 'Paid' | 'Pending' | 'Overdue' => {
-    const monthPayments = payments
-      .filter(
-        (payment) =>
-          payment.tenant_id === tenant.id &&
-          String(payment.payment_month || '')
-            .trim()
-            .toLowerCase() ===
-            currentMonthName().trim().toLowerCase(),
-      )
-      .reduce(
-        (sum, payment) =>
-          sum + Number(payment.amount || 0),
-        0,
-      );
-
-    const monthlyRent = Number(
-      tenant.monthly_rent || 0,
-    );
-
-    if (
-      monthlyRent > 0 &&
-      monthPayments >= monthlyRent
-    ) {
-      return 'Paid';
-    }
-
-    const currentDay = new Date().getDate();
-
-    if (
-      currentDay >
-      Number(tenant.due_date || 5)
-    ) {
-      return 'Overdue';
-    }
-
-    return 'Pending';
-  };
-
-  const sendWhatsAppReminder = (
-    tenant: Tenant,
-  ) => {
-    let cleanPhone = tenant.phone.replace(
-      /[^0-9]/g,
-      '',
-    );
-
-    if (
-      cleanPhone.length === 10
-    ) {
-      cleanPhone = `91${cleanPhone}`;
-    }
-
-    const message = encodeURIComponent(
-      `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent payment of ${money(
-        tenant.monthly_rent,
-      )} for Room ${tenant.room_number || 'N/A'} at ${
-        tenant.property_name || 'your property'
-      }.\n\nYour rent is due on the ${tenant.due_date}th.\n\nThank you.`,
-    );
-
-    window.open(
-      `https://wa.me/${cleanPhone}?text=${message}`,
-      '_blank',
-    );
-  };
-
-  const printReceipt = (
-    payment: Payment,
-  ) => {
-    const tenant = tenants.find(
-      (item) => item.id === payment.tenant_id,
-    );
-
-    const win = window.open('', '_blank');
-
-    if (!win) {
-      return;
-    }
-
-    win.document.write(`
-      <html>
-        <head>
-          <title>Peacely Payment Receipt</title>
-
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              padding: 40px;
-              background: #f5f5f5;
-              color: #111;
-            }
-
-            .card {
-              max-width: 440px;
-              margin: auto;
-              background: white;
-              padding: 32px;
-              border-radius: 18px;
-              border: 1px solid #ddd;
-            }
-
-            .brand {
-              font-size: 28px;
-              font-weight: 800;
-              color: #10b981;
-            }
-
-            .subtitle {
-              color: #777;
-              font-size: 12px;
-              margin-bottom: 24px;
-            }
-
-            .row {
-              display: flex;
-              justify-content: space-between;
-              gap: 20px;
-              padding: 10px 0;
-              border-bottom: 1px solid #eee;
-            }
-
-            .label {
-              color: #777;
-            }
-
-            .value {
-              font-weight: 600;
-              text-align: right;
-            }
-
-            .amount {
-              margin-top: 24px;
-              padding: 20px;
-              background: #ecfdf5;
-              border-radius: 14px;
-              text-align: center;
-            }
-
-            .amount-label {
-              color: #047857;
-              font-size: 12px;
-            }
-
-            .amount-value {
-              color: #065f46;
-              font-size: 30px;
-              font-weight: 800;
-              margin-top: 6px;
-            }
-
-            .footer {
-              text-align: center;
-              margin-top: 25px;
-              color: #888;
-              font-size: 11px;
-            }
-          </style>
-        </head>
-
-        <body>
-          <div class="card">
-            <div class="brand">Peacely</div>
-
-            <div class="subtitle">
-              OFFICIAL RENT PAYMENT RECEIPT
-            </div>
-
-            <div class="row">
-              <span class="label">Receipt ID</span>
-
-              <span class="value">
-                #REC-${payment.id}
-              </span>
-            </div>
-
-            <div class="row">
-              <span class="label">Tenant</span>
-
-              <span class="value">
-                ${
-                  tenant?.name ||
-                  payment.tenant_name ||
-                  'Tenant'
-                }
-              </span>
-            </div>
-
-            <div class="row">
-              <span class="label">Date</span>
-
-              <span class="value">
-                ${payment.payment_date}
-              </span>
-            </div>
-
-            <div class="row">
-              <span class="label">Month</span>
-
-              <span class="value">
-                ${payment.payment_month}
-              </span>
-            </div>
-
-            <div class="row">
-              <span class="label">Method</span>
-
-              <span class="value">
-                ${payment.payment_method}
-              </span>
-            </div>
-
-            <div class="amount">
-              <div class="amount-label">
-                AMOUNT RECEIVED
-              </div>
-
-              <div class="amount-value">
-                ${money(payment.amount)}
-              </div>
-            </div>
-
-            <div class="footer">
-              Thank you for your payment.<br />
-              Generated by Peacely.
-            </div>
-          </div>
-
-          <script>
-            window.onload = function () {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `);
-
-    win.document.close();
-  };
+  /*
+   * =====================================================
+   * PROPERTY
+   * =====================================================
+   */
+
+  const handleCreateProperty =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (!propName.trim()) {
+        setError(
+          'Property name is required.',
+        );
+        return;
+      }
+
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/properties',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              name:
+                propName.trim(),
+              address:
+                propAddress.trim(),
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to add property.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /*
-   * Active tenants are now detected case-insensitively.
-   *
-   * This fixes the dropdown problem when PostgreSQL returns
-   * "active", "ACTIVE", "Active", etc.
+   * =====================================================
+   * ROOM
+   * =====================================================
    */
-  const activeTenants = useMemo(
-    () =>
-      tenants.filter(
-        (tenant) =>
-          String(tenant.status || '')
-            .trim()
-            .toLowerCase() === 'active',
-      ),
-    [tenants],
-  );
 
-  const totalTenants =
-    activeTenants.length;
+  const handleCreateRoom =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (
+        !roomPropertyId ||
+        !roomNumber.trim()
+      ) {
+        setError(
+          'Select a property and enter a room number.',
+        );
+        return;
+      }
+
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/rooms',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              property_id:
+                Number(
+                  roomPropertyId,
+                ),
+              room_number:
+                roomNumber.trim(),
+              sharing_type:
+                sharingType,
+              rent_amount:
+                Number(
+                  roomRent,
+                ) || 0,
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to add room.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
 
   /*
-   * Dashboard revenue is calculated directly from active
-   * tenants instead of relying on the property SQL joins.
-   * This prevents duplicated revenue caused by joins between
-   * properties, rooms, beds and tenants.
+   * =====================================================
+   * BED
+   * =====================================================
    */
-  const expectedRent = useMemo(
-    () =>
-      activeTenants.reduce(
-        (sum, tenant) =>
-          sum +
-          Number(
-            tenant.monthly_rent || 0,
-          ),
-        0,
-      ),
-    [activeTenants],
-  );
 
-  const totalRevenue = expectedRent;
+  const handleCreateBed =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
 
-  const totalBeds = useMemo(
-    () => beds.length,
-    [beds],
-  );
+      if (
+        !bedRoomId ||
+        !bedNumber.trim()
+      ) {
+        setError(
+          'Select a room and enter a bed number.',
+        );
+        return;
+      }
 
-  const occupiedBeds = useMemo(
-    () =>
-      beds.filter(
-        (bed) =>
-          Boolean(bed.is_occupied),
-      ).length,
-    [beds],
-  );
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/beds',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              room_id:
+                Number(bedRoomId),
+              bed_number:
+                bedNumber.trim(),
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to add bed.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+   * =====================================================
+   * TENANT
+   * =====================================================
+   */
+
+  const handleCreateTenant =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (
+        !tenantName.trim() ||
+        !tenantPhone.trim() ||
+        !tenantPropertyId
+      ) {
+        setError(
+          'Name, phone and property are required.',
+        );
+        return;
+      }
+
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/tenants',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              name:
+                tenantName.trim(),
+              phone:
+                tenantPhone.trim(),
+              email:
+                tenantEmail.trim(),
+              property_id:
+                Number(
+                  tenantPropertyId,
+                ),
+              room_id:
+                tenantRoomId
+                  ? Number(
+                      tenantRoomId,
+                    )
+                  : null,
+              bed_id:
+                tenantBedId
+                  ? Number(
+                      tenantBedId,
+                    )
+                  : null,
+              monthly_rent:
+                Number(
+                  tenantRent,
+                ) || 0,
+              due_date:
+                Number(
+                  tenantDueDate,
+                ) || 5,
+              deposit_amount:
+                Number(
+                  tenantDeposit,
+                ) || 0,
+              move_in_date:
+                tenantMoveInDate ||
+                null,
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to add tenant.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+   * =====================================================
+   * PAYMENT
+   * =====================================================
+   */
+
+  const handleRecordPayment =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (
+        !paymentTenantId ||
+        !paymentAmount ||
+        Number(paymentAmount) <=
+          0
+      ) {
+        setError(
+          'Select a tenant and enter a valid amount.',
+        );
+        return;
+      }
+
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/payments',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              tenant_id:
+                Number(
+                  paymentTenantId,
+                ),
+              amount:
+                Number(
+                  paymentAmount,
+                ),
+              payment_date:
+                paymentDate,
+              payment_method:
+                paymentMethod,
+              payment_month:
+                paymentMonth,
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to record payment.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+   * =====================================================
+   * INVOICE
+   * =====================================================
+   */
+
+  const handleCreateInvoice =
+    async (
+      event: React.FormEvent,
+    ) => {
+      event.preventDefault();
+
+      if (
+        !invoiceTenantId ||
+        !invoiceAmount ||
+        Number(invoiceAmount) <=
+          0
+      ) {
+        setError(
+          'Select a tenant and enter a valid amount.',
+        );
+        return;
+      }
+
+      setSaving(true);
+      setError('');
+
+      try {
+        await apiRequest(
+          '/invoices',
+          {
+            method: 'POST',
+            body: JSON.stringify({
+              tenant_id:
+                Number(
+                  invoiceTenantId,
+                ),
+              amount:
+                Number(
+                  invoiceAmount,
+                ),
+              month:
+                invoiceMonth,
+              due_date:
+                invoiceDueDate,
+              status: 'Pending',
+            }),
+          },
+        );
+
+        resetForms();
+        closeModal();
+        await loadAllData();
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : 'Failed to create invoice.',
+        );
+      } finally {
+        setSaving(false);
+      }
+    };
+
+  /*
+   * =====================================================
+   * CALCULATIONS
+   * =====================================================
+   */
+
+  const activeTenants =
+    useMemo(
+      () =>
+        tenants.filter(
+          (tenant) =>
+            String(
+              tenant.status || '',
+            )
+              .toLowerCase() ===
+            'active',
+        ),
+      [tenants],
+    );
+
+  const expectedRent =
+    activeTenants.reduce(
+      (sum, tenant) =>
+        sum +
+        Number(
+          tenant.monthly_rent || 0,
+        ),
+      0,
+    );
+
+  const occupiedBeds =
+    beds.filter(
+      (bed) =>
+        Boolean(
+          bed.is_occupied,
+        ),
+    ).length;
 
   const totalOccupancy =
-    totalBeds > 0
+    beds.length > 0
       ? Math.round(
-          (occupiedBeds / totalBeds) *
+          (occupiedBeds /
+            beds.length) *
             100,
         )
       : 0;
@@ -915,36 +1207,35 @@ function App() {
   const currentMonth =
     currentMonthName();
 
-  const collectedThisMonth = useMemo(
-    () =>
-      payments
-        .filter(
-          (payment) =>
-            String(
-              payment.payment_month || '',
-            )
-              .trim()
-              .toLowerCase() ===
-            currentMonth
-              .trim()
-              .toLowerCase(),
-        )
-        .reduce(
-          (sum, payment) =>
-            sum +
-            Number(
-              payment.amount || 0,
-            ),
-          0,
-        ),
-    [payments, currentMonth],
-  );
+  const collectedThisMonth =
+    payments
+      .filter(
+        (payment) =>
+          String(
+            payment.payment_month ||
+              '',
+          )
+            .trim()
+            .toLowerCase() ===
+          currentMonth
+            .trim()
+            .toLowerCase(),
+      )
+      .reduce(
+        (sum, payment) =>
+          sum +
+          Number(
+            payment.amount || 0,
+          ),
+        0,
+      );
 
-  const pendingDues = Math.max(
-    expectedRent -
-      collectedThisMonth,
-    0,
-  );
+  const pendingDues =
+    Math.max(
+      expectedRent -
+        collectedThisMonth,
+      0,
+    );
 
   const collectionRate =
     expectedRent > 0
@@ -958,58 +1249,28 @@ function App() {
         )
       : 0;
 
-  const filteredTenants =
-    tenants.filter((tenant) => {
-      const query =
-        searchQuery
-          .trim()
-          .toLowerCase();
-
-      const matchesSearch =
-        tenant.name
-          .toLowerCase()
-          .includes(query) ||
-        String(
-          tenant.room_number || '',
-        )
-          .toLowerCase()
-          .includes(query) ||
-        String(
-          tenant.property_name || '',
-        )
-          .toLowerCase()
-          .includes(query);
-
-      const paymentStatus =
-        getTenantPaymentStatus(
-          tenant,
-        );
-
-      const matchesStatus =
-        statusFilter === 'All' ||
-        paymentStatus ===
-          statusFilter;
-
-      return (
-        matchesSearch &&
-        matchesStatus
-      );
-    });
-
   const tenantRooms =
     rooms.filter(
       (room) =>
         !tenantPropertyId ||
-        Number(room.property_id) ===
-          Number(tenantPropertyId),
+        Number(
+          room.property_id,
+        ) ===
+          Number(
+            tenantPropertyId,
+          ),
     );
 
   const tenantBeds =
     beds.filter(
       (bed) =>
         !tenantRoomId ||
-        Number(bed.room_id) ===
-          Number(tenantRoomId),
+        Number(
+          bed.room_id,
+        ) ===
+          Number(
+            tenantRoomId,
+          ),
     );
 
   const availableBeds =
@@ -1018,53 +1279,416 @@ function App() {
         !bed.is_occupied,
     );
 
-  const selectedPaymentTenant =
-    tenants.find(
-      (tenant) =>
-        tenant.id ===
-        Number(paymentTenantId),
+  const filteredTenants =
+    tenants.filter(
+      (tenant) => {
+        const query =
+          searchQuery
+            .trim()
+            .toLowerCase();
+
+        return (
+          tenant.name
+            .toLowerCase()
+            .includes(query) ||
+          String(
+            tenant.phone || '',
+          )
+            .toLowerCase()
+            .includes(query) ||
+          String(
+            tenant.room_number ||
+              '',
+          )
+            .toLowerCase()
+            .includes(query) ||
+          String(
+            tenant.property_name ||
+              '',
+          )
+            .toLowerCase()
+            .includes(query)
+        );
+      },
     );
 
-  const selectedInvoiceTenant =
-    tenants.find(
-      (tenant) =>
-        tenant.id ===
-        Number(invoiceTenantId),
+  /*
+   * =====================================================
+   * WHATSAPP
+   * =====================================================
+   */
+
+  const sendWhatsAppReminder =
+    (tenant: Tenant) => {
+      let phone =
+        tenant.phone.replace(
+          /[^0-9]/g,
+          '',
+        );
+
+      if (phone.length === 10) {
+        phone = `91${phone}`;
+      }
+
+      const message =
+        encodeURIComponent(
+          `Hello ${tenant.name},\n\nThis is a gentle reminder regarding your monthly rent of ${money(
+            tenant.monthly_rent,
+          )} for Room ${
+            tenant.room_number ||
+            'N/A'
+          }.\n\nYour rent is due on the ${tenant.due_date}.\n\nThank you.`,
+        );
+
+      window.open(
+        `https://wa.me/${phone}?text=${message}`,
+        '_blank',
+      );
+    };
+
+  /*
+   * =====================================================
+   * AUTH SCREEN
+   * =====================================================
+   */
+
+  if (authenticated === null) {
+    return (
+      <div className="mobile-shell">
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '24px',
+          }}
+        >
+          <div
+            className="glass-card"
+            style={{
+              width: '100%',
+              maxWidth: '420px',
+              textAlign: 'center',
+              padding: '35px 25px',
+            }}
+          >
+            <div
+              className="brand-logo"
+              style={{
+                margin:
+                  '0 auto 16px',
+              }}
+            >
+              P
+            </div>
+
+            <h1
+              className="brand-title"
+              style={{
+                fontSize: '30px',
+              }}
+            >
+              Peacely
+            </h1>
+
+            <p className="brand-subtitle">
+              Checking your session...
+            </p>
+
+            <div
+              style={{
+                marginTop: '30px',
+                opacity: 0.7,
+              }}
+            >
+              Connecting securely
+              to your account
+            </div>
+          </div>
+        </div>
+      </div>
     );
+  }
 
-  useEffect(() => {
-    if (
-      selectedPaymentTenant &&
-      !paymentAmount
-    ) {
-      setPaymentAmount(
-        String(
-          selectedPaymentTenant.monthly_rent ||
-            '',
-        ),
-      );
-    }
-  }, [
-    selectedPaymentTenant,
-    paymentAmount,
-  ]);
+  if (authenticated === false) {
+    return (
+      <div className="mobile-shell">
+        <div
+          style={{
+            minHeight: '100vh',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+          }}
+        >
+          <div
+            className="glass-card"
+            style={{
+              width: '100%',
+              maxWidth: '450px',
+              padding: '30px 24px',
+            }}
+          >
+            <div
+              style={{
+                textAlign: 'center',
+                marginBottom: '25px',
+              }}
+            >
+              <div
+                className="brand-logo"
+                style={{
+                  margin:
+                    '0 auto 15px',
+                }}
+              >
+                P
+              </div>
 
-  useEffect(() => {
-    if (
-      selectedInvoiceTenant &&
-      !invoiceAmount
-    ) {
-      setInvoiceAmount(
-        String(
-          selectedInvoiceTenant.monthly_rent ||
-            '',
-        ),
-      );
-    }
-  }, [
-    selectedInvoiceTenant,
-    invoiceAmount,
-  ]);
+              <h1
+                style={{
+                  margin: 0,
+                  fontSize: '30px',
+                }}
+              >
+                Peacely
+              </h1>
+
+              <p
+                style={{
+                  marginTop: '8px',
+                  opacity: 0.65,
+                }}
+              >
+                Property & Tenant
+                Management
+              </p>
+            </div>
+
+            {authError && (
+              <div
+                style={{
+                  padding:
+                    '12px 14px',
+                  borderRadius:
+                    '12px',
+                  marginBottom:
+                    '16px',
+                  background:
+                    'rgba(244,63,94,0.12)',
+                  border:
+                    '1px solid rgba(244,63,94,0.3)',
+                  color:
+                    '#fda4af',
+                  fontSize:
+                    '13px',
+                }}
+              >
+                {authError}
+              </div>
+            )}
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '8px',
+                marginBottom:
+                  '20px',
+              }}
+            >
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode(
+                    'login',
+                  );
+                  setAuthError(
+                    '',
+                  );
+                }}
+                style={{
+                  flex: 1,
+                  padding:
+                    '11px',
+                  borderRadius:
+                    '10px',
+                  border:
+                    '1px solid rgba(255,255,255,0.1)',
+                  background:
+                    authMode ===
+                    'login'
+                      ? 'rgba(16,185,129,0.18)'
+                      : 'rgba(255,255,255,0.04)',
+                  color:
+                    'inherit',
+                  cursor:
+                    'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                Log In
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setAuthMode(
+                    'signup',
+                  );
+                  setAuthError(
+                    '',
+                  );
+                }}
+                style={{
+                  flex: 1,
+                  padding:
+                    '11px',
+                  borderRadius:
+                    '10px',
+                  border:
+                    '1px solid rgba(255,255,255,0.1)',
+                  background:
+                    authMode ===
+                    'signup'
+                      ? 'rgba(16,185,129,0.18)'
+                      : 'rgba(255,255,255,0.04)',
+                  color:
+                    'inherit',
+                  cursor:
+                    'pointer',
+                  fontWeight: 700,
+                }}
+              >
+                Sign Up
+              </button>
+            </div>
+
+            <form
+              onSubmit={
+                authMode ===
+                'login'
+                  ? handleLogin
+                  : handleSignup
+              }
+            >
+              {authMode ===
+                'signup' && (
+                <>
+                  <input
+                    className="modal-input"
+                    placeholder="Full name"
+                    value={authName}
+                    onChange={(
+                      e,
+                    ) =>
+                      setAuthName(
+                        e.target
+                          .value,
+                      )
+                    }
+                    autoComplete="name"
+                  />
+
+                  <input
+                    className="modal-input"
+                    placeholder="Phone number (optional)"
+                    value={authPhone}
+                    onChange={(
+                      e,
+                    ) =>
+                      setAuthPhone(
+                        e.target
+                          .value,
+                      )
+                    }
+                    autoComplete="tel"
+                  />
+                </>
+              )}
+
+              <input
+                className="modal-input"
+                type="email"
+                placeholder="Email address"
+                value={authEmail}
+                onChange={(e) =>
+                  setAuthEmail(
+                    e.target.value,
+                  )
+                }
+                autoComplete="email"
+              />
+
+              <input
+                className="modal-input"
+                type="password"
+                placeholder="Password"
+                value={authPassword}
+                onChange={(e) =>
+                  setAuthPassword(
+                    e.target.value,
+                  )
+                }
+                autoComplete={
+                  authMode ===
+                  'login'
+                    ? 'current-password'
+                    : 'new-password'
+                }
+              />
+
+              <button
+                className="btn-primary"
+                type="submit"
+                disabled={
+                  authSaving
+                }
+                style={{
+                  width:
+                    '100%',
+                  marginTop:
+                    '8px',
+                }}
+              >
+                {authSaving
+                  ? 'Please wait...'
+                  : authMode ===
+                      'login'
+                    ? 'Log In'
+                    : 'Create Account'}
+              </button>
+            </form>
+
+            <p
+              style={{
+                textAlign:
+                  'center',
+                marginTop:
+                  '20px',
+                fontSize:
+                  '13px',
+                opacity:
+                  0.65,
+              }}
+            >
+              {authMode ===
+              'login'
+                ? 'New to Peacely? Click Sign Up above.'
+                : 'Already have an account? Click Log In above.'}
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /*
+   * =====================================================
+   * LOADING
+   * =====================================================
+   */
 
   if (loading) {
     return (
@@ -1081,21 +1705,27 @@ function App() {
               </h1>
 
               <p className="brand-subtitle">
-                Asset Intelligence Platform
+                Asset Intelligence
               </p>
             </div>
           </div>
         </header>
 
-        <main className="content-area">
+        <main
+          className="content-area"
+          style={{
+            padding:
+              '30px 20px',
+          }}
+        >
           <div className="hero-card">
             <div className="hero-header">
               <span className="tag-light">
-                Connecting to Peacely
+                Connected
               </span>
 
               <span className="live-indicator">
-                <span className="pulse-dot"></span>
+                <span className="pulse-dot" />
                 Live
               </span>
             </div>
@@ -1105,13 +1735,20 @@ function App() {
             </div>
 
             <div className="hero-meta">
-              Loading your PostgreSQL data
+              Loading your
+              property data
             </div>
           </div>
         </main>
       </div>
     );
   }
+
+  /*
+   * =====================================================
+   * MAIN APP
+   * =====================================================
+   */
 
   return (
     <div className="mobile-shell">
@@ -1127,51 +1764,85 @@ function App() {
             </h1>
 
             <p className="brand-subtitle">
-              Asset Intelligence Platform
+              {owner?.name ||
+                'Property Management'}
             </p>
           </div>
         </div>
 
-        <button
-          className="avatar-btn"
-          onClick={() => {
-            setError('');
-
-            if (
-              activeTenants.length ===
-              0
-            ) {
-              setActiveTab(
-                'tenants',
-              );
-              return;
-            }
-
-            setActiveModal(
-              'recordPayment',
-            );
+        <div
+          style={{
+            display: 'flex',
+            gap: '7px',
+            alignItems: 'center',
           }}
         >
-          <span className="plus-icon">
-            +
-          </span>
+          <button
+            className="avatar-btn"
+            onClick={() => {
+              setError('');
 
-          Record
-        </button>
+              if (
+                activeTenants.length ===
+                0
+              ) {
+                setActiveTab(
+                  'tenants',
+                );
+              } else {
+                setActiveModal(
+                  'payment',
+                );
+              }
+            }}
+          >
+            + Record
+          </button>
+
+          <button
+            type="button"
+            onClick={
+              handleLogout
+            }
+            style={{
+              border:
+                '1px solid rgba(255,255,255,0.12)',
+              background:
+                'rgba(255,255,255,0.05)',
+              color:
+                'inherit',
+              borderRadius:
+                '10px',
+              padding:
+                '9px 10px',
+              cursor:
+                'pointer',
+              fontSize:
+                '12px',
+            }}
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       {error && (
         <div
           style={{
+            margin:
+              '12px 16px',
+            padding:
+              '12px 14px',
+            borderRadius:
+              '12px',
             background:
               'rgba(244,63,94,0.12)',
             border:
               '1px solid rgba(244,63,94,0.3)',
-            color: '#fda4af',
-            padding: '12px 14px',
-            borderRadius: '12px',
-            marginBottom: '12px',
-            fontSize: '13px',
+            color:
+              '#fda4af',
+            fontSize:
+              '13px',
           }}
         >
           {error}
@@ -1185,17 +1856,19 @@ function App() {
             <div className="hero-card">
               <div className="hero-header">
                 <span className="tag-light">
-                  Monthly Revenue Projection
+                  Monthly Revenue
                 </span>
 
                 <span className="live-indicator">
-                  <span className="pulse-dot"></span>
+                  <span className="pulse-dot" />
                   Live
                 </span>
               </div>
 
               <div className="hero-value">
-                {money(totalRevenue)}
+                {money(
+                  expectedRent,
+                )}
               </div>
 
               <div className="hero-meta">
@@ -1204,13 +1877,15 @@ function App() {
                   Occupancy
                 </span>
 
-                <span className="divider">
+                <span>
                   •
                 </span>
 
                 <span>
-                  {totalTenants} Active
-                  Tenants
+                  {
+                    activeTenants.length
+                  }{' '}
+                  Active Tenants
                 </span>
               </div>
 
@@ -1232,13 +1907,14 @@ function App() {
                 <div className="tile-icon">
                   📊
                 </div>
-
                 <div className="tile-value">
-                  {collectionRate}%
+                  {
+                    collectionRate
+                  }
+                  %
                 </div>
-
                 <div className="tile-label">
-                  Rent Collection
+                  Collection
                 </div>
               </div>
 
@@ -1246,13 +1922,11 @@ function App() {
                 <div className="tile-icon">
                   ⏳
                 </div>
-
                 <div className="tile-value">
                   {money(
                     pendingDues,
                   )}
                 </div>
-
                 <div className="tile-label">
                   Pending Dues
                 </div>
@@ -1262,11 +1936,11 @@ function App() {
                 <div className="tile-icon">
                   🏠
                 </div>
-
                 <div className="tile-value">
-                  {properties.length}
+                  {
+                    properties.length
+                  }
                 </div>
-
                 <div className="tile-label">
                   Properties
                 </div>
@@ -1276,13 +1950,13 @@ function App() {
                 <div className="tile-icon">
                   👥
                 </div>
-
                 <div className="tile-value">
-                  {totalTenants}
+                  {
+                    activeTenants.length
+                  }
                 </div>
-
                 <div className="tile-label">
-                  Active Tenants
+                  Tenants
                 </div>
               </div>
             </div>
@@ -1294,7 +1968,8 @@ function App() {
                 </h2>
 
                 <p>
-                  Manage your rental business
+                  Manage your
+                  rental business
                 </p>
               </div>
             </div>
@@ -1304,14 +1979,13 @@ function App() {
                 className="metric-tile"
                 onClick={() =>
                   setActiveModal(
-                    'addProperty',
+                    'property',
                   )
                 }
               >
                 <div className="tile-icon">
                   🏠
                 </div>
-
                 <div className="tile-label">
                   Add Property
                 </div>
@@ -1321,14 +1995,13 @@ function App() {
                 className="metric-tile"
                 onClick={() =>
                   setActiveModal(
-                    'addRoom',
+                    'room',
                   )
                 }
               >
                 <div className="tile-icon">
                   🚪
                 </div>
-
                 <div className="tile-label">
                   Add Room
                 </div>
@@ -1338,14 +2011,29 @@ function App() {
                 className="metric-tile"
                 onClick={() =>
                   setActiveModal(
-                    'addTenant',
+                    'bed',
+                  )
+                }
+              >
+                <div className="tile-icon">
+                  🛏️
+                </div>
+                <div className="tile-label">
+                  Add Bed
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'tenant',
                   )
                 }
               >
                 <div className="tile-icon">
                   👤
                 </div>
-
                 <div className="tile-label">
                   Add Tenant
                 </div>
@@ -1353,59 +2041,33 @@ function App() {
 
               <button
                 className="metric-tile"
-                onClick={() => {
-                  setError('');
-
-                  if (
-                    activeTenants.length ===
-                    0
-                  ) {
-                    setActiveTab(
-                      'tenants',
-                    );
-                    return;
-                  }
-
+                onClick={() =>
                   setActiveModal(
-                    'recordPayment',
-                  );
-                }}
+                    'payment',
+                  )
+                }
               >
                 <div className="tile-icon">
                   ₹
                 </div>
-
                 <div className="tile-label">
-                  Record Payment
+                  Payment
                 </div>
               </button>
 
               <button
                 className="metric-tile"
-                onClick={() => {
-                  setError('');
-
-                  if (
-                    activeTenants.length ===
-                    0
-                  ) {
-                    setActiveTab(
-                      'tenants',
-                    );
-                    return;
-                  }
-
+                onClick={() =>
                   setActiveModal(
-                    'addInvoice',
-                  );
-                }}
+                    'invoice',
+                  )
+                }
               >
                 <div className="tile-icon">
                   🧾
                 </div>
-
                 <div className="tile-label">
-                  Create Invoice
+                  Invoice
                 </div>
               </button>
             </div>
@@ -1415,22 +2077,11 @@ function App() {
                 <h2>
                   Properties
                 </h2>
-
                 <p>
-                  Your rental portfolio
+                  Your rental
+                  portfolio
                 </p>
               </div>
-
-              <button
-                className="text-button"
-                onClick={() =>
-                  setActiveTab(
-                    'properties',
-                  )
-                }
-              >
-                View All
-              </button>
             </div>
 
             {properties.length ===
@@ -1446,15 +2097,17 @@ function App() {
                   </h3>
 
                   <p>
-                    Add your first property
-                    to start using Peacely.
+                    Add your first
+                    property to
+                    start using
+                    Peacely.
                   </p>
 
                   <button
                     className="btn-primary"
                     onClick={() =>
                       setActiveModal(
-                        'addProperty',
+                        'property',
                       )
                     }
                   >
@@ -1463,92 +2116,88 @@ function App() {
                 </div>
               </div>
             ) : (
-              properties
-                .slice(0, 5)
-                .map(
-                  (property) => (
-                    <div
-                      className="glass-card"
-                      key={property.id}
-                    >
-                      <div className="glass-header">
-                        <div>
-                          <h3>
-                            {
-                              property.name
-                            }
-                          </h3>
+              properties.map(
+                (
+                  property,
+                ) => (
+                  <div
+                    className="glass-card"
+                    key={
+                      property.id
+                    }
+                  >
+                    <div className="glass-header">
+                      <div>
+                        <h3>
+                          {
+                            property.name
+                          }
+                        </h3>
 
-                          <p>
-                            {property.address ||
-                              'No address added'}
-                          </p>
-                        </div>
-
-                        <span className="badge">
-                          {Number(
-                            property.bed_count ||
-                              0,
-                          )}{' '}
-                          Beds
-                        </span>
+                        <p>
+                          {property.address ||
+                            'No address'}
+                        </p>
                       </div>
 
-                      <div className="metrics-row">
-                        <div>
-                          <span>
-                            Occupancy
-                          </span>
+                      <span className="badge">
+                        {
+                          property.bed_count ||
+                          0
+                        }{' '}
+                        Beds
+                      </span>
+                    </div>
 
-                          <strong>
-                            {Number(
-                              property.bed_count ||
-                                0,
-                            ) > 0
-                              ? Math.round(
-                                  (Number(
-                                    property.occupied_bed_count ||
-                                      0,
-                                  ) /
-                                    Number(
-                                      property.bed_count ||
-                                        0,
-                                    )) *
-                                    100,
-                                )
-                              : 0}
-                            %
-                          </strong>
-                        </div>
+                    <div className="metrics-row">
+                      <div>
+                        <span>
+                          Rooms
+                        </span>
+                        <strong>
+                          {
+                            property.room_count
+                          }
+                        </strong>
+                      </div>
 
-                        <div>
-                          <span>
-                            Monthly
-                          </span>
+                      <div>
+                        <span>
+                          Occupied
+                        </span>
+                        <strong>
+                          {
+                            property.occupied_bed_count ||
+                            0
+                          }
+                        </strong>
+                      </div>
 
-                          <strong>
-                            {money(
-                              property.monthly_revenue ||
-                                0,
-                            )}
-                          </strong>
-                        </div>
-
-                        <div>
-                          <span>
-                            Tenants
-                          </span>
-
-                          <strong>
-                            {
-                              property.tenant_count
-                            }
-                          </strong>
-                        </div>
+                      <div>
+                        <span>
+                          Tenants
+                        </span>
+                        <strong>
+                          {
+                            property.tenant_count
+                          }
+                        </strong>
                       </div>
                     </div>
-                  ),
-                )
+
+                    <div className="glass-footer">
+                      <span>
+                        Monthly Revenue
+                      </span>
+                      <strong>
+                        {money(
+                          property.monthly_revenue,
+                        )}
+                      </strong>
+                    </div>
+                  </div>
+                ),
+              )
             )}
           </div>
         )}
@@ -1561,9 +2210,9 @@ function App() {
                 <h2>
                   Properties
                 </h2>
-
                 <p>
-                  Manage all your properties
+                  Manage your
+                  properties
                 </p>
               </div>
 
@@ -1571,7 +2220,7 @@ function App() {
                 className="btn-primary"
                 onClick={() =>
                   setActiveModal(
-                    'addProperty',
+                    'property',
                   )
                 }
               >
@@ -1579,33 +2228,27 @@ function App() {
               </button>
             </div>
 
-            <button
-              className="btn-secondary"
-              style={{
-                width: '100%',
-                marginBottom: '14px',
-              }}
-              onClick={() =>
-                setActiveTab('rooms')
-              }
-            >
-              🚪 Manage Rooms & Beds
-            </button>
-
             {properties.map(
-              (property) => (
+              (
+                property,
+              ) => (
                 <div
                   className="glass-card"
-                  key={property.id}
+                  key={
+                    property.id
+                  }
                 >
                   <div className="glass-header">
                     <div>
                       <h3>
-                        {property.name}
+                        {
+                          property.name
+                        }
                       </h3>
-
                       <p>
-                        {property.address}
+                        {
+                          property.address
+                        }
                       </p>
                     </div>
                   </div>
@@ -1615,7 +2258,6 @@ function App() {
                       <span>
                         Rooms
                       </span>
-
                       <strong>
                         {
                           property.room_count
@@ -1627,10 +2269,11 @@ function App() {
                       <span>
                         Beds
                       </span>
-
                       <strong>
-                        {property.bed_count ||
-                          0}
+                        {
+                          property.bed_count ||
+                          0
+                        }
                       </strong>
                     </div>
 
@@ -1638,25 +2281,13 @@ function App() {
                       <span>
                         Occupied
                       </span>
-
                       <strong>
-                        {property.occupied_bed_count ||
-                          0}
+                        {
+                          property.occupied_bed_count ||
+                          0
+                        }
                       </strong>
                     </div>
-                  </div>
-
-                  <div className="glass-footer">
-                    <span>
-                      Monthly Revenue
-                    </span>
-
-                    <strong>
-                      {money(
-                        property.monthly_revenue ||
-                          0,
-                      )}
-                    </strong>
                   </div>
                 </div>
               ),
@@ -1669,9 +2300,9 @@ function App() {
                   <h3>
                     No properties
                   </h3>
-
                   <p>
-                    Add your first property.
+                    Add your first
+                    property.
                   </p>
                 </div>
               </div>
@@ -1679,58 +2310,57 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'rooms' && (
+        {activeTab ===
+          'rooms' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
                 <h2>
                   Rooms & Beds
                 </h2>
-
                 <p>
-                  Manage rooms and available
-                  beds
+                  Manage rooms
+                  and beds
                 </p>
               </div>
+            </div>
 
+            <div className="metrics-grid">
               <button
-                className="btn-primary"
+                className="metric-tile"
                 onClick={() =>
                   setActiveModal(
-                    'addRoom',
+                    'room',
                   )
                 }
               >
-                + Room
+                <div className="tile-icon">
+                  🚪
+                </div>
+                <div className="tile-label">
+                  Add Room
+                </div>
+              </button>
+
+              <button
+                className="metric-tile"
+                onClick={() =>
+                  setActiveModal(
+                    'bed',
+                  )
+                }
+              >
+                <div className="tile-icon">
+                  🛏️
+                </div>
+                <div className="tile-label">
+                  Add Bed
+                </div>
               </button>
             </div>
 
-            <button
-              className="btn-secondary"
-              style={{
-                width: '100%',
-                marginBottom: '14px',
-              }}
-              onClick={() =>
-                setActiveModal(
-                  'addBed',
-                )
-              }
-            >
-              + Add Bed
-            </button>
-
-            {rooms.map((room) => {
-              const roomBeds =
-                beds.filter(
-                  (bed) =>
-                    Number(
-                      bed.room_id,
-                    ) ===
-                    Number(room.id),
-                );
-
-              return (
+            {rooms.map(
+              (room) => (
                 <div
                   className="glass-card"
                   key={room.id}
@@ -1739,20 +2369,22 @@ function App() {
                     <div>
                       <h3>
                         Room{' '}
-                        {room.room_number}
+                        {
+                          room.room_number
+                        }
                       </h3>
 
                       <p>
-                        {room.property_name ||
-                          'Property'}
-                        {' • '}
-                        {room.sharing_type}
+                        {
+                          room.property_name
+                        }
                       </p>
                     </div>
 
                     <span className="badge">
-                      {roomBeds.length}{' '}
-                      Beds
+                      {
+                        room.sharing_type
+                      }
                     </span>
                   </div>
 
@@ -1761,7 +2393,6 @@ function App() {
                       <span>
                         Rent
                       </span>
-
                       <strong>
                         {money(
                           room.rent_amount,
@@ -1771,32 +2402,24 @@ function App() {
 
                     <div>
                       <span>
-                        Occupied
+                        Beds
                       </span>
-
                       <strong>
                         {
-                          roomBeds.filter(
-                            (bed) =>
-                              Boolean(
-                                bed.is_occupied,
-                              ),
-                          ).length
+                          room.bed_count ||
+                          0
                         }
                       </strong>
                     </div>
 
                     <div>
                       <span>
-                        Available
+                        Occupied
                       </span>
-
                       <strong>
                         {
-                          roomBeds.filter(
-                            (bed) =>
-                              !bed.is_occupied,
-                          ).length
+                          room.occupied_bed_count ||
+                          0
                         }
                       </strong>
                     </div>
@@ -1804,77 +2427,70 @@ function App() {
 
                   <div
                     style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: '8px',
-                      marginTop: '14px',
+                      marginTop:
+                        '15px',
                     }}
                   >
-                    {roomBeds.map(
-                      (bed) => (
-                        <span
-                          key={bed.id}
-                          className="badge"
-                          style={{
-                            opacity:
-                              bed.is_occupied
-                                ? 0.55
-                                : 1,
-                          }}
-                        >
-                          Bed{' '}
-                          {
-                            bed.bed_number
-                          }{' '}
-                          {bed.is_occupied
-                            ? '• Occupied'
-                            : '• Available'}
-                        </span>
-                      ),
-                    )}
+                    {beds
+                      .filter(
+                        (bed) =>
+                          bed.room_id ===
+                          room.id,
+                      )
+                      .map(
+                        (
+                          bed,
+                        ) => (
+                          <span
+                            key={
+                              bed.id
+                            }
+                            style={{
+                              display:
+                                'inline-block',
+                              padding:
+                                '7px 10px',
+                              margin:
+                                '4px',
+                              borderRadius:
+                                '8px',
+                              background:
+                                bed.is_occupied
+                                  ? 'rgba(244,63,94,0.15)'
+                                  : 'rgba(16,185,129,0.15)',
+                              fontSize:
+                                '12px',
+                            }}
+                          >
+                            Bed{' '}
+                            {
+                              bed.bed_number
+                            }{' '}
+                            ·{' '}
+                            {bed.is_occupied
+                              ? 'Occupied'
+                              : 'Available'}
+                          </span>
+                        ),
+                      )}
                   </div>
                 </div>
-              );
-            })}
-
-            {rooms.length === 0 && (
-              <div className="glass-card">
-                <div className="empty-state">
-                  <h3>
-                    No rooms yet
-                  </h3>
-
-                  <p>
-                    Add a room to start
-                    creating beds.
-                  </p>
-
-                  <button
-                    className="btn-primary"
-                    onClick={() =>
-                      setActiveModal(
-                        'addRoom',
-                      )
-                    }
-                  >
-                    Add Room
-                  </button>
-                </div>
-              </div>
+              ),
             )}
           </div>
         )}
 
-        {activeTab === 'tenants' && (
+        {activeTab ===
+          'tenants' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
                 <h2>
                   Tenants
                 </h2>
-
                 <p>
-                  Manage residents and rent
+                  Manage your
+                  residents
                 </p>
               </div>
 
@@ -1882,7 +2498,7 @@ function App() {
                 className="btn-primary"
                 onClick={() =>
                   setActiveModal(
-                    'addTenant',
+                    'tenant',
                   )
                 }
               >
@@ -1890,192 +2506,131 @@ function App() {
               </button>
             </div>
 
-            <div className="filter-block">
-              <input
-                className="search-input"
-                placeholder="Search tenant, room or property..."
-                value={searchQuery}
-                onChange={(event) =>
-                  setSearchQuery(
-                    event.target.value,
-                  )
-                }
-              />
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: '8px',
-                  marginTop: '10px',
-                  overflowX: 'auto',
-                }}
-              >
-                {[
-                  'All',
-                  'Paid',
-                  'Pending',
-                  'Overdue',
-                ].map((status) => (
-                  <button
-                    key={status}
-                    className="filter-pill"
-                    style={{
-                      opacity:
-                        statusFilter ===
-                        status
-                          ? 1
-                          : 0.55,
-                    }}
-                    onClick={() =>
-                      setStatusFilter(
-                        status as
-                          | 'All'
-                          | 'Paid'
-                          | 'Pending'
-                          | 'Overdue',
-                      )
-                    }
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
+            <input
+              className="modal-input"
+              placeholder="Search tenant, room or property..."
+              value={
+                searchQuery
+              }
+              onChange={(e) =>
+                setSearchQuery(
+                  e.target.value,
+                )
+              }
+            />
 
             {filteredTenants.map(
-              (tenant) => {
-                const paymentStatus =
-                  getTenantPaymentStatus(
-                    tenant,
-                  );
-
-                return (
-                  <div
-                    className="glass-card"
-                    key={tenant.id}
-                  >
-                    <div className="avatar-title-wrap">
-                      <div className="user-avatar">
-                        {tenant.name
-                          .charAt(0)
-                          .toUpperCase()}
-                      </div>
-
-                      <div>
-                        <h3>
-                          {tenant.name}
-                        </h3>
-
-                        <p>
-                          {tenant.property_name ||
-                            'Property'}
-                          {' • '}
-                          Room{' '}
-                          {tenant.room_number ||
-                            'N/A'}
-                        </p>
-                      </div>
-
-                      <span
-                        className="badge"
-                        style={{
-                          marginLeft:
-                            'auto',
-                        }}
-                      >
+              (
+                tenant,
+              ) => (
+                <div
+                  className="glass-card"
+                  key={
+                    tenant.id
+                  }
+                >
+                  <div className="glass-header">
+                    <div>
+                      <h3>
                         {
-                          paymentStatus
+                          tenant.name
                         }
+                      </h3>
+
+                      <p>
+                        {tenant.phone}
+                      </p>
+                    </div>
+
+                    <span className="badge">
+                      {
+                        tenant.status
+                      }
+                    </span>
+                  </div>
+
+                  <div className="metrics-row">
+                    <div>
+                      <span>
+                        Property
                       </span>
-                    </div>
-
-                    <div className="metrics-row">
-                      <div>
-                        <span>
-                          Monthly Rent
-                        </span>
-
-                        <strong>
-                          {money(
-                            tenant.monthly_rent,
-                          )}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <span>
-                          Due Day
-                        </span>
-
-                        <strong>
-                          {tenant.due_date}
-                        </strong>
-                      </div>
-
-                      <div>
-                        <span>
-                          Deposit
-                        </span>
-
-                        <strong>
-                          {money(
-                            tenant.deposit_amount ||
-                              0,
-                          )}
-                        </strong>
-                      </div>
-                    </div>
-
-                    <div
-                      style={{
-                        display: 'flex',
-                        gap: '8px',
-                        marginTop: '14px',
-                      }}
-                    >
-                      <button
-                        className="btn-secondary"
-                        style={{
-                          flex: 1,
-                        }}
-                        onClick={() =>
-                          sendWhatsAppReminder(
-                            tenant,
-                          )
+                      <strong>
+                        {
+                          tenant.property_name ||
+                          '-'
                         }
-                      >
-                        WhatsApp
-                      </button>
+                      </strong>
+                    </div>
 
-                      <button
-                        className="btn-primary"
-                        style={{
-                          flex: 1,
-                        }}
-                        onClick={() => {
-                          setError('');
-                          setPaymentTenantId(
-                            String(
-                              tenant.id,
-                            ),
-                          );
-                          setPaymentAmount(
-                            String(
-                              tenant.monthly_rent ||
-                                '',
-                            ),
-                          );
-                          setActiveModal(
-                            'recordPayment',
-                          );
-                        }}
-                      >
-                        Record Rent
-                      </button>
+                    <div>
+                      <span>
+                        Room
+                      </span>
+                      <strong>
+                        {
+                          tenant.room_number ||
+                          '-'
+                        }
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Rent
+                      </span>
+                      <strong>
+                        {money(
+                          tenant.monthly_rent,
+                        )}
+                      </strong>
                     </div>
                   </div>
-                );
-              },
+
+                  <div
+                    style={{
+                      display:
+                        'flex',
+                      gap:
+                        '8px',
+                      marginTop:
+                        '14px',
+                    }}
+                  >
+                    <button
+                      className="btn-secondary"
+                      onClick={() =>
+                        sendWhatsAppReminder(
+                          tenant,
+                        )
+                      }
+                    >
+                      WhatsApp
+                    </button>
+
+                    <button
+                      className="btn-primary"
+                      onClick={() => {
+                        setPaymentTenantId(
+                          String(
+                            tenant.id,
+                          ),
+                        );
+                        setPaymentAmount(
+                          String(
+                            tenant.monthly_rent ||
+                              '',
+                          ),
+                        );
+                        setActiveModal(
+                          'payment',
+                        );
+                      }}
+                    >
+                      Payment
+                    </button>
+                  </div>
+                </div>
+              ),
             )}
 
             {filteredTenants.length ===
@@ -2083,12 +2638,11 @@ function App() {
               <div className="glass-card">
                 <div className="empty-state">
                   <h3>
-                    No tenants found
+                    No tenants
                   </h3>
-
                   <p>
-                    Try another search or add
-                    a new tenant.
+                    Add your
+                    first tenant.
                   </p>
                 </div>
               </div>
@@ -2096,200 +2650,150 @@ function App() {
           </div>
         )}
 
-        {activeTab === 'payments' && (
+        {activeTab ===
+          'payments' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
                 <h2>
                   Payments
                 </h2>
-
                 <p>
-                  Rent collection history
+                  Rent collection
+                  history
                 </p>
               </div>
 
               <button
                 className="btn-primary"
-                onClick={() => {
-                  setError('');
-
-                  if (
-                    activeTenants.length ===
-                    0
-                  ) {
-                    setActiveTab(
-                      'tenants',
-                    );
-                    return;
-                  }
-
+                onClick={() =>
                   setActiveModal(
-                    'recordPayment',
-                  );
-                }}
+                    'payment',
+                  )
+                }
               >
                 + Payment
               </button>
             </div>
 
-            <div className="hero-card">
-              <div className="hero-header">
-                <span className="tag-light">
-                  Collected This Month
-                </span>
-              </div>
-
-              <div className="hero-value">
-                {money(
-                  collectedThisMonth,
-                )}
-              </div>
-
-              <div className="hero-meta">
-                {
-                  payments.filter(
-                    (payment) =>
-                      String(
-                        payment.payment_month ||
-                          '',
-                      )
-                        .trim()
-                        .toLowerCase() ===
-                      currentMonth
-                        .trim()
-                        .toLowerCase(),
-                  ).length
-                }{' '}
-                payments
-              </div>
-            </div>
-
             {payments.map(
-              (payment) => (
+              (
+                payment,
+              ) => (
                 <div
                   className="glass-card"
-                  key={payment.id}
+                  key={
+                    payment.id
+                  }
                 >
-                  <div className="avatar-title-wrap">
-                    <div className="user-avatar">
-                      ₹
-                    </div>
-
+                  <div className="glass-header">
                     <div>
                       <h3>
-                        {payment.tenant_name ||
-                          tenants.find(
-                            (tenant) =>
-                              tenant.id ===
-                              payment.tenant_id,
-                          )?.name ||
-                          'Tenant'}
+                        {
+                          payment.tenant_name
+                        }
                       </h3>
 
                       <p>
                         {
-                          payment.payment_month
-                        }{' '}
-                        •{' '}
-                        {
-                          payment.payment_method
+                          payment.payment_date
                         }
                       </p>
                     </div>
 
-                    <div
-                      className="amount-tag"
-                      style={{
-                        marginLeft:
-                          'auto',
-                      }}
-                    >
+                    <strong>
                       {money(
                         payment.amount,
                       )}
-                    </div>
+                    </strong>
                   </div>
 
-                  <div className="glass-footer">
-                    <span>
-                      {payment.payment_date}
-                    </span>
+                  <div className="metrics-row">
+                    <div>
+                      <span>
+                        Month
+                      </span>
+                      <strong>
+                        {
+                          payment.payment_month
+                        }
+                      </strong>
+                    </div>
 
-                    <button
-                      className="text-button"
-                      onClick={() =>
-                        printReceipt(
-                          payment,
-                        )
-                      }
-                    >
-                      Print Receipt
-                    </button>
+                    <div>
+                      <span>
+                        Method
+                      </span>
+                      <strong>
+                        {
+                          payment.payment_method
+                        }
+                      </strong>
+                    </div>
+
+                    <div>
+                      <span>
+                        Room
+                      </span>
+                      <strong>
+                        {
+                          payment.room_number ||
+                          '-'
+                        }
+                      </strong>
+                    </div>
                   </div>
                 </div>
               ),
             )}
 
-            {payments.length === 0 && (
+            {payments.length ===
+              0 && (
               <div className="glass-card">
                 <div className="empty-state">
                   <h3>
-                    No payments yet
+                    No payments
                   </h3>
-
-                  <p>
-                    Recorded payments will
-                    appear here.
-                  </p>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'invoices' && (
+        {activeTab ===
+          'invoices' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
                 <h2>
                   Invoices
                 </h2>
-
                 <p>
-                  Rent billing and dues
+                  Rent invoices
                 </p>
               </div>
 
               <button
                 className="btn-primary"
-                onClick={() => {
-                  setError('');
-
-                  if (
-                    activeTenants.length ===
-                    0
-                  ) {
-                    setActiveTab(
-                      'tenants',
-                    );
-                    return;
-                  }
-
+                onClick={() =>
                   setActiveModal(
-                    'addInvoice',
-                  );
-                }}
+                    'invoice',
+                  )
+                }
               >
                 + Invoice
               </button>
             </div>
 
             {invoices.map(
-              (invoice) => (
+              (
+                invoice,
+              ) => (
                 <div
                   className="glass-card"
-                  key={invoice.id}
+                  key={
+                    invoice.id
+                  }
                 >
                   <div className="glass-header">
                     <div>
@@ -2300,18 +2804,16 @@ function App() {
                       </h3>
 
                       <p>
-                        {invoice.tenant_name ||
-                          tenants.find(
-                            (tenant) =>
-                              tenant.id ===
-                              invoice.tenant_id,
-                          )?.name ||
-                          'Tenant'}
+                        {
+                          invoice.tenant_name
+                        }
                       </p>
                     </div>
 
                     <span className="badge">
-                      {invoice.status}
+                      {
+                        invoice.status
+                      }
                     </span>
                   </div>
 
@@ -2320,7 +2822,6 @@ function App() {
                       <span>
                         Amount
                       </span>
-
                       <strong>
                         {money(
                           invoice.amount,
@@ -2332,10 +2833,11 @@ function App() {
                       <span>
                         Month
                       </span>
-
                       <strong>
-                        {invoice.month ||
-                          '-'}
+                        {
+                          invoice.month ||
+                          '-'
+                        }
                       </strong>
                     </div>
 
@@ -2343,9 +2845,10 @@ function App() {
                       <span>
                         Due
                       </span>
-
                       <strong>
-                        {invoice.due_date}
+                        {
+                          invoice.due_date
+                        }
                       </strong>
                     </div>
                   </div>
@@ -2353,54 +2856,29 @@ function App() {
               ),
             )}
 
-            {invoices.length === 0 && (
+            {invoices.length ===
+              0 && (
               <div className="glass-card">
                 <div className="empty-state">
                   <h3>
-                    No invoices yet
+                    No invoices
                   </h3>
-
-                  <p>
-                    Create an invoice for a
-                    tenant.
-                  </p>
-
-                  <button
-                    className="btn-primary"
-                    onClick={() => {
-                      if (
-                        activeTenants.length ===
-                        0
-                      ) {
-                        setActiveTab(
-                          'tenants',
-                        );
-                        return;
-                      }
-
-                      setActiveModal(
-                        'addInvoice',
-                      );
-                    }}
-                  >
-                    Create Invoice
-                  </button>
                 </div>
               </div>
             )}
           </div>
         )}
 
-        {activeTab === 'analytics' && (
+        {activeTab ===
+          'analytics' && (
           <div className="view-container">
             <div className="section-heading">
               <div>
                 <h2>
                   Analytics
                 </h2>
-
                 <p>
-                  Your business at a glance
+                  Business overview
                 </p>
               </div>
             </div>
@@ -2410,29 +2888,41 @@ function App() {
                 <div className="tile-icon">
                   💰
                 </div>
-
                 <div className="tile-value">
                   {money(
-                    totalRevenue,
+                    expectedRent,
                   )}
                 </div>
-
                 <div className="tile-label">
-                  Monthly Revenue
+                  Expected Rent
                 </div>
               </div>
 
               <div className="metric-tile">
                 <div className="tile-icon">
-                  📈
+                  ✅
                 </div>
-
                 <div className="tile-value">
-                  {collectionRate}%
+                  {money(
+                    collectedThisMonth,
+                  )}
                 </div>
-
                 <div className="tile-label">
-                  Collection Rate
+                  Collected
+                </div>
+              </div>
+
+              <div className="metric-tile">
+                <div className="tile-icon">
+                  ⏳
+                </div>
+                <div className="tile-value">
+                  {money(
+                    pendingDues,
+                  )}
+                </div>
+                <div className="tile-label">
+                  Pending
                 </div>
               </div>
 
@@ -2440,55 +2930,39 @@ function App() {
                 <div className="tile-icon">
                   🛏️
                 </div>
-
                 <div className="tile-value">
-                  {totalOccupancy}%
+                  {
+                    totalOccupancy
+                  }
+                  %
                 </div>
-
                 <div className="tile-label">
                   Occupancy
-                </div>
-              </div>
-
-              <div className="metric-tile">
-                <div className="tile-icon">
-                  ⏰
-                </div>
-
-                <div className="tile-value">
-                  {money(
-                    pendingDues,
-                  )}
-                </div>
-
-                <div className="tile-label">
-                  Pending Dues
                 </div>
               </div>
             </div>
 
             <div className="glass-card">
-              <div className="glass-header">
-                <div>
-                  <h3>
-                    Portfolio Summary
-                  </h3>
+              <h3>
+                Portfolio
+                Summary
+              </h3>
 
-                  <p>
-                    Current database
-                    statistics
-                  </p>
-                </div>
-              </div>
-
-              <div className="metrics-row">
+              <div
+                className="metrics-row"
+                style={{
+                  marginTop:
+                    '20px',
+                }}
+              >
                 <div>
                   <span>
                     Properties
                   </span>
-
                   <strong>
-                    {properties.length}
+                    {
+                      properties.length
+                    }
                   </strong>
                 </div>
 
@@ -2496,9 +2970,10 @@ function App() {
                   <span>
                     Rooms
                   </span>
-
                   <strong>
-                    {rooms.length}
+                    {
+                      rooms.length
+                    }
                   </strong>
                 </div>
 
@@ -2506,50 +2981,10 @@ function App() {
                   <span>
                     Beds
                   </span>
-
                   <strong>
-                    {beds.length}
-                  </strong>
-                </div>
-              </div>
-
-              <div
-                className="metrics-row"
-                style={{
-                  marginTop: '14px',
-                }}
-              >
-                <div>
-                  <span>
-                    Active Tenants
-                  </span>
-
-                  <strong>
-                    {totalTenants}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    Collected
-                  </span>
-
-                  <strong>
-                    {money(
-                      collectedThisMonth,
-                    )}
-                  </strong>
-                </div>
-
-                <div>
-                  <span>
-                    Pending
-                  </span>
-
-                  <strong>
-                    {money(
-                      pendingDues,
-                    )}
+                    {
+                      beds.length
+                    }
                   </strong>
                 </div>
               </div>
@@ -2558,192 +2993,156 @@ function App() {
         )}
       </main>
 
-      <nav className="glass-nav">
-        <button
-          className={`nav-item ${
-            activeTab === 'dashboard'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+      /*
+       * =================================================
+       * BOTTOM NAVIGATION
+       * =================================================
+       */
+
+      <nav
+        className="bottom-nav"
+      >
+        {(
+          [
+            [
               'dashboard',
-            )
-          }
-        >
-          <span>⌂</span>
-
-          <small>
-            Home
-          </small>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'properties' ||
-            activeTab === 'rooms'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+              '⌂',
+              'Home',
+            ],
+            [
               'properties',
-            )
-          }
-        >
-          <span>🏠</span>
-
-          <small>
-            Assets
-          </small>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'tenants'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+              '🏠',
+              'Properties',
+            ],
+            [
+              'rooms',
+              '🚪',
+              'Rooms',
+            ],
+            [
               'tenants',
-            )
-          }
-        >
-          <span>👥</span>
-
-          <small>
-            Tenants
-          </small>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'payments'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+              '👥',
+              'Tenants',
+            ],
+            [
               'payments',
-            )
-          }
-        >
-          <span>₹</span>
-
-          <small>
-            Payments
-          </small>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'invoices'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+              '₹',
+              'Payments',
+            ],
+            [
               'invoices',
-            )
-          }
-        >
-          <span>🧾</span>
-
-          <small>
-            Invoices
-          </small>
-        </button>
-
-        <button
-          className={`nav-item ${
-            activeTab === 'analytics'
-              ? 'active'
-              : ''
-          }`}
-          onClick={() =>
-            setActiveTab(
+              '🧾',
+              'Invoices',
+            ],
+            [
               'analytics',
-            )
-          }
-        >
-          <span>📊</span>
+              '📊',
+              'Analytics',
+            ],
+          ] as [
+            Tab,
+            string,
+            string,
+          ][]
+        ).map(
+          ([
+            tab,
+            icon,
+            label,
+          ]) => (
+            <button
+              key={tab}
+              className={
+                activeTab ===
+                tab
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setActiveTab(tab)
+              }
+            >
+              <span>
+                {icon}
+              </span>
 
-          <small>
-            Analytics
-          </small>
-        </button>
+              <small>
+                {label}
+              </small>
+            </button>
+          ),
+        )}
       </nav>
 
-      {activeModal !== 'none' && (
+      /*
+       * =================================================
+       * MODALS
+       * =================================================
+       */
+
+      {activeModal !==
+        'none' && (
         <div
-          className="modal-backdrop"
-          onMouseDown={(event) => {
-            if (
-              event.target ===
-              event.currentTarget
-            ) {
-              closeModal();
-            }
+          onClick={
+            closeModal
+          }
+          style={{
+            position:
+              'fixed',
+            inset: 0,
+            zIndex: 1000,
+            background:
+              'rgba(0,0,0,0.72)',
+            display: 'flex',
+            alignItems:
+              'center',
+            justifyContent:
+              'center',
+            padding:
+              '20px',
           }}
         >
-          <div className="modal-card">
-            <div className="glass-header">
-              <div>
-                <h3>
-                  {activeModal ===
-                    'addProperty' &&
-                    'Add Property'}
-
-                  {activeModal ===
-                    'addRoom' &&
-                    'Add Room'}
-
-                  {activeModal ===
-                    'addBed' &&
-                    'Add Bed'}
-
-                  {activeModal ===
-                    'addTenant' &&
-                    'Add Tenant'}
-
-                  {activeModal ===
-                    'recordPayment' &&
-                    'Record Payment'}
-
-                  {activeModal ===
-                    'addInvoice' &&
-                    'Create Invoice'}
-                </h3>
-
-                <p>
-                  Enter the details below
-                </p>
-              </div>
-
-              <button
-                className="btn-secondary"
-                onClick={closeModal}
-                disabled={saving}
-              >
-                ✕
-              </button>
-            </div>
-
+          <div
+            className="glass-card"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+            style={{
+              width:
+                '100%',
+              maxWidth:
+                '520px',
+              maxHeight:
+                '90vh',
+              overflowY:
+                'auto',
+              padding:
+                '24px',
+            }}
+          >
             {activeModal ===
-              'addProperty' && (
+              'property' && (
               <form
                 onSubmit={
                   handleCreateProperty
                 }
               >
+                <h2>
+                  Add Property
+                </h2>
+
                 <input
                   className="modal-input"
                   placeholder="Property name"
-                  value={propName}
-                  onChange={(event) =>
+                  value={
+                    propName
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setPropName(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -2751,49 +3150,52 @@ function App() {
                 <input
                   className="modal-input"
                   placeholder="Address"
-                  value={propAddress}
-                  onChange={(event) =>
+                  value={
+                    propAddress
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setPropAddress(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Add Property'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
 
             {activeModal ===
-              'addRoom' && (
+              'room' && (
               <form
                 onSubmit={
                   handleCreateRoom
                 }
               >
+                <h2>
+                  Add Room
+                </h2>
+
                 <select
                   className="modal-input"
-                  value={roomPropertyId}
-                  onChange={(event) =>
+                  value={
+                    roomPropertyId
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setRoomPropertyId(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 >
@@ -2802,14 +3204,20 @@ function App() {
                   </option>
 
                   {properties.map(
-                    (property) => (
+                    (
+                      property,
+                    ) => (
                       <option
-                        key={property.id}
+                        key={
+                          property.id
+                        }
                         value={
                           property.id
                         }
                       >
-                        {property.name}
+                        {
+                          property.name
+                        }
                       </option>
                     ),
                   )}
@@ -2818,39 +3226,45 @@ function App() {
                 <input
                   className="modal-input"
                   placeholder="Room number"
-                  value={roomNumber}
-                  onChange={(event) =>
+                  value={
+                    roomNumber
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setRoomNumber(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
                 <select
                   className="modal-input"
-                  value={sharingType}
-                  onChange={(event) =>
+                  value={
+                    sharingType
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setSharingType(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 >
                   <option>
                     Single
                   </option>
-
                   <option>
                     Double
                   </option>
-
                   <option>
                     Triple
                   </option>
-
                   <option>
                     Four Sharing
                   </option>
-
                   <option>
                     Other
                   </option>
@@ -2859,50 +3273,53 @@ function App() {
                 <input
                   className="modal-input"
                   type="number"
-                  placeholder="Monthly room rent"
-                  value={roomRent}
-                  onChange={(event) =>
+                  placeholder="Monthly rent"
+                  value={
+                    roomRent
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setRoomRent(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Add Room'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
 
             {activeModal ===
-              'addBed' && (
+              'bed' && (
               <form
                 onSubmit={
                   handleCreateBed
                 }
               >
+                <h2>
+                  Add Bed
+                </h2>
+
                 <select
                   className="modal-input"
-                  value={bedRoomId}
-                  onChange={(event) =>
+                  value={
+                    bedRoomId
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setBedRoomId(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 >
@@ -2910,68 +3327,78 @@ function App() {
                     Select room
                   </option>
 
-                  {rooms.map((room) => (
-                    <option
-                      key={room.id}
-                      value={room.id}
-                    >
-                      {room.property_name ||
-                        'Property'}{' '}
-                      • Room{' '}
-                      {
-                        room.room_number
-                      }
-                    </option>
-                  ))}
+                  {rooms.map(
+                    (room) => (
+                      <option
+                        key={
+                          room.id
+                        }
+                        value={
+                          room.id
+                        }
+                      >
+                        {
+                          room.property_name
+                        }{' '}
+                        · Room{' '}
+                        {
+                          room.room_number
+                        }
+                      </option>
+                    ),
+                  )}
                 </select>
 
                 <input
                   className="modal-input"
-                  placeholder="Bed number / name"
-                  value={bedNumber}
-                  onChange={(event) =>
+                  placeholder="Bed number"
+                  value={
+                    bedNumber
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setBedNumber(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Add Bed'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
 
             {activeModal ===
-              'addTenant' && (
+              'tenant' && (
               <form
                 onSubmit={
                   handleCreateTenant
                 }
               >
+                <h2>
+                  Add Tenant
+                </h2>
+
                 <input
                   className="modal-input"
                   placeholder="Tenant name"
-                  value={tenantName}
-                  onChange={(event) =>
+                  value={
+                    tenantName
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantName(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -2979,39 +3406,51 @@ function App() {
                 <input
                   className="modal-input"
                   placeholder="Phone number"
-                  type="tel"
-                  value={tenantPhone}
-                  onChange={(event) =>
+                  value={
+                    tenantPhone
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantPhone(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
                 <input
                   className="modal-input"
-                  placeholder="Email (optional)"
                   type="email"
-                  value={tenantEmail}
-                  onChange={(event) =>
+                  placeholder="Email (optional)"
+                  value={
+                    tenantEmail
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantEmail(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
                 <select
                   className="modal-input"
-                  value={tenantPropertyId}
-                  onChange={(event) => {
+                  value={
+                    tenantPropertyId
+                  }
+                  onChange={(
+                    e,
+                  ) => {
                     setTenantPropertyId(
-                      event.target.value,
+                      e.target
+                        .value,
                     );
-
                     setTenantRoomId(
                       '',
                     );
-
                     setTenantBedId(
                       '',
                     );
@@ -3022,14 +3461,20 @@ function App() {
                   </option>
 
                   {properties.map(
-                    (property) => (
+                    (
+                      property,
+                    ) => (
                       <option
-                        key={property.id}
+                        key={
+                          property.id
+                        }
                         value={
                           property.id
                         }
                       >
-                        {property.name}
+                        {
+                          property.name
+                        }
                       </option>
                     ),
                   )}
@@ -3037,37 +3482,40 @@ function App() {
 
                 <select
                   className="modal-input"
-                  value={tenantRoomId}
-                  onChange={(event) => {
+                  value={
+                    tenantRoomId
+                  }
+                  onChange={(
+                    e,
+                  ) => {
                     setTenantRoomId(
-                      event.target.value,
+                      e.target
+                        .value,
                     );
-
                     setTenantBedId(
                       '',
                     );
                   }}
-                  disabled={
-                    !tenantPropertyId
-                  }
                 >
                   <option value="">
                     Select room
                   </option>
 
                   {tenantRooms.map(
-                    (room) => (
+                    (
+                      room,
+                    ) => (
                       <option
-                        key={room.id}
-                        value={room.id}
+                        key={
+                          room.id
+                        }
+                        value={
+                          room.id
+                        }
                       >
                         Room{' '}
                         {
                           room.room_number
-                        }{' '}
-                        •{' '}
-                        {
-                          room.sharing_type
                         }
                       </option>
                     ),
@@ -3076,14 +3524,16 @@ function App() {
 
                 <select
                   className="modal-input"
-                  value={tenantBedId}
-                  onChange={(event) =>
-                    setTenantBedId(
-                      event.target.value,
-                    )
+                  value={
+                    tenantBedId
                   }
-                  disabled={
-                    !tenantRoomId
+                  onChange={(
+                    e,
+                  ) =>
+                    setTenantBedId(
+                      e.target
+                        .value,
+                    )
                   }
                 >
                   <option value="">
@@ -3091,10 +3541,16 @@ function App() {
                   </option>
 
                   {availableBeds.map(
-                    (bed) => (
+                    (
+                      bed,
+                    ) => (
                       <option
-                        key={bed.id}
-                        value={bed.id}
+                        key={
+                          bed.id
+                        }
+                        value={
+                          bed.id
+                        }
                       >
                         Bed{' '}
                         {
@@ -3109,10 +3565,15 @@ function App() {
                   className="modal-input"
                   type="number"
                   placeholder="Monthly rent"
-                  value={tenantRent}
-                  onChange={(event) =>
+                  value={
+                    tenantRent
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantRent(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -3120,13 +3581,18 @@ function App() {
                 <input
                   className="modal-input"
                   type="number"
+                  placeholder="Due day"
                   min="1"
                   max="31"
-                  placeholder="Rent due day"
-                  value={tenantDueDate}
-                  onChange={(event) =>
+                  value={
+                    tenantDueDate
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantDueDate(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -3135,10 +3601,15 @@ function App() {
                   className="modal-input"
                   type="number"
                   placeholder="Security deposit"
-                  value={tenantDeposit}
-                  onChange={(event) =>
+                  value={
+                    tenantDeposit
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantDeposit(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -3149,156 +3620,164 @@ function App() {
                   value={
                     tenantMoveInDate
                   }
-                  onChange={(event) =>
+                  onChange={(
+                    e,
+                  ) =>
                     setTenantMoveInDate(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={saving}
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Add Tenant'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
 
             {activeModal ===
-              'recordPayment' && (
+              'payment' && (
               <form
                 onSubmit={
                   handleRecordPayment
                 }
               >
+                <h2>
+                  Record Payment
+                </h2>
+
                 <select
                   className="modal-input"
-                  value={paymentTenantId}
-                  onChange={(event) => {
-                    const selectedId =
-                      event.target.value;
+                  value={
+                    paymentTenantId
+                  }
+                  onChange={(
+                    e,
+                  ) => {
+                    const id =
+                      e.target
+                        .value;
 
                     setPaymentTenantId(
-                      selectedId,
+                      id,
                     );
 
                     const tenant =
-                      activeTenants.find(
-                        (item) =>
+                      tenants.find(
+                        (
+                          item,
+                        ) =>
+                          item.id ===
                           Number(
-                            item.id,
-                          ) ===
-                          Number(
-                            selectedId,
+                            id,
                           ),
                       );
 
-                    if (tenant) {
+                    if (
+                      tenant
+                    ) {
                       setPaymentAmount(
                         String(
                           tenant.monthly_rent ||
                             '',
                         ),
                       );
-                    } else {
-                      setPaymentAmount(
-                        '',
-                      );
                     }
                   }}
                 >
                   <option value="">
-                    {activeTenants.length ===
-                    0
-                      ? 'No active tenants found'
-                      : 'Select tenant'}
+                    Select tenant
                   </option>
 
                   {activeTenants.map(
-                    (tenant) => (
+                    (
+                      tenant,
+                    ) => (
                       <option
-                        key={tenant.id}
-                        value={tenant.id}
+                        key={
+                          tenant.id
+                        }
+                        value={
+                          tenant.id
+                        }
                       >
-                        {tenant.name} •{' '}
+                        {
+                          tenant.name
+                        }{' '}
+                        ·{' '}
                         {money(
                           tenant.monthly_rent,
                         )}
-                        {tenant.room_number
-                          ? ` • Room ${tenant.room_number}`
-                          : ''}
                       </option>
                     ),
                   )}
                 </select>
 
-                {activeTenants.length ===
-                  0 && (
-                  <p
-                    style={{
-                      fontSize: '12px',
-                      opacity: 0.7,
-                      marginTop: '-4px',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    Add an active tenant first
-                    from the Tenants section.
-                  </p>
-                )}
-
                 <input
                   className="modal-input"
                   type="number"
-                  min="1"
                   placeholder="Amount"
-                  value={paymentAmount}
-                  onChange={(event) =>
+                  value={
+                    paymentAmount
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setPaymentAmount(
-                      event.target.value,
+                      e.target
+                        .value,
+                    )
+                  }
+                />
+
+                <input
+                  className="modal-input"
+                  type="date"
+                  value={
+                    paymentDate
+                  }
+                  onChange={(
+                    e,
+                  ) =>
+                    setPaymentDate(
+                      e.target
+                        .value,
                     )
                   }
                 />
 
                 <select
                   className="modal-input"
-                  value={paymentMethod}
-                  onChange={(event) =>
+                  value={
+                    paymentMethod
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setPaymentMethod(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 >
                   <option>
                     UPI
                   </option>
-
                   <option>
                     Cash
                   </option>
-
                   <option>
                     Bank Transfer
                   </option>
-
                   <option>
                     Card
                   </option>
-
                   <option>
                     Other
                   </option>
@@ -3306,155 +3785,134 @@ function App() {
 
                 <input
                   className="modal-input"
-                  type="date"
-                  value={paymentDate}
-                  onChange={(event) =>
-                    setPaymentDate(
-                      event.target.value,
-                    )
-                  }
-                />
-
-                <input
-                  className="modal-input"
                   placeholder="Payment month"
-                  value={paymentMonth}
-                  onChange={(event) =>
+                  value={
+                    paymentMonth
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setPaymentMonth(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={
-                      saving ||
-                      activeTenants.length ===
-                        0
-                    }
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Record Payment'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
 
             {activeModal ===
-              'addInvoice' && (
+              'invoice' && (
               <form
                 onSubmit={
                   handleCreateInvoice
                 }
               >
+                <h2>
+                  Create Invoice
+                </h2>
+
                 <select
                   className="modal-input"
-                  value={invoiceTenantId}
-                  onChange={(event) => {
-                    const selectedId =
-                      event.target.value;
+                  value={
+                    invoiceTenantId
+                  }
+                  onChange={(
+                    e,
+                  ) => {
+                    const id =
+                      e.target
+                        .value;
 
                     setInvoiceTenantId(
-                      selectedId,
+                      id,
                     );
 
                     const tenant =
-                      activeTenants.find(
-                        (item) =>
+                      tenants.find(
+                        (
+                          item,
+                        ) =>
+                          item.id ===
                           Number(
-                            item.id,
-                          ) ===
-                          Number(
-                            selectedId,
+                            id,
                           ),
                       );
 
-                    if (tenant) {
+                    if (
+                      tenant
+                    ) {
                       setInvoiceAmount(
                         String(
                           tenant.monthly_rent ||
                             '',
                         ),
                       );
-                    } else {
-                      setInvoiceAmount(
-                        '',
-                      );
                     }
                   }}
                 >
                   <option value="">
-                    {activeTenants.length ===
-                    0
-                      ? 'No active tenants found'
-                      : 'Select tenant'}
+                    Select tenant
                   </option>
 
                   {activeTenants.map(
-                    (tenant) => (
+                    (
+                      tenant,
+                    ) => (
                       <option
-                        key={tenant.id}
-                        value={tenant.id}
+                        key={
+                          tenant.id
+                        }
+                        value={
+                          tenant.id
+                        }
                       >
-                        {tenant.name} •{' '}
-                        {money(
-                          tenant.monthly_rent,
-                        )}
-                        {tenant.room_number
-                          ? ` • Room ${tenant.room_number}`
-                          : ''}
+                        {
+                          tenant.name
+                        }
                       </option>
                     ),
                   )}
                 </select>
 
-                {activeTenants.length ===
-                  0 && (
-                  <p
-                    style={{
-                      fontSize: '12px',
-                      opacity: 0.7,
-                      marginTop: '-4px',
-                      marginBottom: '12px',
-                    }}
-                  >
-                    Add an active tenant first
-                    from the Tenants section.
-                  </p>
-                )}
-
                 <input
                   className="modal-input"
                   type="number"
-                  min="1"
                   placeholder="Invoice amount"
-                  value={invoiceAmount}
-                  onChange={(event) =>
+                  value={
+                    invoiceAmount
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setInvoiceAmount(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
                 <input
                   className="modal-input"
-                  placeholder="Billing month"
-                  value={invoiceMonth}
-                  onChange={(event) =>
+                  placeholder="Month"
+                  value={
+                    invoiceMonth
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setInvoiceMonth(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
@@ -3462,37 +3920,27 @@ function App() {
                 <input
                   className="modal-input"
                   type="date"
-                  value={invoiceDueDate}
-                  onChange={(event) =>
+                  value={
+                    invoiceDueDate
+                  }
+                  onChange={(
+                    e,
+                  ) =>
                     setInvoiceDueDate(
-                      event.target.value,
+                      e.target
+                        .value,
                     )
                   }
                 />
 
-                <div className="modal-actions">
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    onClick={closeModal}
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    className="btn-primary"
-                    disabled={
-                      saving ||
-                      activeTenants.length ===
-                        0
-                    }
-                  >
-                    {saving
-                      ? 'Saving...'
-                      : 'Create Invoice'}
-                  </button>
-                </div>
+                <ModalButtons
+                  saving={
+                    saving
+                  }
+                  onCancel={
+                    closeModal
+                  }
+                />
               </form>
             )}
           </div>
@@ -3502,8 +3950,59 @@ function App() {
   );
 }
 
+/*
+ * =======================================================
+ * MODAL BUTTONS
+ * =======================================================
+ */
+
+function ModalButtons({
+  saving,
+  onCancel,
+}: {
+  saving: boolean;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      style={{
+        display: 'flex',
+        gap: '10px',
+        marginTop: '20px',
+      }}
+    >
+      <button
+        type="button"
+        className="btn-secondary"
+        onClick={onCancel}
+        disabled={saving}
+        style={{
+          flex: 1,
+        }}
+      >
+        Cancel
+      </button>
+
+      <button
+        type="submit"
+        className="btn-primary"
+        disabled={saving}
+        style={{
+          flex: 1,
+        }}
+      >
+        {saving
+          ? 'Saving...'
+          : 'Save'}
+      </button>
+    </div>
+  );
+}
+
 ReactDOM.createRoot(
-  document.getElementById('root')!,
+  document.getElementById(
+    'root',
+  )!,
 ).render(
   <React.StrictMode>
     <App />
