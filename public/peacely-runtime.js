@@ -17,6 +17,133 @@
   const getRequestUrl = (request) =>
     typeof request === 'string' ? request : request?.url || '';
 
+  const currentMonthLabel = () => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const normalizedMonth = (value) =>
+    String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .toLowerCase();
+
+  const isCurrentMonth = (value) => {
+    const target = normalizedMonth(currentMonthLabel());
+    const text = normalizedMonth(value);
+    return text === target;
+  };
+
+  const dateMonthLabel = (value) => {
+    if (!value) return '';
+    const parsed = new Date(`${String(value).slice(0, 10)}T00:00:00`);
+    if (Number.isNaN(parsed.getTime())) return '';
+    return parsed.toLocaleDateString('en-US', {
+      month: 'long',
+      year: 'numeric',
+    });
+  };
+
+  const fetchCollection = async (path, key) => {
+    try {
+      const response = await originalFetch(path, {
+        method: 'GET',
+        credentials: 'include',
+        headers: { Accept: 'application/json' },
+      });
+      if (!response.ok) return [];
+      const payload = await response.json().catch(() => null);
+      if (Array.isArray(payload)) return payload;
+      return Array.isArray(payload?.[key]) ? payload[key] : [];
+    } catch (error) {
+      console.error(`[Peacely] Unable to load ${path}:`, error);
+      return [];
+    }
+  };
+
+  const prepareAnalyticsPayload = async (payload) => {
+    if (!payload || typeof payload !== 'object') return payload;
+
+    const [invoices, payments] = await Promise.all([
+      fetchCollection('/api/invoices', 'invoices'),
+      fetchCollection('/api/payments', 'payments'),
+    ]);
+
+    const monthName = currentMonthLabel();
+
+    const currentInvoices = invoices.filter((invoice) => {
+      if (String(invoice.status || '').toLowerCase() === 'cancelled') return false;
+      const invoiceMonth = invoice.month || dateMonthLabel(invoice.due_date);
+      return isCurrentMonth(invoiceMonth);
+    });
+
+    const propertyTotals = new Map();
+    for (const invoice of currentInvoices) {
+      const propertyId = Number(invoice.property_id);
+      if (!Number.isInteger(propertyId)) continue;
+
+      const existing = propertyTotals.get(propertyId) || {
+        expected: 0,
+        collected: 0,
+      };
+
+      existing.expected += Number(invoice.amount || 0);
+      existing.collected += Number(invoice.paid_amount || 0);
+      propertyTotals.set(propertyId, existing);
+    }
+
+    const propertyRows = Array.isArray(payload.properties)
+      ? payload.properties.map((property) => {
+          const totals = propertyTotals.get(Number(property.id)) || {
+            expected: 0,
+            collected: 0,
+          };
+
+          return {
+            ...property,
+            monthly_revenue: totals.expected,
+            monthly_collected: totals.collected,
+            monthly_outstanding: Math.max(
+              totals.expected - totals.collected,
+              0,
+            ),
+          };
+        })
+      : payload.properties;
+
+    const methodTotals = new Map();
+    for (const payment of payments) {
+      const paymentMonth =
+        payment.payment_month ||
+        dateMonthLabel(payment.payment_date);
+
+      if (!isCurrentMonth(paymentMonth)) continue;
+
+      const method = String(payment.payment_method || 'Other').trim() || 'Other';
+      const existing = methodTotals.get(method) || {
+        method,
+        count: 0,
+        amount: 0,
+      };
+
+      existing.count += 1;
+      existing.amount += Number(payment.amount || 0);
+      methodTotals.set(method, existing);
+    }
+
+    return {
+      ...payload,
+      analytics_month: monthName,
+      properties: propertyRows,
+      payment_methods: Array.from(methodTotals.values()).sort(
+        (a, b) => b.amount - a.amount,
+      ),
+    };
+  };
+
   const preparePaymentRequest = async (args) => {
     const request = args[0];
     const options = args[1] || {};
@@ -171,6 +298,22 @@
 
     const url = getRequestUrl(request);
     const pathname = url.split('?')[0];
+
+    if (pathname.endsWith('/api/analytics') && response.ok) {
+      const analyticsPayload = await response.clone().json().catch(() => null);
+      if (analyticsPayload) {
+        const normalizedPayload = await prepareAnalyticsPayload(analyticsPayload);
+        const headers = new Headers(response.headers);
+        headers.set('Content-Type', 'application/json');
+        headers.delete('Content-Length');
+        return new Response(JSON.stringify(normalizedPayload), {
+          status: response.status,
+          statusText: response.statusText,
+          headers,
+        });
+      }
+    }
+
     const key = collectionKeys[pathname];
     if (!key || !response.ok) return response;
 
