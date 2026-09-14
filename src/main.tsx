@@ -75,6 +75,8 @@ interface Payment {
   notes?: string;
   property_name?: string;
   room_number?: string;
+  invoice_id?: number;
+  invoice_number?: string;
 }
 
 interface Invoice {
@@ -86,6 +88,23 @@ interface Invoice {
   month?: string;
   due_date: string;
   status: string;
+  paid_amount?: number;
+  balance_amount?: number;
+  payment_percentage?: number;
+  delivery_status?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+interface FinanceSummary {
+  expected: number;
+  collected: number;
+  pending: number;
+  overdue: number;
+  invoice_count: number;
+  paid_invoice_count: number;
+  overdue_invoice_count: number;
+  collection_rate: number;
 }
 
 type Tab =
@@ -254,6 +273,8 @@ function App() {
     useState(today());
 
   const [paymentTenantId, setPaymentTenantId] =
+    useState('');
+  const [paymentInvoiceId, setPaymentInvoiceId] =
     useState('');
   const [paymentAmount, setPaymentAmount] =
     useState('');
@@ -448,7 +469,6 @@ function App() {
       setOwner(data.owner);
       setAuthenticated(true);
       setAuthPassword('');
-
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -502,7 +522,6 @@ function App() {
       setOwner(data.owner);
       setAuthenticated(true);
       setAuthPassword('');
-
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -558,6 +577,7 @@ function App() {
     setTenantMoveInDate(today());
 
     setPaymentTenantId('');
+    setPaymentInvoiceId('');
     setPaymentAmount('');
     setPaymentMethod('UPI');
     setPaymentMonth(currentMonthName());
@@ -576,6 +596,7 @@ function App() {
 
   const closeModal = () => {
     if (saving) return;
+
     setActiveModal('none');
     setSelectedTenant(null);
     setError('');
@@ -767,6 +788,20 @@ function App() {
       return;
     }
 
+    if (
+      paymentInvoiceId &&
+      invoices.some(
+        (invoice) =>
+          invoice.id === Number(paymentInvoiceId) &&
+          normalize(invoice.status) === 'cancelled',
+      )
+    ) {
+      setError(
+        'This invoice is cancelled and cannot receive a payment.',
+      );
+      return;
+    }
+
     setSaving(true);
     setError('');
 
@@ -779,6 +814,9 @@ function App() {
           payment_date: paymentDate,
           payment_method: paymentMethod,
           payment_month: paymentMonth,
+          invoice_id: paymentInvoiceId
+            ? Number(paymentInvoiceId)
+            : null,
         }),
       });
 
@@ -1058,6 +1096,9 @@ function App() {
         ) ||
         normalize(payment.payment_month).includes(
           query,
+        ) ||
+        normalize(payment.invoice_number).includes(
+          query,
         )
       );
     },
@@ -1076,10 +1117,94 @@ function App() {
           query,
         ) ||
         normalize(invoice.month).includes(query) ||
-        normalize(invoice.status).includes(query)
+        normalize(invoice.status).includes(query) ||
+        normalize(
+          invoice.delivery_status,
+        ).includes(query)
       );
     },
   );
+
+  const financeSummary = useMemo<FinanceSummary>(() => {
+    const validInvoices = invoices.filter(
+      (invoice) =>
+        normalize(invoice.status) !== 'cancelled',
+    );
+
+    const expected = validInvoices.reduce(
+      (sum, invoice) =>
+        sum + Number(invoice.amount || 0),
+      0,
+    );
+
+    const collected = validInvoices.reduce(
+      (sum, invoice) =>
+        sum + Number(invoice.paid_amount || 0),
+      0,
+    );
+
+    const pending = validInvoices.reduce(
+      (sum, invoice) =>
+        sum +
+        Math.max(
+          Number(invoice.balance_amount ?? invoice.amount ?? 0),
+          0,
+        ),
+      0,
+    );
+
+    const overdue = validInvoices
+      .filter(
+        (invoice) =>
+          normalize(invoice.status) === 'overdue',
+      )
+      .reduce(
+        (sum, invoice) =>
+          sum +
+          Math.max(
+            Number(
+              invoice.balance_amount ??
+                invoice.amount ??
+                0,
+            ),
+            0,
+          ),
+        0,
+      );
+
+    const paidInvoiceCount =
+      validInvoices.filter(
+        (invoice) =>
+          normalize(invoice.status) === 'paid',
+      ).length;
+
+    const overdueInvoiceCount =
+      validInvoices.filter(
+        (invoice) =>
+          normalize(invoice.status) ===
+          'overdue',
+      ).length;
+
+    return {
+      expected,
+      collected,
+      pending,
+      overdue,
+      invoice_count: validInvoices.length,
+      paid_invoice_count: paidInvoiceCount,
+      overdue_invoice_count:
+        overdueInvoiceCount,
+      collection_rate:
+        expected > 0
+          ? Math.min(
+              Math.round(
+                (collected / expected) * 100,
+              ),
+              100,
+            )
+          : 0,
+    };
+  }, [invoices]);
 
   const sendWhatsAppReminder = (
     tenant: Tenant,
@@ -1113,6 +1238,80 @@ function App() {
     );
   };
 
+  const sendInvoiceWhatsApp = async (
+    invoice: Invoice,
+  ) => {
+    try {
+      await apiRequest(
+        `/invoices/${invoice.id}/sent`,
+        {
+          method: 'PATCH',
+        },
+      );
+
+      const tenant = tenants.find(
+        (item) =>
+          item.id === invoice.tenant_id,
+      );
+
+      if (!tenant) {
+        throw new Error(
+          'Tenant information not found.',
+        );
+      }
+
+      let phone = tenant.phone.replace(
+        /[^0-9]/g,
+        '',
+      );
+
+      if (phone.length === 10) {
+        phone = `91${phone}`;
+      }
+
+      const paid = Number(
+        invoice.paid_amount || 0,
+      );
+
+      const balance = Math.max(
+        Number(
+          invoice.balance_amount ??
+            invoice.amount,
+        ) - paid,
+        0,
+      );
+
+      const message = encodeURIComponent(
+        `Hello ${tenant.name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${
+          invoice.invoice_number
+        }\nMonth: ${
+          invoice.month || '-'
+        }\nAmount: ${money(
+          invoice.amount,
+        )}\nPaid: ${money(
+          paid,
+        )}\nBalance: ${money(
+          balance,
+        )}\nDue date: ${formatDate(
+          invoice.due_date,
+        )}\n\nThank you.`,
+      );
+
+      window.open(
+        `https://wa.me/${phone}?text=${message}`,
+        '_blank',
+      );
+
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to send invoice.',
+      );
+    }
+  };
+
   const openTenantDetails = (
     tenant: Tenant,
   ) => {
@@ -1124,6 +1323,8 @@ function App() {
     tenant: Tenant,
   ) => {
     setPaymentTenantId(String(tenant.id));
+    setPaymentInvoiceId('');
+
     setPaymentAmount(
       String(
         getTenantPending(tenant) ||
@@ -1131,8 +1332,65 @@ function App() {
           '',
       ),
     );
+
     setActiveModal('payment');
   };
+
+  const openPaymentForInvoice = (
+    invoice: Invoice,
+  ) => {
+    if (
+      normalize(invoice.status) ===
+      'cancelled'
+    ) {
+      setError(
+        'Cancelled invoices cannot receive payments.',
+      );
+      return;
+    }
+
+    const balance = Math.max(
+      Number(
+        invoice.balance_amount ??
+          Number(invoice.amount || 0) -
+            Number(invoice.paid_amount || 0),
+      ),
+      0,
+    );
+
+    if (balance <= 0) {
+      setError('This invoice is already fully paid.');
+      return;
+    }
+
+    setPaymentTenantId(
+      String(invoice.tenant_id),
+    );
+
+    setPaymentInvoiceId(
+      String(invoice.id),
+    );
+
+    setPaymentAmount(String(balance));
+
+    setPaymentMonth(
+      invoice.month || currentMonthName(),
+    );
+
+    setActiveModal('payment');
+  };
+
+  const getInvoiceBalance = (
+    invoice: Invoice,
+  ) =>
+    Math.max(
+      Number(
+        invoice.balance_amount ??
+          Number(invoice.amount || 0) -
+            Number(invoice.paid_amount || 0),
+      ),
+      0,
+    );
 
   const selectedTenantPayments =
     selectedTenant
@@ -1150,12 +1408,15 @@ function App() {
           <div className="brand-logo auth-logo">
             P
           </div>
+
           <h1 className="auth-title">
             Peacely
           </h1>
+
           <p className="auth-subtitle">
             Checking your session...
           </p>
+
           <div className="auth-loader">
             Connecting securely
           </div>
@@ -1342,22 +1603,32 @@ function App() {
         {activeTab === 'dashboard' && (
           <Dashboard
             expectedRent={expectedRent}
-            collectedThisMonth={collectedThisMonth}
+            collectedThisMonth={
+              collectedThisMonth
+            }
             pendingDues={pendingDues}
             collectionRate={collectionRate}
             totalOccupancy={totalOccupancy}
             activeTenants={activeTenants}
             occupiedBeds={occupiedBeds}
-            availableBedCount={availableBedCount}
+            availableBedCount={
+              availableBedCount
+            }
             properties={properties}
             upcomingDues={upcomingDues}
             overdueTenants={overdueTenants}
             recentPayments={recentPayments}
             getTenantPending={getTenantPending}
             getTenantPaid={getTenantPaid}
-            openTenantDetails={openTenantDetails}
-            sendWhatsAppReminder={sendWhatsAppReminder}
-            openPaymentForTenant={openPaymentForTenant}
+            openTenantDetails={
+              openTenantDetails
+            }
+            sendWhatsAppReminder={
+              sendWhatsAppReminder
+            }
+            openPaymentForTenant={
+              openPaymentForTenant
+            }
             openModal={openModal}
             setActiveTab={setActiveTab}
           />
@@ -1388,13 +1659,19 @@ function App() {
             tenantFilter={tenantFilter}
             setTenantFilter={setTenantFilter}
             propertyFilter={propertyFilter}
-            setPropertyFilter={setPropertyFilter}
+            setPropertyFilter={
+              setPropertyFilter
+            }
             properties={properties}
             openModal={openModal}
             getTenantStatus={getTenantStatus}
             getTenantPaid={getTenantPaid}
-            getTenantPending={getTenantPending}
-            openTenantDetails={openTenantDetails}
+            getTenantPending={
+              getTenantPending
+            }
+            openTenantDetails={
+              openTenantDetails
+            }
             sendWhatsAppReminder={
               sendWhatsAppReminder
             }
@@ -1419,6 +1696,9 @@ function App() {
             search={invoiceSearch}
             setSearch={setInvoiceSearch}
             openModal={openModal}
+            onPay={openPaymentForInvoice}
+            onSend={sendInvoiceWhatsApp}
+            getBalance={getInvoiceBalance}
           />
         )}
 
@@ -1428,11 +1708,30 @@ function App() {
             rooms={rooms}
             beds={beds}
             tenants={activeTenants}
-            expectedRent={expectedRent}
-            collected={collectedThisMonth}
-            pending={pendingDues}
+            expectedRent={
+              financeSummary.invoice_count > 0
+                ? financeSummary.expected
+                : expectedRent
+            }
+            collected={
+              financeSummary.invoice_count > 0
+                ? financeSummary.collected
+                : collectedThisMonth
+            }
+            pending={
+              financeSummary.invoice_count > 0
+                ? financeSummary.pending
+                : pendingDues
+            }
+            overdue={
+              financeSummary.overdue
+            }
             occupancy={totalOccupancy}
-            collectionRate={collectionRate}
+            collectionRate={
+              financeSummary.invoice_count > 0
+                ? financeSummary.collection_rate
+                : collectionRate
+            }
           />
         )}
       </main>
@@ -1491,7 +1790,9 @@ function App() {
                 className="modal-input"
                 value={roomPropertyId}
                 onChange={(e) =>
-                  setRoomPropertyId(e.target.value)
+                  setRoomPropertyId(
+                    e.target.value,
+                  )
                 }
               >
                 <option value="">
@@ -1758,7 +2059,11 @@ function App() {
             >
               <ModalTitle
                 title="Record Payment"
-                subtitle="Record a rent payment against a tenant."
+                subtitle={
+                  paymentInvoiceId
+                    ? 'Record payment against the selected invoice.'
+                    : 'Record a rent payment against a tenant.'
+                }
               />
 
               <select
@@ -1766,7 +2071,9 @@ function App() {
                 value={paymentTenantId}
                 onChange={(e) => {
                   const id = e.target.value;
+
                   setPaymentTenantId(id);
+                  setPaymentInvoiceId('');
 
                   const tenant = tenants.find(
                     (item) =>
@@ -1805,6 +2112,75 @@ function App() {
                   </option>
                 ))}
               </select>
+
+              {paymentTenantId && (
+                <select
+                  className="modal-input"
+                  value={paymentInvoiceId}
+                  onChange={(e) => {
+                    const id = e.target.value;
+
+                    setPaymentInvoiceId(id);
+
+                    if (id) {
+                      const invoice =
+                        invoices.find(
+                          (item) =>
+                            item.id ===
+                            Number(id),
+                        );
+
+                      if (invoice) {
+                        setPaymentAmount(
+                          String(
+                            getInvoiceBalance(
+                              invoice,
+                            ),
+                          ),
+                        );
+
+                        setPaymentMonth(
+                          invoice.month ||
+                            currentMonthName(),
+                        );
+                      }
+                    }
+                  }}
+                >
+                  <option value="">
+                    No invoice — general payment
+                  </option>
+
+                  {invoices
+                    .filter(
+                      (invoice) =>
+                        invoice.tenant_id ===
+                          Number(
+                            paymentTenantId,
+                          ) &&
+                        normalize(
+                          invoice.status,
+                        ) !== 'cancelled' &&
+                        getInvoiceBalance(
+                          invoice,
+                        ) > 0,
+                    )
+                    .map((invoice) => (
+                      <option
+                        key={invoice.id}
+                        value={invoice.id}
+                      >
+                        {invoice.invoice_number} ·{' '}
+                        {money(
+                          getInvoiceBalance(
+                            invoice,
+                          ),
+                        )}{' '}
+                        balance
+                      </option>
+                    ))}
+                </select>
+              )}
 
               <input
                 className="modal-input"
@@ -1964,11 +2340,11 @@ function App() {
                   selectedTenant,
                 )}
                 onClose={closeModal}
-                onPayment={() => {
+                onPayment={() =>
                   openPaymentForTenant(
                     selectedTenant,
-                  );
-                }}
+                  )
+                }
                 onWhatsApp={() =>
                   sendWhatsAppReminder(
                     selectedTenant,
@@ -2210,6 +2586,7 @@ function Dashboard({
                       <strong>
                         {tenant.name}
                       </strong>
+
                       <span>
                         {money(
                           getTenantPending(
@@ -2347,6 +2724,7 @@ function Dashboard({
                 <strong>
                   {money(payment.amount)}
                 </strong>
+
                 <span className="status paid">
                   Paid
                 </span>
@@ -2404,12 +2782,14 @@ function Dashboard({
                 label="Rooms"
                 value={property.room_count}
               />
+
               <MiniMetric
                 label="Beds"
                 value={
                   property.bed_count || 0
                 }
               />
+
               <MiniMetric
                 label="Occupied"
                 value={
@@ -2421,6 +2801,7 @@ function Dashboard({
 
             <div className="glass-footer">
               <span>Monthly Revenue</span>
+
               <strong>
                 {money(
                   property.monthly_revenue,
@@ -2453,7 +2834,9 @@ function PropertiesView({
         action={
           <button
             className="btn-primary"
-            onClick={() => openModal('property')}
+            onClick={() =>
+              openModal('property')
+            }
           >
             + Property
           </button>
@@ -2483,6 +2866,7 @@ function PropertiesView({
             <div className="glass-header">
               <div>
                 <h3>{property.name}</h3>
+
                 <p>
                   {property.address ||
                     'No address'}
@@ -2515,6 +2899,7 @@ function PropertiesView({
 
             <div className="glass-footer">
               <span>Monthly Revenue</span>
+
               <strong>
                 {money(
                   property.monthly_revenue,
@@ -2646,6 +3031,7 @@ function RoomsView({
                     key={bed.id}
                   >
                     Bed {bed.bed_number}
+
                     <small>
                       {bed.is_occupied
                         ? 'Occupied'
@@ -2798,9 +3184,8 @@ function TenantsView({
       {tenants.map((tenant) => {
         const status = getTenantStatus(tenant);
         const paid = getTenantPaid(tenant.id);
-        const pending = getTenantPending(
-          tenant,
-        );
+        const pending =
+          getTenantPending(tenant);
 
         return (
           <div
@@ -2826,8 +3211,7 @@ function TenantsView({
                   {tenant.property_name ||
                     'Property'}{' '}
                   · Room{' '}
-                  {tenant.room_number || '-'} ·
-                  Bed{' '}
+                  {tenant.room_number || '-'} · Bed{' '}
                   {tenant.bed_number || '-'}
                 </span>
               </div>
@@ -2838,6 +3222,7 @@ function TenantsView({
             <div className="tenant-finance">
               <div>
                 <span>Monthly Rent</span>
+
                 <strong>
                   {money(
                     tenant.monthly_rent,
@@ -2847,6 +3232,7 @@ function TenantsView({
 
               <div>
                 <span>Paid</span>
+
                 <strong className="success-text">
                   {money(paid)}
                 </strong>
@@ -2854,6 +3240,7 @@ function TenantsView({
 
               <div>
                 <span>Pending</span>
+
                 <strong
                   className={
                     pending > 0
@@ -2951,7 +3338,7 @@ function PaymentsView({
 
       <input
         className="search-input"
-        placeholder="Search tenant, property, month or method..."
+        placeholder="Search tenant, invoice, property, month or method..."
         value={search}
         onChange={(e) =>
           setSearch(e.target.value)
@@ -3003,6 +3390,14 @@ function PaymentsView({
 
           <div className="metrics-row">
             <MiniMetric
+              label="Invoice"
+              value={
+                payment.invoice_number ||
+                'General Payment'
+              }
+            />
+
+            <MiniMetric
               label="Month"
               value={
                 payment.payment_month
@@ -3042,11 +3437,17 @@ function InvoicesView({
   search,
   setSearch,
   openModal,
+  onPay,
+  onSend,
+  getBalance,
 }: {
   invoices: Invoice[];
   search: string;
   setSearch: (value: string) => void;
   openModal: (modal: Modal) => void;
+  onPay: (invoice: Invoice) => void;
+  onSend: (invoice: Invoice) => void;
+  getBalance: (invoice: Invoice) => number;
 }) {
   return (
     <div className="view-container">
@@ -3074,54 +3475,138 @@ function InvoicesView({
         }
       />
 
-      {invoices.map((invoice) => (
-        <div
-          className="glass-card"
-          key={invoice.id}
-        >
-          <div className="glass-header">
-            <div>
-              <h3>
-                {invoice.invoice_number}
-              </h3>
+      {invoices.map((invoice) => {
+        const balance = getBalance(invoice);
+        const paid = Number(
+          invoice.paid_amount || 0,
+        );
 
-              <p>
-                {invoice.tenant_name ||
-                  'Tenant'}
-              </p>
+        const percentage = Math.min(
+          Math.round(
+            Number(
+              invoice.payment_percentage ??
+                (Number(invoice.amount) > 0
+                  ? (paid /
+                      Number(invoice.amount)) *
+                    100
+                  : 0),
+            ),
+          ),
+          100,
+        );
+
+        const status = normalize(
+          invoice.status,
+        );
+
+        return (
+          <div
+            className="glass-card"
+            key={invoice.id}
+          >
+            <div className="glass-header">
+              <div>
+                <h3>
+                  {invoice.invoice_number}
+                </h3>
+
+                <p>
+                  {invoice.tenant_name ||
+                    'Tenant'}
+                </p>
+              </div>
+
+              <StatusBadge
+                status={
+                  invoice.status || 'Pending'
+                }
+              />
             </div>
 
-            <StatusBadge
-              status={
-                normalize(
-                  invoice.status,
-                ) === 'paid'
-                  ? 'paid'
-                  : 'pending'
-              }
-            />
+            <div className="metrics-row">
+              <MiniMetric
+                label="Invoice Amount"
+                value={money(
+                  invoice.amount,
+                )}
+              />
+
+              <MiniMetric
+                label="Paid"
+                value={money(paid)}
+              />
+
+              <MiniMetric
+                label="Balance"
+                value={money(balance)}
+              />
+
+              <MiniMetric
+                label="Due"
+                value={formatDate(
+                  invoice.due_date,
+                )}
+              />
+            </div>
+
+            <div className="glass-footer">
+              <span>
+                {invoice.month || '-'} ·{' '}
+                {percentage}% paid
+              </span>
+
+              <span
+                className={
+                  normalize(
+                    invoice.delivery_status,
+                  ) === 'sent'
+                    ? 'status paid'
+                    : 'status pending'
+                }
+              >
+                {invoice.delivery_status ||
+                  'Not Sent'}
+              </span>
+            </div>
+
+            <div className="progress-bar-bg">
+              <div
+                className="progress-bar-fill"
+                style={{
+                  width: `${percentage}%`,
+                }}
+              />
+            </div>
+
+            <div className="tenant-actions">
+              {status !== 'paid' &&
+                status !== 'cancelled' && (
+                  <button
+                    className="btn-primary"
+                    onClick={() =>
+                      onPay(invoice)
+                    }
+                  >
+                    Pay {money(balance)}
+                  </button>
+                )}
+
+              <button
+                className="btn-secondary"
+                onClick={() =>
+                  onSend(invoice)
+                }
+              >
+                {normalize(
+                  invoice.delivery_status,
+                ) === 'sent'
+                  ? 'Send Again'
+                  : 'WhatsApp Invoice'}
+              </button>
+            </div>
           </div>
-
-          <div className="metrics-row">
-            <MiniMetric
-              label="Amount"
-              value={money(invoice.amount)}
-            />
-
-            <MiniMetric
-              label="Month"
-              value={invoice.month || '-'}
-            />
-
-            <MiniMetric
-              label="Due"
-              value={formatDate(
-                invoice.due_date,
-              )}
-            />
-          </div>
-        </div>
-      ))}
+        );
+      })}
 
       {invoices.length === 0 && (
         <EmptyCard
@@ -3152,6 +3637,7 @@ function AnalyticsView({
   expectedRent,
   collected,
   pending,
+  overdue,
   occupancy,
   collectionRate,
 }: {
@@ -3162,6 +3648,7 @@ function AnalyticsView({
   expectedRent: number;
   collected: number;
   pending: number;
+  overdue: number;
   occupancy: number;
   collectionRate: number;
 }) {
@@ -3192,9 +3679,35 @@ function AnalyticsView({
         />
 
         <Metric
+          icon="⚠️"
+          value={money(overdue)}
+          label="Overdue"
+        />
+      </div>
+
+      <div className="metrics-grid">
+        <Metric
           icon="📈"
           value={`${collectionRate}%`}
           label="Collection Rate"
+        />
+
+        <Metric
+          icon="🏠"
+          value={String(properties.length)}
+          label="Properties"
+        />
+
+        <Metric
+          icon="👥"
+          value={String(tenants.length)}
+          label="Active Tenants"
+        />
+
+        <Metric
+          icon="🛏️"
+          value={`${occupancy}%`}
+          label="Occupancy"
         />
       </div>
 
@@ -3363,6 +3876,7 @@ function TenantDetails({
       <div className="finance-panel">
         <div>
           <span>Paid this month</span>
+
           <strong className="success-text">
             {money(paid)}
           </strong>
@@ -3370,6 +3884,7 @@ function TenantDetails({
 
         <div>
           <span>Pending</span>
+
           <strong
             className={
               pending
@@ -3402,6 +3917,7 @@ function TenantDetails({
         <div className="section-heading">
           <div>
             <h3>Payment History</h3>
+
             <p>
               {payments.length} payment
               {payments.length !== 1
@@ -3440,6 +3956,12 @@ function TenantDetails({
                   <span>
                     {payment.payment_month}
                   </span>
+
+                  {payment.invoice_number && (
+                    <span>
+                      {payment.invoice_number}
+                    </span>
+                  )}
                 </div>
 
                 <div>
@@ -3694,9 +4216,11 @@ function StatusBadge({
 }: {
   status: string;
 }) {
+  const normalized = normalize(status);
+
   return (
     <span
-      className={`status ${normalize(status)}`}
+      className={`status ${normalized}`}
     >
       {status.charAt(0).toUpperCase() +
         status.slice(1)}
