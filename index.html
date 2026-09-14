@@ -4,6 +4,54 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Peacely</title>
+
+    <script>
+      (() => {
+        const originalFetch = window.fetch.bind(window);
+
+        const collectionKeys = {
+          '/api/properties': 'properties',
+          '/api/rooms': 'rooms',
+          '/api/beds': 'beds',
+          '/api/tenants': 'tenants',
+          '/api/payments': 'payments',
+          '/api/invoices': 'invoices',
+        };
+
+        window.fetch = async (...args) => {
+          const response = await originalFetch(...args);
+          const request = args[0];
+          const url =
+            typeof request === 'string'
+              ? request
+              : request?.url || '';
+          const pathname = url.split('?')[0];
+          const key = collectionKeys[pathname];
+
+          if (!key || !response.ok) {
+            return response;
+          }
+
+          const payload = await response
+            .clone()
+            .json()
+            .catch(() => null);
+
+          if (!payload || !Array.isArray(payload[key])) {
+            return response;
+          }
+
+          return new Response(
+            JSON.stringify(payload[key]),
+            {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+            },
+          );
+        };
+      })();
+    </script>
   </head>
 
   <body>
