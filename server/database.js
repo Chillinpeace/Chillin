@@ -28,6 +28,24 @@ export async function initializeDatabase() {
     // =====================================================
 
     await client.query(`
+      CREATE TABLE IF NOT EXISTS owners (
+        id SERIAL PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        phone VARCHAR(30) DEFAULT '',
+        password_hash TEXT NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
+      CREATE TABLE IF NOT EXISTS sessions (
+        id SERIAL PRIMARY KEY,
+        owner_id INTEGER NOT NULL
+          REFERENCES owners(id) ON DELETE CASCADE,
+        token_hash TEXT UNIQUE NOT NULL,
+        expires_at TIMESTAMPTZ NOT NULL,
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS properties (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
@@ -102,20 +120,14 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // DATABASE MIGRATIONS
-    // =====================================================
-    // IMPORTANT:
-    // CREATE TABLE IF NOT EXISTS does NOT modify old tables.
-    // These ALTER statements upgrade existing Peacely DBs.
+    // MIGRATIONS
     // =====================================================
 
-    // Properties
     await client.query(`
       ALTER TABLE properties
       ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
     `);
 
-    // Rooms
     await client.query(`
       ALTER TABLE rooms
       ADD COLUMN IF NOT EXISTS sharing_type VARCHAR(50)
@@ -130,18 +142,11 @@ export async function initializeDatabase() {
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
-    // Beds
     await client.query(`
       ALTER TABLE beds
       ADD COLUMN IF NOT EXISTS is_occupied BOOLEAN
         DEFAULT FALSE;
     `);
-
-    // -----------------------------------------------------
-    // OLD DATABASES MAY HAVE "occupied"
-    // -----------------------------------------------------
-    // Copy the old value into the new standard column.
-    // -----------------------------------------------------
 
     const occupiedColumn = await client.query(`
       SELECT column_name
@@ -160,7 +165,6 @@ export async function initializeDatabase() {
       `);
     }
 
-    // Tenants
     await client.query(`
       ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS email VARCHAR(255)
@@ -199,7 +203,6 @@ export async function initializeDatabase() {
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
-    // Payments
     await client.query(`
       ALTER TABLE payments
       ADD COLUMN IF NOT EXISTS payment_date DATE
@@ -222,7 +225,6 @@ export async function initializeDatabase() {
         TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
-    // Invoices
     await client.query(`
       ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS month VARCHAR(50);
@@ -237,7 +239,16 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // CONSTRAINTS / FOREIGN KEYS
+    // OWNER OWNERSHIP
+    // =====================================================
+
+    await client.query(`
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+    `);
+
+    // =====================================================
+    // FOREIGN KEYS
     // =====================================================
 
     await client.query(`
@@ -328,6 +339,18 @@ export async function initializeDatabase() {
           ON DELETE CASCADE;
         END IF;
 
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'properties_owner_id_fkey'
+        ) THEN
+          ALTER TABLE properties
+          ADD CONSTRAINT properties_owner_id_fkey
+          FOREIGN KEY (owner_id)
+          REFERENCES owners(id)
+          ON DELETE CASCADE;
+        END IF;
+
       END $$;
     `);
 
@@ -336,6 +359,9 @@ export async function initializeDatabase() {
     // =====================================================
 
     await client.query(`
+      CREATE INDEX IF NOT EXISTS idx_properties_owner_id
+        ON properties(owner_id);
+
       CREATE INDEX IF NOT EXISTS idx_rooms_property_id
         ON rooms(property_id);
 
@@ -356,19 +382,25 @@ export async function initializeDatabase() {
 
       CREATE INDEX IF NOT EXISTS idx_invoices_tenant_id
         ON invoices(tenant_id);
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_owner_id
+        ON sessions(owner_id);
+
+      CREATE INDEX IF NOT EXISTS idx_sessions_expires_at
+        ON sessions(expires_at);
     `);
 
     await client.query('COMMIT');
 
     console.log(
-      'PostgreSQL database initialized and migrated successfully.'
+      'PostgreSQL database initialized and migrated successfully.',
     );
   } catch (error) {
     await client.query('ROLLBACK');
 
     console.error(
       'Database initialization failed:',
-      error
+      error,
     );
 
     throw error;
