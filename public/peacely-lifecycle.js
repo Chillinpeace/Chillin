@@ -38,11 +38,6 @@
     return Array.isArray(data) ? data : [];
   };
 
-  const isTenantsTabActive = () => {
-    const controls = [...document.querySelectorAll('button, a, [role="button"]')];
-    return controls.some((el) => el.classList.contains('active') && /^tenants$/i.test(String(el.textContent || '').trim()));
-  };
-
   const findTenantsView = () => {
     const headings = [...document.querySelectorAll('h1, h2, h3')];
     const heading = headings.find((el) => /^tenants$/i.test(String(el.textContent || '').trim()));
@@ -51,17 +46,21 @@
 
   const render = async () => {
     const view = findTenantsView();
-    if (!view || !isTenantsTabActive()) {
+    if (!view) {
       document.getElementById(PANEL_ID)?.remove();
       return;
     }
 
     addStyles();
     let panel = document.getElementById(PANEL_ID);
+    if (panel && panel.parentElement !== view) {
+      panel.remove();
+      panel = null;
+    }
+
     if (!panel) {
       panel = document.createElement('section');
       panel.id = PANEL_ID;
-      const header = view.querySelector('h1, h2, h3')?.closest('div');
       view.insertBefore(panel, view.firstElementChild || null);
       panel.innerHTML = `
         <h3>Tenant Lifecycle</h3>
@@ -86,7 +85,7 @@
         const tenant = active.find((t) => Number(t.id) === tenantId);
         const msg = panel.querySelector('#pl-msg');
         if (!tenantId || !tenant) { msg.textContent = 'Select an active tenant first.'; return; }
-        if (!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)) { msg.textContent = 'Choose a valid move-out date.'; return; }
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { msg.textContent = 'Choose a valid move-out date.'; return; }
         if (!window.confirm(`Move ${tenant.name} out on ${date}? This will release the assigned bed.`)) return;
         const button = panel.querySelector('#pl-moveout');
         button.disabled = true;
@@ -110,10 +109,16 @@
     }
   };
 
-  const observer = new MutationObserver(() => {
+  const scheduleRender = () => {
     window.clearTimeout(window.__peacelyLifecycleTimer);
     window.__peacelyLifecycleTimer = window.setTimeout(() => render().catch(() => {}), 80);
-  });
+  };
+
+  const observer = new MutationObserver(scheduleRender);
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
-  window.setTimeout(() => render().catch(() => {}), 300);
+
+  window.setTimeout(() => render().catch(() => {}), 100);
+  window.setTimeout(() => render().catch(() => {}), 500);
+  window.setTimeout(() => render().catch(() => {}), 1500);
+  window.setInterval(() => render().catch(() => {}), 2000);
 })();
