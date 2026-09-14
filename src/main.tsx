@@ -887,7 +887,7 @@ function App() {
    * 3. Backend confirms success
    * 4. Modal closes immediately
    * 5. Forms reset
-   * 6. Data refreshes
+   * 6. Data refreshes in background
    * 7. Saving is always released in finally
    */
   const handleRecordPayment = async (
@@ -1047,13 +1047,12 @@ function App() {
        * problem, the payment itself is already
        * safely saved in the database.
        */
-      try {
-        loadAllData().catch((refreshError) => {
-  console.error(
-    'Payment saved but refresh failed:',
-    refreshError,
-  );
-});
+      loadAllData().catch((refreshError) => {
+        console.error(
+          'Payment saved but data refresh failed:',
+          refreshError,
+        );
+      });
     } catch (err) {
       console.error(
         'Payment recording failed:',
