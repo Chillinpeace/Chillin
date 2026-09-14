@@ -1,83 +1,120 @@
 (() => {
   'use strict';
 
-  const removeHiddenUI = () => {
-    const controls = [
-      ...document.querySelectorAll('button, a, [role="button"]'),
-    ];
+  const textOf = (element) => String(element?.textContent || '').replace(/\s+/g, ' ').trim();
+  const controls = () => [...document.querySelectorAll('button, a, [role="button"]')];
 
-    const analyticsControls = controls.filter((element) => {
-      const text = String(element.textContent || '').trim();
-      return /analytics$/i.test(text) || element.dataset?.tab === 'analytics';
-    });
-
-    for (const control of analyticsControls) {
-      if (control.classList.contains('active')) {
-        const dashboardControl = document.querySelector('[data-tab="dashboard"]') ||
-          [...document.querySelectorAll('button, a, [role="button"]')]
-            .find((element) => /^(?:🏠\s*)?home$/i.test(String(element.textContent || '').trim()));
-
-        if (dashboardControl && dashboardControl !== control) {
-          dashboardControl.click();
-        }
-      }
-
-      control.remove();
-    }
-
-    const paymentControls = [
-      ...document.querySelectorAll('button, a, [role="button"]'),
-    ].filter((element) => {
-      const text = String(element.textContent || '').replace(/\s+/g, ' ').trim();
-      return /^\+\s*payment$/i.test(text);
-    });
-
-    paymentControls.forEach((element) => element.remove());
-
-    document
-      .querySelectorAll('.peacely-ops-tab[data-tab="analytics"]')
+  const removeAnalytics = () => {
+    controls().filter((element) => /analytics$/i.test(textOf(element)) || element.dataset?.tab === 'analytics')
       .forEach((element) => element.remove());
 
-    document
-      .querySelectorAll('.peacely-analytics-section, .peacely-analytics-grid, .peacely-analytics-note')
+    document.querySelectorAll('.peacely-ops-tab[data-tab="analytics"], .peacely-analytics-section, .peacely-analytics-grid, .peacely-analytics-note')
       .forEach((element) => element.remove());
 
     document.querySelectorAll('.view-container').forEach((container) => {
-      const heading = [...container.querySelectorAll('h1, h2, h3')]
-        .find((element) => /^analytics$/i.test(String(element.textContent || '').trim()));
-
-      if (heading) {
-        container.remove();
-      }
+      const heading = [...container.querySelectorAll('h1, h2, h3')].find((element) => /^analytics$/i.test(textOf(element)));
+      if (heading) container.remove();
     });
   };
 
-  const isTenantsScreen = () => {
-    const controls = [...document.querySelectorAll('button, a, [role="button"]')];
-    return controls.some((element) => {
-      const text = String(element.textContent || '').replace(/\s+/g, ' ').trim();
-      return /^tenants$/i.test(text) && element.classList.contains('active');
+  const isPaymentsContainer = (element) => {
+    const container = element?.closest?.('.view-container');
+    if (!container) return false;
+    return [...container.querySelectorAll('h1, h2, h3')].some((heading) => /^payments$/i.test(textOf(heading)));
+  };
+
+  const keepPaymentActionOnlyInPayments = () => {
+    controls().filter((element) => /^\+\s*payment$/i.test(textOf(element))).forEach((element) => {
+      if (!isPaymentsContainer(element)) element.remove();
     });
   };
 
   const findTenantsContainer = () => {
-    const heading = [...document.querySelectorAll('h1, h2, h3')]
-      .find((element) => /^tenants$/i.test(String(element.textContent || '').trim()));
+    const heading = [...document.querySelectorAll('h1, h2, h3')].find((element) => /^tenants$/i.test(textOf(element)));
+    return heading?.closest('.view-container') || null;
+  };
 
-    if (!heading) return null;
-    return heading.closest('.view-container') || heading.parentElement?.parentElement || heading.parentElement;
+  const tenantCardByName = (name) => {
+    const container = findTenantsContainer();
+    if (!container) return null;
+    return [...container.querySelectorAll('.tenant-card')].find((card) => {
+      const heading = card.querySelector('h3');
+      return textOf(heading) === String(name || '').trim();
+    }) || null;
+  };
+
+  const cleanTenantCards = async () => {
+    const container = findTenantsContainer();
+    if (!container) return;
+
+    // Tenant screen is the tenant database only. Payment/reminder actions belong in Payments.
+    container.querySelectorAll('.tenant-card').forEach((card) => {
+      const actionButtons = [...card.querySelectorAll('button')];
+      actionButtons.forEach((button) => {
+        const label = textOf(button);
+        if (/^(pay|whatsapp)$/i.test(label)) button.remove();
+      });
+
+      const finance = card.querySelector('.tenant-finance');
+      if (finance) {
+        const values = [...finance.querySelectorAll('div')];
+        values.forEach((item) => {
+          const label = textOf(item.querySelector('span'));
+          if (/^(paid|pending)$/i.test(label)) item.remove();
+        });
+      }
+    });
+
+    if (container.dataset.tenantDatabaseLoaded === '1') return;
+    container.dataset.tenantDatabaseLoaded = 'loading';
+
+    try {
+      const response = await fetch('/api/tenants', { credentials: 'include' });
+      const payload = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(payload?.error || 'Unable to load tenant database.');
+
+      const tenants = Array.isArray(payload) ? payload : [];
+      tenants.forEach((tenant) => {
+        const card = tenantCardByName(tenant.name);
+        if (!card || card.querySelector('.peacely-tenant-database')) return;
+
+        const database = document.createElement('div');
+        database.className = 'peacely-tenant-database';
+        database.style.cssText = 'display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0;padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:12px;';
+
+        const fields = [
+          ['Monthly Rent', `₹${Number(tenant.monthly_rent || 0).toLocaleString('en-IN')}`],
+          ['Deposit', `₹${Number(tenant.deposit_amount || 0).toLocaleString('en-IN')}`],
+          ['Due Date', tenant.due_date ? String(tenant.due_date) : '-'],
+          ['Move In', tenant.move_in_date ? new Date(tenant.move_in_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'],
+          ['Property', tenant.property_name || '-'],
+          ['Room / Bed', `${tenant.room_number || '-'} / ${tenant.bed_number || '-'}`],
+        ];
+
+        fields.forEach(([label, value]) => {
+          const field = document.createElement('div');
+          field.innerHTML = `<span style="display:block;font-size:12px;opacity:.65;margin-bottom:3px">${label}</span><strong style="font-size:14px">${value}</strong>`;
+          database.appendChild(field);
+        });
+
+        const finance = card.querySelector('.tenant-finance');
+        if (finance) finance.replaceWith(database);
+        else card.appendChild(database);
+      });
+
+      container.dataset.tenantDatabaseLoaded = '1';
+    } catch {
+      container.dataset.tenantDatabaseLoaded = '0';
+    }
   };
 
   const showMoveOutPicker = async () => {
     try {
       const response = await fetch('/api/tenants', { credentials: 'include' });
-      const tenants = await response.json();
+      const payload = await response.json().catch(() => []);
+      if (!response.ok) throw new Error(payload?.error || 'Unable to load tenants.');
 
-      if (!response.ok) {
-        throw new Error(tenants?.error || 'Unable to load tenants.');
-      }
-
-      const activeTenants = (Array.isArray(tenants) ? tenants : [])
+      const activeTenants = (Array.isArray(payload) ? payload : [])
         .filter((tenant) => String(tenant.status || '').trim().toLowerCase() === 'active');
 
       if (!activeTenants.length) {
@@ -130,12 +167,10 @@
       confirm.onclick = async () => {
         const tenant = activeTenants.find((item) => String(item.id) === select.value);
         if (!tenant || !date.value) return;
-
         if (!window.confirm(`Move ${tenant.name} out on ${date.value}? This will release the assigned bed.`)) return;
 
         confirm.disabled = true;
         confirm.textContent = 'Moving out...';
-
         try {
           const result = await fetch(`/api/tenants/${encodeURIComponent(tenant.id)}/move-out`, {
             method: 'PATCH',
@@ -143,12 +178,8 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ move_out_date: date.value }),
           });
-
           const data = await result.json().catch(() => null);
-          if (!result.ok) {
-            throw new Error(data?.error || 'Unable to move out tenant.');
-          }
-
+          if (!result.ok) throw new Error(data?.error || 'Unable to move out tenant.');
           overlay.remove();
           window.alert(`${tenant.name} has been moved out successfully.`);
           window.location.reload();
@@ -172,11 +203,8 @@
   };
 
   const addMoveOutControl = () => {
-    if (!isTenantsScreen()) return;
-    if (document.getElementById('peacely-moveout-button')) return;
-
     const container = findTenantsContainer();
-    if (!container) return;
+    if (!container || document.getElementById('peacely-moveout-button')) return;
 
     const button = document.createElement('button');
     button.id = 'peacely-moveout-button';
@@ -185,28 +213,61 @@
     button.style.cssText = 'display:block;width:100%;margin:10px 0 16px;padding:12px 16px;border:0;border-radius:12px;background:#111;color:#fff;font-weight:700;font-size:15px;cursor:pointer;';
     button.addEventListener('click', showMoveOutPicker);
 
-    const heading = [...container.querySelectorAll('h1, h2, h3')]
-      .find((element) => /^tenants$/i.test(String(element.textContent || '').trim()));
+    const heading = [...container.querySelectorAll('h1, h2, h3')].find((element) => /^tenants$/i.test(textOf(element)));
+    if (heading?.parentElement) heading.parentElement.appendChild(button);
+    else container.insertBefore(button, container.firstChild);
+  };
 
-    if (heading?.parentElement) {
-      heading.parentElement.appendChild(button);
-    } else {
-      container.insertBefore(button, container.firstChild);
-    }
+  const addPaymentActions = () => {
+    const container = [...document.querySelectorAll('.view-container')].find((candidate) =>
+      [...candidate.querySelectorAll('h1, h2, h3')].some((heading) => /^payments$/i.test(textOf(heading)))
+    );
+    if (!container) return;
+
+    [...container.querySelectorAll('.glass-card')].forEach((card) => {
+      if (card.querySelector('.peacely-payment-actions')) return;
+
+      const invoiceText = [...card.querySelectorAll('*')].find((element) => textOf(element).startsWith('INV-'));
+      const invoiceNumber = invoiceText ? textOf(invoiceText) : '';
+      const buttons = document.createElement('div');
+      buttons.className = 'peacely-payment-actions';
+      buttons.style.cssText = 'display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;';
+
+      const pay = document.createElement('button');
+      pay.type = 'button';
+      pay.textContent = 'Pay';
+      pay.style.cssText = 'padding:9px 14px;border:0;border-radius:10px;background:#111;color:#fff;font-weight:700;';
+      pay.onclick = () => {
+        const headerPay = [...container.querySelectorAll('button')].find((button) => /^\+\s*payment$/i.test(textOf(button)));
+        if (headerPay) headerPay.click();
+      };
+      buttons.appendChild(pay);
+
+      if (invoiceNumber) {
+        const wa = document.createElement('button');
+        wa.type = 'button';
+        wa.textContent = 'WhatsApp Invoice';
+        wa.style.cssText = 'padding:9px 14px;border:1px solid #ddd;border-radius:10px;background:#fff;font-weight:700;';
+        wa.onclick = () => {
+          window.open(`https://wa.me/?text=${encodeURIComponent(`Invoice ${invoiceNumber} from Peacely`)}`, '_blank');
+        };
+        buttons.appendChild(wa);
+      }
+
+      card.appendChild(buttons);
+    });
   };
 
   const refreshUI = () => {
-    removeHiddenUI();
+    removeAnalytics();
+    keepPaymentActionOnlyInPayments();
+    cleanTenantCards();
     addMoveOutControl();
+    addPaymentActions();
   };
 
   const observer = new MutationObserver(refreshUI);
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true,
-    attributes: true,
-    attributeFilter: ['class'],
-  });
+  observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
 
   window.setTimeout(refreshUI, 50);
   window.setTimeout(refreshUI, 150);
