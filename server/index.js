@@ -688,7 +688,7 @@ app.get(
           p.name
 
         ORDER BY
-          p.id,
+          p.name,
           r.room_number
       `,
       [req.owner.id],
