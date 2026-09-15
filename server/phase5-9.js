@@ -95,7 +95,15 @@ async function audit(req, action, entityType = null, entityId = null, details = 
   try { await query(`INSERT INTO audit_logs(owner_id,actor_type,actor_id,action,entity_type,entity_id,details,ip_address,user_agent) VALUES($1,'owner',$1,$2,$3,$4,$5::jsonb,$6,$7)`, [req.phaseOwner.id, action, entityType, entityId, JSON.stringify(details), req.ip || '', clean(req.headers['user-agent']).slice(0,1000)]); } catch (e) { console.error('Audit log failed:', e.message); }
 }
 
-router.use(auth, limited);
+// This router is mounted before the legacy authentication endpoints by
+// server/bootstrap.js. Never intercept the public auth endpoints here.
+router.use((req, res, next) => {
+  if (req.path.startsWith('/auth/')) return next();
+  return auth(req, res, (err) => {
+    if (err) return next(err);
+    return limited(req, res, next);
+  });
+});
 
 // ---------------- PHASE 5: AUTOMATION & COMMUNICATION ----------------
 router.get('/automation/settings', async (req,res) => {
