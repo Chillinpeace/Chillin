@@ -36,7 +36,7 @@ try {
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id, expense_date);
-    CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id, property_id);
+    CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id,property_id);
 
     CREATE TABLE IF NOT EXISTS maintenance_tickets (
       id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, property_id INTEGER, room_id INTEGER, bed_id INTEGER,
@@ -66,42 +66,31 @@ try {
     CREATE INDEX IF NOT EXISTS idx_maintenance_owner_property ON maintenance_tickets(owner_id,property_id);
 
     CREATE TABLE IF NOT EXISTS property_levels (
-      id SERIAL PRIMARY KEY,
-      owner_id INTEGER NOT NULL,
-      property_id INTEGER NOT NULL,
-      building_name VARCHAR(150) NOT NULL DEFAULT 'Main Building',
-      floor_name VARCHAR(150) NOT NULL DEFAULT 'Ground Floor',
+      id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, property_id INTEGER NOT NULL,
+      building_name VARCHAR(150) NOT NULL DEFAULT 'Main Building', floor_name VARCHAR(150) NOT NULL DEFAULT 'Ground Floor',
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(owner_id, property_id, building_name, floor_name)
+      UNIQUE(owner_id,property_id,building_name,floor_name)
     );
-    CREATE INDEX IF NOT EXISTS idx_property_levels_owner_property ON property_levels(owner_id, property_id);
+    CREATE INDEX IF NOT EXISTS idx_property_levels_owner_property ON property_levels(owner_id,property_id);
 
     CREATE TABLE IF NOT EXISTS tenant_documents (
-      id SERIAL PRIMARY KEY,
-      owner_id INTEGER NOT NULL,
-      tenant_id INTEGER NOT NULL,
-      document_type VARCHAR(80) NOT NULL DEFAULT 'Other',
-      title VARCHAR(200) NOT NULL,
-      document_url TEXT DEFAULT '',
-      notes TEXT DEFAULT '',
-      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, tenant_id INTEGER NOT NULL,
+      document_type VARCHAR(80) NOT NULL DEFAULT 'Other', title VARCHAR(200) NOT NULL,
+      document_url TEXT DEFAULT '', notes TEXT DEFAULT '', created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
-    CREATE INDEX IF NOT EXISTS idx_tenant_documents_owner_tenant ON tenant_documents(owner_id, tenant_id);
+    CREATE INDEX IF NOT EXISTS idx_tenant_documents_owner_tenant ON tenant_documents(owner_id,tenant_id);
 
     CREATE TABLE IF NOT EXISTS rent_settings (
-      owner_id INTEGER PRIMARY KEY,
-      recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      late_fee_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      late_fee_type VARCHAR(20) NOT NULL DEFAULT 'flat',
-      late_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
-      grace_days INTEGER NOT NULL DEFAULT 0,
-      whatsapp_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      sms_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-      email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-      reminder_days_before INTEGER NOT NULL DEFAULT 3,
-      overdue_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      owner_id INTEGER PRIMARY KEY, recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      late_fee_enabled BOOLEAN NOT NULL DEFAULT TRUE, late_fee_type VARCHAR(20) NOT NULL DEFAULT 'flat',
+      late_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0, grace_days INTEGER NOT NULL DEFAULT 0,
+      whatsapp_enabled BOOLEAN NOT NULL DEFAULT TRUE, sms_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      email_enabled BOOLEAN NOT NULL DEFAULT FALSE, reminder_days_before INTEGER NOT NULL DEFAULT 3,
+      overdue_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE, updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS late_fee_applied BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS late_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
   `);
 } catch (error) {
   console.error('Peacely compatibility migration warning:', error);
