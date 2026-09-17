@@ -52,11 +52,6 @@
     button?.classList.add('active');
   }
 
-  function exportCsv(name, rows) {
-    const csv = rows.map(row => row.map(v => { const x=String(v ?? ''); return /[",\n]/.test(x) ? `"${x.replace(/"/g,'""')}"` : x; }).join(',')).join('\n');
-    const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download=name; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1000);
-  }
-
   async function loadTenants() {
     const d = await api('/tenants');
     return Array.isArray(d) ? d : [];
@@ -90,7 +85,7 @@
           <label>From<input id="p6-from" class="p6-input" type="date" value="${esc(from)}"></label>
           <label>To<input id="p6-to" class="p6-input" type="date" value="${esc(to)}"></label>
           <button class="p6-btn" id="p6-refresh">Refresh Report</button>
-          <button class="p6-btn alt" id="p6-export">Export Financial CSV</button>
+          <button class="p6-btn alt" id="p6-export">Export Financial PDF</button>
         </div>
         <div class="p6-grid">
           <div class="p6-card"><div class="p6-label">Invoiced</div><div class="p6-value">${money(financial?.invoiced)}</div><div class="p6-muted">Invoices due in range</div></div>
@@ -123,9 +118,13 @@
         </div>`;
 
       c.querySelector('#p6-refresh').onclick = () => renderFinancial();
-      c.querySelector('#p6-export').onclick = () => exportCsv(`peacely-financial-${from}-to-${to}.csv`, [
-        ['Metric','Value'],['Invoiced',financial?.invoiced],['Collected',financial?.collected],['Expenses',financial?.expenses],['Net Cash',financial?.net_cash],['Outstanding',financial?.outstanding],['Payments',financial?.payment_count],['Expense Entries',financial?.expense_count],[],['Month','Invoiced','Collected','Expenses','Net Cash'],...monthly.map(x=>[x.month,x.invoiced,x.collected,x.expenses,Number(x.collected||0)-Number(x.expenses||0)])
-      ]);
+      c.querySelector('#p6-export').onclick = async () => {
+        if (typeof window.peacelyExportFinancialPdf !== 'function') {
+          alert('PDF export is still loading. Please refresh Peacely once and try again.');
+          return;
+        }
+        await window.peacelyExportFinancialPdf();
+      };
       c.querySelector('#p6-tenant').onchange = async (e) => {
         const box = c.querySelector('#p6-tenant-history');
         const id = Number(e.target.value);
