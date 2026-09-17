@@ -4,6 +4,7 @@ import expenseRouter from './expenses.js';
 import phase59Router from './phase5-9.js';
 import phase7OperationsRouter from './phase7-operations.js';
 import financialPdfRouter from './financial-pdf.js';
+import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
 import { query } from './database.js';
 
 const { Client } = pg;
@@ -63,6 +64,44 @@ try {
     ALTER TABLE maintenance_tickets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     CREATE INDEX IF NOT EXISTS idx_maintenance_owner_status ON maintenance_tickets(owner_id,status);
     CREATE INDEX IF NOT EXISTS idx_maintenance_owner_property ON maintenance_tickets(owner_id,property_id);
+
+    CREATE TABLE IF NOT EXISTS property_levels (
+      id SERIAL PRIMARY KEY,
+      owner_id INTEGER NOT NULL,
+      property_id INTEGER NOT NULL,
+      building_name VARCHAR(150) NOT NULL DEFAULT 'Main Building',
+      floor_name VARCHAR(150) NOT NULL DEFAULT 'Ground Floor',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(owner_id, property_id, building_name, floor_name)
+    );
+    CREATE INDEX IF NOT EXISTS idx_property_levels_owner_property ON property_levels(owner_id, property_id);
+
+    CREATE TABLE IF NOT EXISTS tenant_documents (
+      id SERIAL PRIMARY KEY,
+      owner_id INTEGER NOT NULL,
+      tenant_id INTEGER NOT NULL,
+      document_type VARCHAR(80) NOT NULL DEFAULT 'Other',
+      title VARCHAR(200) NOT NULL,
+      document_url TEXT DEFAULT '',
+      notes TEXT DEFAULT '',
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_tenant_documents_owner_tenant ON tenant_documents(owner_id, tenant_id);
+
+    CREATE TABLE IF NOT EXISTS rent_settings (
+      owner_id INTEGER PRIMARY KEY,
+      recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      late_fee_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      late_fee_type VARCHAR(20) NOT NULL DEFAULT 'flat',
+      late_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+      grace_days INTEGER NOT NULL DEFAULT 0,
+      whatsapp_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      sms_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      email_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      reminder_days_before INTEGER NOT NULL DEFAULT 3,
+      overdue_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 } catch (error) {
   console.error('Peacely compatibility migration warning:', error);
@@ -78,6 +117,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', financialPdfRouter);
     originalUse.call(this, '/api', phase7OperationsRouter);
     originalUse.call(this, '/api', phase59Router);
+    originalUse.call(this, '/api', nivaasiUpgradesRouter);
     phaseRoutersMounted = true;
   }
   return result;
