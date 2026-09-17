@@ -35,7 +35,7 @@ try {
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-    CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id, expense_date);
+    CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id,expense_date);
     CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id,property_id);
 
     CREATE TABLE IF NOT EXISTS maintenance_tickets (
@@ -88,9 +88,6 @@ try {
       email_enabled BOOLEAN NOT NULL DEFAULT FALSE, reminder_days_before INTEGER NOT NULL DEFAULT 3,
       overdue_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE, updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
-
-    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS late_fee_applied BOOLEAN NOT NULL DEFAULT FALSE;
-    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS late_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
   `);
 } catch (error) {
   console.error('Peacely compatibility migration warning:', error);
