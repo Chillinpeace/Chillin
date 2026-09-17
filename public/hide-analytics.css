@@ -1,0 +1,8 @@
+/* Analytics has been removed from the owner UI. */
+.bottom-nav .nav-item:nth-child(7) {
+  display: none !important;
+}
+
+.view-container:has(.analytics-list) {
+  display: none !important;
+}
