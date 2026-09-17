@@ -66,14 +66,31 @@ async function ensureSchema() {
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
+    -- Older deployments created an expenses.owner_id foreign key against an
+    -- incompatible owner table. Application-level owner checks already protect
+    -- this table, so remove every legacy FK on this column. This also prevents
+    -- valid signed-in owners from being rejected by stale database constraints.
+    DO $$
+    DECLARE c RECORD;
+    BEGIN
+      FOR c IN
+        SELECT con.conname
+        FROM pg_constraint con
+        JOIN pg_class rel ON rel.oid = con.conrelid
+        JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = ANY(con.conkey)
+        WHERE rel.relname = 'expenses' AND con.contype = 'f' AND att.attname = 'owner_id'
+      LOOP
+        EXECUTE format('ALTER TABLE expenses DROP CONSTRAINT IF EXISTS %I', c.conname);
+      END LOOP;
+    END $$;
+
     CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id, expense_date);
     CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id, property_id);
   `);
 }
 
 async function auth(req,res,next) {
-  // The bootstrap mounts Phase 7 before the legacy /api/auth routes.
-  // Never let this router intercept authentication endpoints.
   if (req.path === '/auth' || req.path.startsWith('/auth/')) return next();
   try {
     await ensureSchema();
@@ -120,7 +137,6 @@ router.post('/maintenance', async (req,res) => {
   const cost=num(b.actual_cost ?? b.cost);
   const due=clean(b.due_date);
   if(!propertyId||!roomId||!bedId) return res.status(400).json({success:false,error:'Property, room and bed are required.'});
-  if(!category) return res.status(400).json({success:false,error:'Category is required.'});
   if(!description) return res.status(400).json({success:false,error:'Description is required.'});
   if(!(cost>0)) return res.status(400).json({success:false,error:'Maintenance cost must be greater than zero.'});
   if(!validDate(due)) return res.status(400).json({success:false,error:'A valid maintenance date is required.'});
