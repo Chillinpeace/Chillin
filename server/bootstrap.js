@@ -2,6 +2,7 @@ import pg from 'pg';
 import express from 'express';
 import expenseRouter from './expenses.js';
 import phase59Router from './phase5-9.js';
+import financialPdfRouter from './financial-pdf.js';
 
 // PostgreSQL can infer the same placeholder as different types when a
 // payment status value is used both as a column value and in a comparison.
@@ -27,6 +28,7 @@ express.application.use = function patchedUse(...args) {
   const result = originalUse.apply(this, args);
   if (!phaseRoutersMounted) {
     originalUse.call(this, '/api', expenseRouter);
+    originalUse.call(this, '/api', financialPdfRouter);
     originalUse.call(this, '/api', phase59Router);
     phaseRoutersMounted = true;
   }
