@@ -54,6 +54,32 @@ async function ensureTable() {
   return tableReady;
 }
 
+async function syncMaintenanceExpenses(ownerId) {
+  // Backfill any maintenance costs that were saved before the Operations -> Expenses
+  // synchronization was hardened. The marker makes this idempotent.
+  try {
+    await query(`
+      INSERT INTO expenses (owner_id, property_id, expense_date, category, amount, note, created_at)
+      SELECT m.owner_id, m.property_id, COALESCE(m.due_date, m.created_at::date), 'Maintenance', m.actual_cost,
+             '[maintenance:' || m.id::text || '] ' || COALESCE(NULLIF(m.category,''),'General') || ': ' || COALESCE(m.description,''),
+             COALESCE(m.created_at, CURRENT_TIMESTAMP)
+      FROM maintenance_tickets m
+      WHERE m.owner_id=$1
+        AND COALESCE(m.actual_cost,0)>0
+        AND NOT EXISTS (
+          SELECT 1 FROM expenses e
+          WHERE e.owner_id=m.owner_id
+            AND e.category='Maintenance'
+            AND e.note LIKE '[maintenance:' || m.id::text || ']%'
+        )
+    `, [ownerId]);
+  } catch (error) {
+    // Expenses must continue to work even if an older installation does not have
+    // the maintenance table yet.
+    if (!/maintenance_tickets.*does not exist/i.test(String(error?.message || ''))) throw error;
+  }
+}
+
 async function requireOwner(req, res, next) {
   try {
     await ensureTable();
@@ -91,6 +117,7 @@ async function propertyForOwner(ownerId, propertyId) {
 router.get('/expenses', requireOwner, async (req, res) => {
   try {
     const ownerId = req.expenseOwner.id;
+    await syncMaintenanceExpenses(ownerId);
     const month = clean(req.query.month);
     const propertyId = clean(req.query.property_id);
     const params = [ownerId];
@@ -118,13 +145,14 @@ router.get('/expenses', requireOwner, async (req, res) => {
     return res.json(result.rows);
   } catch (error) {
     console.error('Expense list failed:', error);
-    return res.status(500).json({ success: false, error: 'Unable to load expenses.' });
+    return res.status(500).json({ success: false, error: error.message || 'Unable to load expenses.' });
   }
 });
 
 router.get('/expenses/summary', requireOwner, async (req, res) => {
   try {
     const ownerId = req.expenseOwner.id;
+    await syncMaintenanceExpenses(ownerId);
     const month = clean(req.query.month);
     const params = [ownerId];
     const where = ['e.owner_id = $1'];
