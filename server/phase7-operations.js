@@ -52,6 +52,7 @@ async function ensureSchema() {
     ALTER TABLE maintenance_tickets ADD COLUMN IF NOT EXISTS due_date DATE;
     ALTER TABLE maintenance_tickets ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
     ALTER TABLE maintenance_tickets ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    ALTER TABLE maintenance_tickets ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     CREATE TABLE IF NOT EXISTS expenses (
       id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, property_id INTEGER,
       expense_date DATE NOT NULL DEFAULT CURRENT_DATE, category VARCHAR(100) NOT NULL DEFAULT 'Other',
@@ -64,10 +65,16 @@ async function ensureSchema() {
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS amount NUMERIC(12,2) NOT NULL DEFAULT 0;
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
     ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id, expense_date);
+    CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id, property_id);
   `);
 }
 
 async function auth(req,res,next) {
+  // The bootstrap mounts Phase 7 before the legacy /api/auth routes.
+  // Never let this router intercept authentication endpoints.
+  if (req.path === '/auth' || req.path.startsWith('/auth/')) return next();
   try {
     await ensureSchema();
     const owner = await ownerFromRequest(req);
