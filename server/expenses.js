@@ -36,8 +36,7 @@ async function ensureTable() {
         category VARCHAR(100) NOT NULL DEFAULT 'Other',
         amount NUMERIC(12,2) NOT NULL CHECK (amount > 0),
         note TEXT DEFAULT '',
-        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-        updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS property_id INTEGER;
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS expense_date DATE NOT NULL DEFAULT CURRENT_DATE;
@@ -45,7 +44,6 @@ async function ensureTable() {
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS amount NUMERIC(12,2) NOT NULL DEFAULT 0;
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
       ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
-      ALTER TABLE expenses ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
       CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id, expense_date);
       CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id, property_id);
     `).catch((error) => {
@@ -110,7 +108,8 @@ router.get('/expenses', requireOwner, async (req, res) => {
       where.push(`e.property_id = $${params.length}`);
     }
     const result = await query(`
-      SELECT e.id, e.property_id, p.name AS property_name, e.expense_date, e.category, e.amount, e.note, e.created_at, e.updated_at
+      SELECT e.id, e.property_id, p.name AS property_name, e.expense_date, e.category, e.amount, e.note, e.created_at,
+             e.created_at AS updated_at
       FROM expenses e
       LEFT JOIN properties p ON p.id = e.property_id AND p.owner_id = e.owner_id
       WHERE ${where.join(' AND ')}
@@ -172,9 +171,9 @@ router.post('/expenses', requireOwner, async (req, res) => {
     const result = await query(`
       INSERT INTO expenses (owner_id, property_id, expense_date, category, amount, note)
       VALUES ($1,$2,$3,$4,$5,$6)
-      RETURNING id, owner_id, property_id, expense_date, category, amount, note, created_at, updated_at
+      RETURNING id, owner_id, property_id, expense_date, category, amount, note, created_at
     `, [ownerId, property?.id || null, expenseDate, category, amount, note]);
-    return res.status(201).json({ ...result.rows[0], property_name: property?.name || null });
+    return res.status(201).json({ ...result.rows[0], property_name: property?.name || null, updated_at: result.rows[0]?.created_at || null });
   } catch (error) {
     console.error('Expense create failed:', error);
     return res.status(500).json({ success: false, error: error.message || 'Unable to create expense.' });
@@ -197,11 +196,11 @@ router.put('/expenses/:id', requireOwner, async (req, res) => {
     if (!Number.isFinite(amount) || amount <= 0) return res.status(400).json({ success: false, error: 'Expense amount must be greater than zero.' });
     const property = await propertyForOwner(ownerId, propertyId);
     const result = await query(`
-      UPDATE expenses SET property_id=$1, expense_date=$2, category=$3, amount=$4, note=$5, updated_at=CURRENT_TIMESTAMP
+      UPDATE expenses SET property_id=$1, expense_date=$2, category=$3, amount=$4, note=$5
       WHERE id=$6 AND owner_id=$7
-      RETURNING id, owner_id, property_id, expense_date, category, amount, note, created_at, updated_at
+      RETURNING id, owner_id, property_id, expense_date, category, amount, note, created_at
     `, [property?.id || null, expenseDate, category, amount, note, id, ownerId]);
-    return res.json({ ...result.rows[0], property_name: property?.name || null });
+    return res.json({ ...result.rows[0], property_name: property?.name || null, updated_at: result.rows[0]?.created_at || null });
   } catch (error) {
     console.error('Expense update failed:', error);
     return res.status(500).json({ success: false, error: error.message || 'Unable to update expense.' });
