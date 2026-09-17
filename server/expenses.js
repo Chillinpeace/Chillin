@@ -14,6 +14,23 @@ ALTER TABLE expenses ADD COLUMN IF NOT EXISTS category VARCHAR(100) NOT NULL DEF
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
 ALTER TABLE expenses ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+
+-- Remove any stale owner_id foreign key left by an older deployment.
+-- Ownership is validated against the authenticated session and selected property.
+DO $$
+DECLARE c RECORD;
+BEGIN
+  FOR c IN
+    SELECT con.conname
+    FROM pg_constraint con
+    JOIN pg_class rel ON rel.oid = con.conrelid
+    JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = ANY(con.conkey)
+    WHERE rel.relname = 'expenses' AND con.contype = 'f' AND att.attname = 'owner_id'
+  LOOP
+    EXECUTE format('ALTER TABLE expenses DROP CONSTRAINT IF EXISTS %I', c.conname);
+  END LOOP;
+END $$;
+
 CREATE INDEX IF NOT EXISTS idx_expenses_owner_date ON expenses(owner_id,expense_date);
 CREATE INDEX IF NOT EXISTS idx_expenses_owner_property ON expenses(owner_id,property_id);`).catch(e=>{tableReady=null;throw e;});}return tableReady;}
 async function syncMaintenanceExpenses(ownerId){try{await query(`INSERT INTO expenses(owner_id,property_id,expense_date,category,amount,note,created_at)
