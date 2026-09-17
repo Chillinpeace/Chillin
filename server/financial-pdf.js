@@ -102,7 +102,9 @@ function table(doc, headers, rows, widths) {
   doc.moveDown(0.2);
 }
 
-router.get('/api/reports/financial.pdf', async (req, res) => {
+// IMPORTANT: this router is mounted at /api by server/bootstrap.js.
+// Therefore the route itself must be relative to that mount point.
+router.get('/reports/financial.pdf', async (req, res) => {
   try {
     const owner = await ownerFromRequest(req);
     if (!owner) return res.status(401).json({ success:false, error:'Authentication required.' });
@@ -123,7 +125,7 @@ router.get('/api/reports/financial.pdf', async (req, res) => {
       query(`SELECT TO_CHAR(m,'YYYY-MM') AS month,COALESCE((SELECT SUM(pay.amount) FROM payments pay JOIN tenants t ON t.id=pay.tenant_id JOIN properties p ON p.id=t.property_id WHERE p.owner_id=$1 AND pay.payment_date>=m AND pay.payment_date<m+INTERVAL '1 month'),0) AS collected,COALESCE((SELECT SUM(i.amount) FROM invoices i JOIN tenants t ON t.id=i.tenant_id JOIN properties p ON p.id=t.property_id WHERE p.owner_id=$1 AND i.due_date>=m AND i.due_date<m+INTERVAL '1 month'),0) AS invoiced,COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.owner_id=$1 AND e.expense_date>=m AND e.expense_date<m+INTERVAL '1 month'),0) AS expenses FROM generate_series(DATE_TRUNC('month',$2::date),DATE_TRUNC('month',$3::date),INTERVAL '1 month') m ORDER BY m`, [id,from,to]),
       query(`SELECT i.invoice_number,i.amount,i.paid_amount,i.due_date,GREATEST(0,CURRENT_DATE-i.due_date)::integer AS days_overdue,GREATEST(0,COALESCE(i.amount,0)-COALESCE(i.paid_amount,0)) AS balance,t.name AS tenant_name,p.name AS property_name FROM invoices i JOIN tenants t ON t.id=i.tenant_id JOIN properties p ON p.id=t.property_id WHERE p.owner_id=$1 AND LOWER(COALESCE(i.status,'')) NOT IN('paid','cancelled') AND GREATEST(0,COALESCE(i.amount,0)-COALESCE(i.paid_amount,0))>0 ORDER BY days_overdue DESC,due_date`, [id]),
       query(`SELECT p.name,COUNT(DISTINCT CASE WHEN LOWER(COALESCE(t.status,''))='active' THEN t.id END)::integer AS active_tenants,COUNT(DISTINCT b.id)::integer AS beds,COUNT(DISTINCT CASE WHEN b.is_occupied THEN b.id END)::integer AS occupied,COALESCE(SUM(CASE WHEN LOWER(COALESCE(t.status,''))='active' THEN t.monthly_rent ELSE 0 END),0) AS income,COALESCE((SELECT SUM(e.amount) FROM expenses e WHERE e.owner_id=$1 AND e.property_id=p.id),0) AS expenses FROM properties p LEFT JOIN tenants t ON t.property_id=p.id LEFT JOIN rooms r ON r.property_id=p.id LEFT JOIN beds b ON b.room_id=r.id WHERE p.owner_id=$1 GROUP BY p.id,p.name ORDER BY p.name`, [id]),
-      tenantId ? query(`SELECT t.id,t.name,t.phone,t.email,p.name AS property_name,r.room_number,b.bed_number, t.monthly_rent,t.deposit_amount,t.move_in_date,t.move_out_date,t.status FROM tenants t JOIN properties p ON p.id=t.property_id LEFT JOIN rooms r ON r.id=t.room_id LEFT JOIN beds b ON b.id=t.bed_id WHERE t.id=$1 AND p.owner_id=$2`, [tenantId,id]).then(async tr => { if (!tr.rows.length) return null; const invoices=await query(`SELECT invoice_number,due_date,amount,paid_amount,status FROM invoices WHERE tenant_id=$1 ORDER BY due_date DESC,id DESC`,[tenantId]); const payments=await query(`SELECT payment_date,amount,payment_method,reference,notes,invoice_id FROM payments WHERE tenant_id=$1 ORDER BY payment_date DESC,id DESC`,[tenantId]); return {tenant:tr.rows[0],invoices:invoices.rows,payments:payments.rows}; }) : Promise.resolve(null)
+      tenantId ? query(`SELECT t.id,t.name,t.phone,t.email,p.name AS property_name,r.room_number,b.bed_number,t.monthly_rent,t.deposit_amount,t.move_in_date,t.move_out_date,t.status FROM tenants t JOIN properties p ON p.id=t.property_id LEFT JOIN rooms r ON r.id=t.room_id LEFT JOIN beds b ON b.id=t.bed_id WHERE t.id=$1 AND p.owner_id=$2`, [tenantId,id]).then(async tr => { if (!tr.rows.length) return null; const invoices=await query(`SELECT invoice_number,due_date,amount,paid_amount,status FROM invoices WHERE tenant_id=$1 ORDER BY due_date DESC,id DESC`,[tenantId]); const payments=await query(`SELECT payment_date,amount,payment_method,reference,notes,invoice_id FROM payments WHERE tenant_id=$1 ORDER BY payment_date DESC,id DESC`,[tenantId]); return {tenant:tr.rows[0],invoices:invoices.rows,payments:payments.rows}; }) : Promise.resolve(null)
     ]);
 
     const collected=num(income.rows[0]?.collected), billed=num(invoiced.rows[0]?.invoiced), allocated=num(invoiced.rows[0]?.allocated), expenseTotal=num(expenses.rows[0]?.expenses);
@@ -150,18 +152,20 @@ router.get('/api/reports/financial.pdf', async (req, res) => {
 
     section(doc,'Outstanding Rent Ageing');
     table(doc,['Bucket','Balance'],[['Current',money(buckets.current)],['1–30 Days',money(buckets['1_30'])],['31–60 Days',money(buckets['31_60'])],['61–90 Days',money(buckets['61_90'])],['90+ Days',money(buckets['90_plus'])]],[260,235]);
-    table(doc,['Tenant','Property','Invoice','Due','Days','Balance'], aging.rows.map(x=>[x.tenant_name,x.property_name,x.invoice_number,x.due_date,num(x.days_overdue),money(x.balance)]),[90,90,80,65,45,125]);
+    if (aging.rows.length) table(doc,['Tenant','Property','Invoice','Due','Days','Balance'],aging.rows.map(x=>[x.tenant_name,x.property_name,x.invoice_number,x.due_date,num(x.days_overdue),money(x.balance)]),[90,90,80,65,45,125]);
+    else doc.fontSize(9).text('No outstanding invoice balances.');
 
     section(doc,'Property Profitability');
     doc.fontSize(8).fillColor('#555').text('Active-tenant monthly rent less recorded property expenses.');
     doc.fillColor('#111');
-    table(doc,['Property','Active','Occupancy','Monthly Rent','Expenses','Profit'], properties.rows.map(x=>[x.name,num(x.active_tenants),`${num(x.occupied)}/${num(x.beds)}`,money(x.income),money(x.expenses),money(num(x.income)-num(x.expenses))]),[105,55,70,100,85,80]);
+    table(doc,['Property','Active','Occupancy','Monthly Rent','Expenses','Profit'],properties.rows.map(x=>[x.name,num(x.active_tenants),`${num(x.occupied)}/${num(x.beds)}`,money(x.income),money(x.expenses),money(num(x.income)-num(x.expenses))]),[105,55,70,100,85,80]);
 
     section(doc,'Monthly P&L / Cash Flow');
-    table(doc,['Month','Invoiced','Collected','Expenses','Net Cash'], monthly.rows.map(x=>[x.month,money(x.invoiced),money(x.collected),money(x.expenses),money(num(x.collected)-num(x.expenses))]),[75,105,105,105,105]);
+    table(doc,['Month','Invoiced','Collected','Expenses','Net Cash'],monthly.rows.map(x=>[x.month,money(x.invoiced),money(x.collected),money(x.expenses),money(num(x.collected)-num(x.expenses))]),[75,105,105,105,105]);
 
     section(doc,'Expense Analytics');
-    table(doc,['Category','Entries','Amount'], categories.rows.map(x=>[x.category||'Other',num(x.count),money(x.amount)]),[260,80,155]);
+    if (categories.rows.length) table(doc,['Category','Entries','Amount'],categories.rows.map(x=>[x.category||'Other',num(x.count),money(x.amount)]),[260,80,155]);
+    else doc.fontSize(9).text('No expenses in this reporting period.');
 
     if (tenantHistory) {
       section(doc,'Tenant Financial History');
