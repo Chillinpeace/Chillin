@@ -250,6 +250,10 @@ export async function initializeDatabase() {
         name VARCHAR(255) NOT NULL,
         phone VARCHAR(30) NOT NULL,
         email VARCHAR(255) DEFAULT '',
+        gender VARCHAR(30) DEFAULT '',
+        id_proof_type VARCHAR(50) DEFAULT '',
+        id_photo_front TEXT DEFAULT '',
+        id_photo_back TEXT DEFAULT '',
         property_id INTEGER NOT NULL,
         room_id INTEGER,
         bed_id INTEGER,
@@ -266,6 +270,22 @@ export async function initializeDatabase() {
     await client.query(`
       ALTER TABLE tenants
       ADD COLUMN IF NOT EXISTS email VARCHAR(255)
+        DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS gender VARCHAR(30)
+        DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS id_proof_type VARCHAR(50)
+        DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS id_photo_front TEXT
+        DEFAULT '';
+
+      ALTER TABLE tenants
+      ADD COLUMN IF NOT EXISTS id_photo_back TEXT
         DEFAULT '';
 
       ALTER TABLE tenants
