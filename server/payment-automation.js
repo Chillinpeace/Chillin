@@ -462,7 +462,11 @@ async function createDueInvoices() {
   let created = 0;
 
   for (const owner of owners.rows) {
-    const settings = {
+    const settingsResult = await query(
+      'SELECT reminders_enabled,reminder_days_before,overdue_reminders_enabled,recurring_invoices_enabled FROM automation_settings WHERE owner_id=$1 LIMIT 1',
+      [owner.owner_id],
+    );
+    const settings = settingsResult.rows[0] || {
       reminders_enabled: true,
       reminder_days_before: 3,
       overdue_reminders_enabled: true,
@@ -535,6 +539,7 @@ async function sendDueReminderIfNeeded(invoice, settings) {
   const due = new Date(`${invoice.due_date}T00:00:00Z`);
   const daysUntilDue = Math.round((due.getTime() - new Date(isoDate(today)).getTime()) / 86400000);
   const reminderType = daysUntilDue < 0 ? 'payment_overdue' : 'payment_due';
+  if (daysUntilDue < 0 && !settings.overdue_reminders_enabled) return false;
 
   const exists = await query(
     `SELECT id FROM notifications
@@ -624,6 +629,52 @@ router.get('/payment-automation/status', auth, async (req, res) => {
     recurring_invoices: true,
     pending_invoices: Number(pending.rows[0]?.count || 0),
     paid_last_30_days: Number(recent.rows[0]?.count || 0),
+  });
+});
+
+router.get('/payment-automation/settings', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const result = await query(
+    'SELECT reminders_enabled,reminder_days_before,overdue_reminders_enabled,recurring_invoices_enabled FROM automation_settings WHERE owner_id=$1 LIMIT 1',
+    [req.paymentOwner.id],
+  );
+  const settings = result.rows[0] || {
+    reminders_enabled: true,
+    reminder_days_before: 3,
+    overdue_reminders_enabled: true,
+    recurring_invoices_enabled: true,
+  };
+  return res.json({
+    success: true,
+    settings: {
+      reminders_enabled: Boolean(settings.reminders_enabled),
+      reminder_days_before: Number(settings.reminder_days_before || 3),
+      overdue_reminders_enabled: Boolean(settings.overdue_reminders_enabled),
+      recurring_invoices_enabled: Boolean(settings.recurring_invoices_enabled),
+    },
+  });
+});
+
+router.put('/payment-automation/settings', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const remindersEnabled = req.body?.reminders_enabled !== false;
+  const overdueEnabled = req.body?.overdue_reminders_enabled !== false;
+  const recurringEnabled = req.body?.recurring_invoices_enabled !== false;
+  const reminderDays = Math.min(Math.max(Number(req.body?.reminder_days_before ?? 3) || 0, 0), 30);
+
+  await query(
+    'INSERT INTO automation_settings(owner_id,reminders_enabled,reminder_days_before,overdue_reminders_enabled,recurring_invoices_enabled,updated_at) VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP) ON CONFLICT(owner_id) DO UPDATE SET reminders_enabled=EXCLUDED.reminders_enabled,reminder_days_before=EXCLUDED.reminder_days_before,overdue_reminders_enabled=EXCLUDED.overdue_reminders_enabled,recurring_invoices_enabled=EXCLUDED.recurring_invoices_enabled,updated_at=CURRENT_TIMESTAMP',
+    [req.paymentOwner.id, remindersEnabled, reminderDays, overdueEnabled, recurringEnabled],
+  );
+
+  return res.json({
+    success: true,
+    settings: {
+      reminders_enabled: remindersEnabled,
+      reminder_days_before: reminderDays,
+      overdue_reminders_enabled: overdueEnabled,
+      recurring_invoices_enabled: recurringEnabled,
+    },
   });
 });
 
