@@ -733,10 +733,8 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
 
   const hasUpi = clean(invoice.upi_id);
   const upiLink = hasUpi
-NaN
-NaN
-
-  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    ? 'upi://pay?pa=' + encodeURIComponent(invoice.upi_id) + '&pn=' + encodeURIComponent(invoice.owner_name || 'Owner') + '&am=' + encodeURIComponent(num(invoice.amount).toFixed(2)) + '&cu=INR'
+    : '';
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!doctype html>
 <html lang="en">
