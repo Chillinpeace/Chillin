@@ -355,12 +355,35 @@ function dueDateForMonth(year, monthIndex, dueDay) {
   return new Date(Date.UTC(year, monthIndex, day, 23, 59, 59));
 }
 
+async function processCompletedMoveOuts() {
+  const result = await query(
+    `SELECT t.id,t.bed_id
+     FROM tenants t
+     INNER JOIN properties p ON p.id=t.property_id
+     WHERE t.move_out_date IS NOT NULL
+       AND t.move_out_date <= CURRENT_DATE
+       AND LOWER(COALESCE(t.status,'')) NOT IN ('inactive','moved out')`,
+  );
+
+  for (const tenant of result.rows) {
+    await query(
+      'UPDATE tenants SET status=\'Inactive\', bed_id=NULL WHERE id=$1',
+      [tenant.id],
+    );
+    if (tenant.bed_id) {
+      await query('UPDATE beds SET is_occupied=FALSE WHERE id=$1', [tenant.bed_id]);
+    }
+  }
+
+  return result.rows.length;
+}
+
 async function createDueInvoices() {
   const owners = await query(`
     SELECT DISTINCT p.owner_id
     FROM properties p
     INNER JOIN tenants t ON t.property_id=p.id
-    WHERE LOWER(COALESCE(t.status,''))='active'
+    WHERE LOWER(COALESCE(t.status,'')) IN ('active','move out notice')
       AND COALESCE(t.monthly_rent,0)>0
   `);
 
@@ -389,7 +412,9 @@ async function createDueInvoices() {
       `SELECT t.id,t.name,t.phone,t.email,t.monthly_rent,t.due_date,p.name AS property_name
        FROM tenants t
        INNER JOIN properties p ON p.id=t.property_id
-       WHERE p.owner_id=$1 AND LOWER(COALESCE(t.status,''))='active' AND COALESCE(t.monthly_rent,0)>0`,
+       WHERE p.owner_id=$1
+         AND LOWER(COALESCE(t.status,'')) IN ('active','move out notice')
+         AND COALESCE(t.monthly_rent,0)>0`,
       [owner.owner_id],
     );
 
@@ -400,7 +425,7 @@ async function createDueInvoices() {
       const threshold = addDays(due, -reminderDays);
       const todayIso = isoDate(today);
 
-      if (todayIso < isoDate(threshold)) continue;
+      const reminderDue = todayIso >= isoDate(threshold);
 
       const existing = await query(
         `SELECT id,status FROM invoices
@@ -436,7 +461,7 @@ async function createDueInvoices() {
       }
 
       const invoice = await loadInvoice(invoiceId);
-      if (invoice) {
+      if (invoice && reminderDue) {
         await sendDueReminderIfNeeded(invoice, settings);
       }
     }
@@ -446,7 +471,10 @@ async function createDueInvoices() {
 }
 
 async function sendDueReminderIfNeeded(invoice, settings) {
-  if (!whatsappConfigured()) return false;
+  if (!whatsappConfigured()) {
+    console.warn('WhatsApp automation skipped: Cloud API environment variables are not configured.');
+    return false;
+  }
   if (!settings.reminders_enabled) return false;
   if (clean(invoice.status).toLowerCase() === 'paid') return false;
 
@@ -528,9 +556,13 @@ async function sendDueReminderIfNeeded(invoice, settings) {
 async function runPaymentAutomation() {
   try {
     await ensurePaymentColumns();
-    await createDueInvoices();
+    await processCompletedMoveOuts();
+    const created = await createDueInvoices();
+    console.log(`Payment automation cycle completed. Invoices created: ${created}`);
+    return { created };
   } catch (error) {
     console.error('Payment automation cycle failed:', error);
+    return { created: 0, error: error.message };
   }
 }
 
@@ -831,6 +863,42 @@ router.put('/payment-automation/settings', auth, async (req, res) => {
       recurring_invoices_enabled: recurringEnabled,
     },
   });
+});
+
+router.post('/payment-automation/test-whatsapp', auth, async (req, res) => {
+  await ensurePaymentColumns();
+
+  if (!whatsappConfigured()) {
+    return res.status(503).json({
+      success: false,
+      error: 'WhatsApp Cloud API is not configured. Check the WhatsApp environment variables on Railway.',
+    });
+  }
+
+  const to = clean(req.body?.phone);
+  if (!to) {
+    return res.status(400).json({ success: false, error: 'Enter a test WhatsApp number.' });
+  }
+
+  try {
+    const result = await sendWhatsAppTemplate(
+      to,
+      process.env.WHATSAPP_REMINDER_TEMPLATE,
+      ['Peacely Test', '₹1', isoDate(new Date()), `${baseUrl()}/api/payment-automation/status`],
+    );
+
+    return res.json({
+      success: true,
+      provider_message_id: result?.messages?.[0]?.id || '',
+      message: 'WhatsApp test request accepted by Meta.',
+    });
+  } catch (error) {
+    console.error('WhatsApp test failed:', error);
+    return res.status(400).json({
+      success: false,
+      error: error?.message || 'WhatsApp test failed.',
+    });
+  }
 });
 
 export { runPaymentAutomation };
