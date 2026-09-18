@@ -507,7 +507,47 @@ export async function initializeDatabase() {
     `);
 
     // =====================================================
-    // 8. SESSIONS
+    // 8. EXPENSES
+    // =====================================================
+
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS expenses (
+        id SERIAL PRIMARY KEY,
+        owner_id INTEGER NOT NULL,
+        property_id INTEGER,
+        category VARCHAR(100) NOT NULL,
+        amount NUMERIC(10,2) NOT NULL,
+        expense_date DATE DEFAULT CURRENT_DATE,
+        note TEXT DEFAULT '',
+        created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    await client.query(`
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS property_id INTEGER;
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS category VARCHAR(100) DEFAULT 'Other';
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS amount NUMERIC(10,2) DEFAULT 0;
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS expense_date DATE DEFAULT CURRENT_DATE;
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS note TEXT DEFAULT '';
+
+      ALTER TABLE expenses
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
+    `);
+
+    // =====================================================
+    // 9. SESSIONS
     // =====================================================
 
     /*
