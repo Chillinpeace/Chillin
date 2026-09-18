@@ -1679,7 +1679,7 @@ function App() {
         !bed.is_occupied,
     );
 
-  const handleMarkInvoicePaid = async (invoice: Invoice) => {
+  const handleMarkInvoicePaid = (invoice: Invoice) => {
     if (normalize(invoice.status) === 'paid') return;
 
     const balance = Math.max(
@@ -1692,26 +1692,16 @@ function App() {
     setMarkingInvoiceId(invoice.id);
     setError('');
 
-    try {
-      // Paid is an owner confirmation action only.
-      // Do not open WhatsApp or send a success message here.
-      await apiRequest(
-        `/payment-automation/invoices/${invoice.id}/mark-paid`,
-        { method: 'POST' },
-      );
-
-      // Refresh the app so the invoice immediately changes to Paid
-      // and the payment appears in the Payments view.
-      await loadAllData();
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not mark the invoice as paid.',
-      );
-    } finally {
-      setMarkingInvoiceId(null);
-    }
+    // Confirm the payment on the server, then redirect to the
+    // successful-payment WhatsApp invoice message.
+    // Use a native form POST so mobile browsers do not block the
+    // WhatsApp navigation after an awaited fetch request.
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `${API}/payment-automation/invoices/${invoice.id}/mark-paid?redirect=whatsapp`;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
   };
 
   const filteredTenants =
