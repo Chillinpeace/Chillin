@@ -1689,12 +1689,6 @@ function App() {
 
     if (balance <= 0) return;
 
-    const confirmed = window.confirm(
-      `Confirm that you received ${money(balance)} from ${invoice.tenant_name || 'this tenant'} for invoice ${invoice.invoice_number}?`,
-    );
-
-    if (!confirmed) return;
-
     setMarkingInvoiceId(invoice.id);
     setError('');
 
@@ -1702,7 +1696,12 @@ function App() {
       await apiRequest(`/payment-automation/invoices/${invoice.id}/mark-paid`, {
         method: 'POST',
       });
-      await loadAllData();
+
+      // Keep the owner flow to one tap: once the payment is confirmed,
+      // open WhatsApp with the paid invoice receipt message.
+      window.location.assign(
+        `${API}/payment-automation/invoices/${invoice.id}/whatsapp-link`,
+      );
     } catch (err) {
       setError(
         err instanceof Error
@@ -5363,7 +5362,7 @@ function InvoicesView({
                     onClick={() => onMarkPaid(invoice)}
                     disabled={markingInvoiceId === invoice.id}
                   >
-                    {markingInvoiceId === invoice.id ? 'Confirming...' : 'Mark as Paid'}
+                    {markingInvoiceId === invoice.id ? 'Sending...' : 'Paid'}
                   </button>
                 )}
               </div>
