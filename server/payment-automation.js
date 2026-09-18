@@ -699,18 +699,11 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  // Keep the UPI intent deliberately simple for broad compatibility across
-  // UPI apps. Some apps can decline intents when optional payee metadata is
-  // supplied even though the same UPI ID works for a normal manual transfer.
-  // The invoice number is used as a transaction reference/note so the owner
-  // can identify the payment without changing the actual payment destination.
-  const upiAmount = Math.max(0, num(invoice.amount)).toFixed(2);
-  const upiReference = clean(invoice.invoice_number || ('PEACELY-' + invoice.id))
-    .replace(/[^A-Za-z0-9._-]/g, '')
-    .slice(0, 50);
-  const upiNote = ('Peacely Rent ' + upiReference).slice(0, 80);
+  // Use a minimal P2P UPI intent. The tenant enters the amount in the
+  // UPI app itself, which avoids app-specific rejection of prefilled
+  // merchant/reference fields while keeping the owner's UPI destination.
   const upiLink = clean(invoice.upi_id)
-    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&am=${encodeURIComponent(upiAmount)}&cu=INR&tr=${encodeURIComponent(upiReference)}&tn=${encodeURIComponent(upiNote)}`
+    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&pn=${encodeURIComponent(invoice.owner_name || 'Owner')}`
     : '';
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
@@ -732,8 +725,8 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
   <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
-  ${upiLink ? `<a class="pay" href="${upiLink}">Pay with UPI</a>` : ''}
-  ${clean(invoice.upi_id) ? `<div class="detail"><strong>UPI ID</strong><br>${escapeHtml(invoice.upi_id)}</div>` : ''}
+  ${upiLink ? `<a class="pay" href="${upiLink}">Open UPI app</a>` : ''}
+  ${clean(invoice.upi_id) ? `<div class="detail"><strong>UPI ID</strong><br><span id="upiId">${escapeHtml(invoice.upi_id)}</span><br><button type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(invoice.upi_id)}).then(()=>{this.textContent='Copied'})" style="margin-top:8px;padding:9px 12px;border:0;border-radius:8px;background:#e9edf3;cursor:pointer">Copy UPI ID</button></div>` : ''}
   ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
   ${qr ? `<img class="qr" src="${qr}" alt="Owner UPI QR code">` : ''}
   ${clean(invoice.payment_instructions) ? `<div class="detail note">${escapeHtml(invoice.payment_instructions)}</div>` : ''}
