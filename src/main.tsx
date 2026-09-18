@@ -998,6 +998,26 @@ function App() {
     }
   };
 
+  const handleViewPaymentPage = async (invoice: Invoice) => {
+    try {
+      const result = await apiRequest<{ success: boolean; url: string }>(
+        `/payment-automation/invoices/${invoice.id}/payment-page`,
+      );
+
+      if (!result?.url) {
+        throw new Error('Payment page URL was not generated.');
+      }
+
+      window.open(result.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to open the payment page.',
+      );
+    }
+  };
+
   const handleCreateTenant = async (
     event: React.FormEvent,
   ) => {
@@ -1006,12 +1026,10 @@ function App() {
     if (
       !tenantName.trim() ||
       !tenantPhone.trim() ||
-      !tenantGender ||
-      !tenantIdProofType ||
       !tenantPropertyId
     ) {
       setError(
-        'Name, phone, gender, ID proof and property are required.',
+        'Name, phone and property are required.',
       );
       return;
     }
@@ -3044,7 +3062,7 @@ function App() {
                 className="modal-input"
                 type="number"
                 min="1"
-                max="31"
+                max="28"
                 placeholder="Rent due day"
                 value={
                   tenantDueDate
@@ -4752,15 +4770,25 @@ function InvoicesView({
             <div className="progress-bar-bg">
               <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
             </div>
-            {!isPaid && balance > 0 && (
-              <div className="tenant-actions">
+            {balance > 0 && (
+              <div className="tenant-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
                 <button
                   className="btn-primary"
-                  onClick={() => onMarkPaid(invoice)}
-                  disabled={markingInvoiceId === invoice.id}
+                  type="button"
+                  onClick={() => handleViewPaymentPage(invoice)}
                 >
-                  {markingInvoiceId === invoice.id ? 'Confirming...' : 'Mark as Paid'}
+                  View Payment Page
                 </button>
+                {!isPaid && (
+                  <button
+                    className="btn-primary"
+                    type="button"
+                    onClick={() => onMarkPaid(invoice)}
+                    disabled={markingInvoiceId === invoice.id}
+                  >
+                    {markingInvoiceId === invoice.id ? 'Confirming...' : 'Mark as Paid'}
+                  </button>
+                )}
               </div>
             )}
           </div>
