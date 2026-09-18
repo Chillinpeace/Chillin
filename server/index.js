@@ -20,6 +20,13 @@ const QUERY_TIMEOUT_MS = 15000;
 app.use(express.json({ limit: '3mb', verify: (req, _res, buffer) => { req.rawBody = buffer.toString('utf8'); } }));
 app.use(express.urlencoded({ extended: true }));
 
+app.use((req, res, next) => {
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 // =====================================================
 // HELPERS
 // =====================================================
@@ -88,14 +95,14 @@ function setSessionCookie(res, token) {
     'Set-Cookie',
     `${SESSION_COOKIE}=${encodeURIComponent(
       token,
-    )}; Max-Age=${maxAge}; Path=/; HttpOnly; SameSite=Lax`,
+    )}; Max-Age=${maxAge}; Path=/; HttpOnly; Secure; SameSite=Lax`,
   );
 }
 
 function clearSessionCookie(res) {
   res.setHeader(
     'Set-Cookie',
-    `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; SameSite=Lax`,
+    `${SESSION_COOKIE}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`,
   );
 }
 
