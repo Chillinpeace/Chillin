@@ -713,7 +713,7 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
 <style>
 body{font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:24px;color:#172033}
 .card{max-width:520px;margin:0 auto;background:#fff;border-radius:20px;padding:24px;box-shadow:0 10px 35px rgba(0,0,0,.08)}
-h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;margin:18px 0}.pay{display:block;text-align:center;background:#111827;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:700;margin:18px 0}.detail{padding:14px;background:#f4f6f8;border-radius:12px;margin-top:10px}.qr{max-width:260px;width:100%;display:block;margin:18px auto;border-radius:12px}.note{white-space:pre-wrap}
+h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;margin:18px 0}.pay{display:block;width:100%;box-sizing:border-box;text-align:center;background:#111827;color:#fff;border:0;padding:14px;border-radius:12px;font-weight:700;margin:18px 0;cursor:pointer;font-size:16px}.detail{padding:14px;background:#f4f6f8;border-radius:12px;margin-top:10px}.qr{max-width:260px;width:100%;display:block;margin:18px auto;border-radius:12px}.note{white-space:pre-wrap}
 </style>
 </head>
 <body>
@@ -723,6 +723,8 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
   <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
+  <button class="pay" type="button" onclick="document.getElementById('paymentOptions').scrollIntoView({behavior:'smooth',block:'center'})">Pay Now</button>
+  <div id="paymentOptions">
   ${qr ? `
     <div class="detail" style="text-align:center">
       <strong>Scan the owner's UPI QR code</strong>
@@ -741,6 +743,7 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
   ${clean(invoice.payment_instructions) ? `<div class="detail note">${escapeHtml(invoice.payment_instructions)}</div>` : ''}
   <div class="detail"><strong>After paying</strong><br>Inform the property owner. The owner will confirm the payment in Peacely and your paid invoice will be sent automatically.</div>
+  </div>
 </div>
 </body>
 </html>`);
