@@ -1384,10 +1384,10 @@ function App() {
   const activeTenants = useMemo(
     () =>
       tenants.filter(
-        (tenant) =>
-          normalize(
-            tenant.status,
-          ) === 'active',
+        (tenant) => {
+          const status = normalize(tenant.status);
+          return status === 'active' || status === 'move out notice';
+        },
       ),
     [tenants],
   );
@@ -1603,7 +1603,11 @@ function App() {
           .filter((tenant) => {
             if (!tenant.move_out_date) return false;
             const date = new Date(tenant.move_out_date);
-            return !Number.isNaN(date.getTime()) && date >= new Date();
+            if (Number.isNaN(date.getTime())) return false;
+            const todayDate = new Date();
+            todayDate.setHours(0, 0, 0, 0);
+            date.setHours(0, 0, 0, 0);
+            return date >= todayDate;
           })
           .sort(
             (a, b) =>
@@ -5345,6 +5349,7 @@ function TenantDetails({
     | 'overdue';
   onClose: () => void;
   onMoveOut: (tenant: Tenant) => void;
+  onReassign: (tenant: Tenant) => void;
 }) {
   const [fullScreenImage, setFullScreenImage] = useState<{ src: string; label: string } | null>(null);
 
