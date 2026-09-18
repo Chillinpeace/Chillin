@@ -5338,6 +5338,7 @@ function TenantDetails({
   status,
   onClose,
   onMoveOut,
+  onReassign,
 }: {
   tenant: Tenant;
   payments: Payment[];
