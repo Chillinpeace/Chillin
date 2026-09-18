@@ -3146,7 +3146,7 @@ function Header({
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState<
-    'none' | 'plan' | 'updates' | 'guide' | 'contact'
+    'none' | 'plan' | 'updates' | 'guide' | 'contact' | 'terms'
   >('none');
 
   const toggleSection = (section: typeof menuSection) => {
@@ -3249,12 +3249,37 @@ function Header({
                 <p>Need help with your account, payments or property management?</p>
                 <div className="menu-contact-box">
                   <span>Email</span>
-                  <strong>support@peacely.app</strong>
+                  <strong>chillinpeace.team@gmail.com</strong>
                 </div>
                 <div className="menu-contact-box">
                   <span>Support hours</span>
                   <strong>Monday–Saturday · 9:00 AM–6:00 PM</strong>
                 </div>
+              </div>
+            )}
+
+            <button className="profile-menu-item" type="button" onClick={() => toggleSection('terms')}>
+              <span>📄</span><span>Terms and Conditions</span><span className="menu-chevron">{menuSection === 'terms' ? '⌃' : '›'}</span>
+            </button>
+            {menuSection === 'terms' && (
+              <div className="profile-menu-detail">
+                <strong>Peacely Terms and Conditions</strong>
+                <p>These terms explain the basic rules for using Peacely as a property owner or manager.</p>
+                <ul>
+                  <li><strong>Account:</strong> You are responsible for keeping your login credentials secure and for the accuracy of information entered into your account.</li>
+                  <li><strong>Property information:</strong> You are responsible for ensuring that property, room, bed, tenant, rent and invoice information you enter is accurate and lawful.</li>
+                  <li><strong>Tenant information:</strong> Only provide personal information that you are authorised to provide. You remain responsible for obtaining any permissions or notices required by applicable law.</li>
+                  <li><strong>Payments:</strong> Peacely provides payment information, invoices and payment-recording tools. Rent is paid directly to the property owner using the payment details displayed by the owner. Peacely does not take possession of the rent through this payment flow.</li>
+                  <li><strong>Payment confirmation:</strong> When direct payment is used, the owner is responsible for confirming that payment has actually been received before marking an invoice as paid.</li>
+                  <li><strong>WhatsApp and notifications:</strong> Automated reminders and receipts depend on the relevant communication service and correct contact information. Delivery may be delayed or unavailable because of third-party service issues.</li>
+                  <li><strong>Acceptable use:</strong> Do not use Peacely for unlawful activity, fraud, harassment, unauthorised access, or to store or distribute misleading or harmful information.</li>
+                  <li><strong>Service availability:</strong> Features may be updated, changed, suspended or temporarily unavailable for maintenance, security, technical or operational reasons.</li>
+                  <li><strong>Third-party services:</strong> Peacely may use third-party services for hosting, messaging, authentication or other functionality. Their own terms and policies may also apply.</li>
+                  <li><strong>Data:</strong> Peacely handles personal information in accordance with its applicable privacy practices and Indian data-protection requirements. Users should review the privacy information provided by Peacely before using the service.</li>
+                  <li><strong>Changes:</strong> Peacely may update these terms when the service, legal requirements or operating practices change. Important changes may be communicated through the app.</li>
+                  <li><strong>Contact:</strong> Questions about these terms can be sent to chillinpeace.team@gmail.com.</li>
+                </ul>
+                <p style={{marginBottom: 0}}>By continuing to use Peacely, you acknowledge that you have read and understood these terms.</p>
               </div>
             )}
 
