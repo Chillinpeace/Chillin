@@ -3144,40 +3144,128 @@ function Header({
   onLogout: () => void;
   onAccountSettings: () => void;
 }) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [menuSection, setMenuSection] = useState<
+    'none' | 'plan' | 'updates' | 'guide' | 'contact'
+  >('none');
+
+  const toggleSection = (section: typeof menuSection) => {
+    setMenuSection(menuSection === section ? 'none' : section);
+  };
+
   return (
-    <header className="app-header">
-      <div className="brand-wrap">
-        <div className="brand-logo">
-          P
+    <>
+      <header className="app-header">
+        <div className="brand-wrap">
+          <div className="brand-logo">P</div>
+          <div>
+            <h1 className="brand-title">Peacely</h1>
+            <p className="brand-subtitle">{owner?.name || 'Property Management'}</p>
+          </div>
         </div>
 
-        <div>
-          <h1 className="brand-title">
-            Peacely
-          </h1>
-
-          <p className="brand-subtitle">
-            {owner?.name ||
-              'Property Management'}
-          </p>
+        <div className="header-actions">
+          <button
+            className="hamburger-btn"
+            type="button"
+            aria-label="Open profile menu"
+            aria-expanded={menuOpen}
+            onClick={() => {
+              setMenuOpen(!menuOpen);
+              if (menuOpen) setMenuSection('none');
+            }}
+          >
+            <span></span><span></span><span></span>
+          </button>
         </div>
-      </div>
+      </header>
 
-      <div className="header-actions">
-        <button
-          className="logout-btn"
-          onClick={onAccountSettings}
-        >
-          Account Settings
-        </button>
-        <button
-          className="logout-btn"
-          onClick={onLogout}
-        >
-          Logout
-        </button>
-      </div>
-    </header>
+      {menuOpen && (
+        <div className="profile-menu-backdrop" onClick={() => setMenuOpen(false)}>
+          <aside className="profile-menu" onClick={(e) => e.stopPropagation()}>
+            <div className="profile-menu-header">
+              <div className="avatar">{getInitials(owner?.name || 'Owner')}</div>
+              <div>
+                <strong>{owner?.name || 'Owner'}</strong>
+                <span>{owner?.email || ''}</span>
+              </div>
+            </div>
+
+            <button className="profile-menu-item" type="button" onClick={() => { onAccountSettings(); setMenuOpen(false); }}>
+              <span>⚙️</span><span>Account Settings</span>
+            </button>
+
+            <button className="profile-menu-item" type="button" onClick={() => toggleSection('plan')}>
+              <span>💳</span><span>Active subscription plan</span><span className="menu-chevron">{menuSection === 'plan' ? '⌃' : '›'}</span>
+            </button>
+            {menuSection === 'plan' && (
+              <div className="profile-menu-detail">
+                <strong>Peacely Free Plan</strong>
+                <p>Property management, tenant records, rent tracking and invoices.</p>
+                <div className="menu-detail-row"><span>Status</span><strong>Active</strong></div>
+                <div className="menu-detail-row"><span>Billing</span><strong>No charge currently</strong></div>
+              </div>
+            )}
+
+            <button className="profile-menu-item" type="button" onClick={() => toggleSection('updates')}>
+              <span>🔔</span><span>Important updates</span><span className="menu-chevron">{menuSection === 'updates' ? '⌃' : '›'}</span>
+            </button>
+            {menuSection === 'updates' && (
+              <div className="profile-menu-detail">
+                <strong>Peacely updates</strong>
+                <p>Stay informed about new features, improvements and important account notices.</p>
+                <ul>
+                  <li>Rent invoices and payment tracking are available.</li>
+                  <li>Direct owner payment details can be shared with tenants.</li>
+                  <li>WhatsApp reminders are available when configured.</li>
+                </ul>
+              </div>
+            )}
+
+            <button className="profile-menu-item" type="button" onClick={() => toggleSection('guide')}>
+              <span>📖</span><span>Support Guide</span><span className="menu-chevron">{menuSection === 'guide' ? '⌃' : '›'}</span>
+            </button>
+            {menuSection === 'guide' && (
+              <div className="profile-menu-detail">
+                <strong>Quick Support Guide</strong>
+                <p>Manage your property from one place.</p>
+                <ul>
+                  <li><strong>Properties:</strong> add buildings, floors, rooms and beds.</li>
+                  <li><strong>Tenants:</strong> add tenants and assign rooms or beds.</li>
+                  <li><strong>Payments:</strong> record and review received rent.</li>
+                  <li><strong>Invoices:</strong> review dues and confirm payments.</li>
+                  <li><strong>Analytics:</strong> monitor occupancy and collection.</li>
+                  <li><strong>Account Settings:</strong> manage payment and reminder settings.</li>
+                </ul>
+              </div>
+            )}
+
+            <button className="profile-menu-item" type="button" onClick={() => toggleSection('contact')}>
+              <span>💬</span><span>Contact us</span><span className="menu-chevron">{menuSection === 'contact' ? '⌃' : '›'}</span>
+            </button>
+            {menuSection === 'contact' && (
+              <div className="profile-menu-detail">
+                <strong>Peacely Support</strong>
+                <p>Need help with your account, payments or property management?</p>
+                <div className="menu-contact-box">
+                  <span>Email</span>
+                  <strong>support@peacely.app</strong>
+                </div>
+                <div className="menu-contact-box">
+                  <span>Support hours</span>
+                  <strong>Monday–Saturday · 9:00 AM–6:00 PM</strong>
+                </div>
+              </div>
+            )}
+
+            <div className="profile-menu-divider"></div>
+            <button className="profile-menu-item logout-menu-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+              <span>↪</span><span>Logout</span>
+            </button>
+          </aside>
+        </div>
+      )}
+    </>
   );
 }
 
