@@ -2352,6 +2352,7 @@ function App() {
             setRoomPropertyId={setRoomPropertyId}
             setRoomFloorName={setRoomFloorName}
             setFloorPropertyId={setFloorPropertyId}
+            setBedRoomId={setBedRoomId}
             removeBed={handleRemoveBed}
             deleteProperty={handleDeleteProperty}
           />
@@ -3809,12 +3810,13 @@ function Dashboard({
 function PropertiesView({
   properties, rooms, beds, propertyLevels, managedPropertyId,
   setManagedPropertyId, openModal, setRoomPropertyId, setRoomFloorName,
-  setFloorPropertyId, removeBed, deleteProperty,
+  setFloorPropertyId, setBedRoomId, removeBed, deleteProperty,
 }: {
   properties: Property[]; rooms: Room[]; beds: Bed[]; propertyLevels: PropertyLevel[];
   managedPropertyId: number | null; setManagedPropertyId: (value: number | null) => void;
   openModal: (modal: Modal) => void; setRoomPropertyId: (value: string) => void;
   setRoomFloorName: (value: string) => void; setFloorPropertyId: (value: string) => void;
+  setBedRoomId: (value: string) => void;
   removeBed: (bed: Bed) => void; deleteProperty: (property: Property) => void;
 }) {
   const managedProperty = properties.find((property) => property.id === managedPropertyId) || null;
@@ -3904,6 +3906,16 @@ function PropertiesView({
                       <h3>Room {room.room_number}</h3>
                       <p>{room.floor_name || 'Ground Floor'} · {room.room_type || 'Non AC'} · {room.sharing_type}</p>
                     </div>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() => {
+                        setBedRoomId(String(room.id));
+                        openModal('bed');
+                      }}
+                    >
+                      + Bed
+                    </button>
                   </div>
                   <div className="metrics-row">
                     <MiniMetric label="Per Day" value={money(room.per_day_rent || 0)} />
