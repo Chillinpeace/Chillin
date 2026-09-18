@@ -16,7 +16,7 @@ const SESSION_COOKIE = 'peacely_session';
 const SESSION_DAYS = 30;
 const QUERY_TIMEOUT_MS = 15000;
 
-app.use(express.json({ limit: '3mb' }));
+app.use(express.json({ limit: '3mb', verify: (req, _res, buffer) => { req.rawBody = buffer.toString('utf8'); } }));
 app.use(express.urlencoded({ extended: true }));
 
 // =====================================================
@@ -3239,6 +3239,12 @@ app.get(
           i.paid_at,
           i.created_at,
           i.updated_at,
+          i.payment_provider,
+          i.payment_link_id,
+          i.payment_link_url,
+          i.payment_link_status,
+          i.payment_link_created_at,
+          i.payment_link_paid_amount,
 
           t.name AS tenant_name,
 
