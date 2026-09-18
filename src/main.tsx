@@ -1907,6 +1907,7 @@ function App() {
         const paymentPage =
           await apiRequest<{
             url: string;
+            payment_page_url: string;
           }>(
             `/payment-automation/invoices/${invoice.id}/whatsapp-link`,
           );
@@ -1954,7 +1955,7 @@ function App() {
               balance,
             )}\\nDue date: ${formatDate(
               invoice.due_date,
-            )}\\n\\nPay directly to the property owner using the UPI/phone/QR details here:\\n${paymentPage.url}\\n\\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`,
+            )}\\n\\nPay directly to the property owner using the UPI/phone/QR details here:\\n${paymentPage.payment_page_url}\\n\\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`,
           );
 
         window.open(
