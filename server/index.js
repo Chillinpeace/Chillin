@@ -1183,14 +1183,37 @@ app.post(
       ],
     );
 
-    const normalizedSharing = sharingType.toLowerCase();
-    const sharingBeds = normalizedSharing === 'single'
-      ? 1
-      : normalizedSharing === 'double'
-        ? 2
-        : normalizedSharing === 'triple'
-          ? 3
-          : Number(normalizedSharing.match(/\b(\d+)\b/)?.[1] || 0);
+    const normalizedSharing = sharingType
+      .toLowerCase()
+      .replace(/[-_]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const wordCounts = {
+      single: 1,
+      one: 1,
+      double: 2,
+      two: 2,
+      triple: 3,
+      three: 3,
+      four: 4,
+      five: 5,
+      six: 6,
+      seven: 7,
+      eight: 8,
+      nine: 9,
+      ten: 10,
+    };
+
+    const numericCount = Number(
+      normalizedSharing.match(/\b(\d+)\b/)?.[1] || 0,
+    );
+
+    const wordCount = Object.entries(wordCounts).find(
+      ([word]) => new RegExp('\\b' + word + '\\b').test(normalizedSharing),
+    )?.[1] || 0;
+
+    const sharingBeds = numericCount || Number(wordCount);
 
     for (let index = 1; index <= Math.min(Math.max(sharingBeds, 0), 20); index += 1) {
       await safeQuery(
