@@ -2263,12 +2263,6 @@ function App() {
             openTenantDetails={
               openTenantDetails
             }
-            sendWhatsAppReminder={
-              sendWhatsAppReminder
-            }
-            openPaymentForTenant={
-              openPaymentForTenant
-            }
             openModal={
               openModal
             }
