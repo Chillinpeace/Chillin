@@ -48,9 +48,6 @@ async function auth(req, res, next) {
   }
 }
 
-const cashfreeConfigured = () =>
-  Boolean(process.env.CASHFREE_CLIENT_ID && process.env.CASHFREE_CLIENT_SECRET);
-
 const whatsappConfigured = () =>
   Boolean(
     process.env.WHATSAPP_ACCESS_TOKEN &&
@@ -61,45 +58,16 @@ const whatsappConfigured = () =>
 const baseUrl = () =>
   String(process.env.APP_BASE_URL || 'https://chillin-production.up.railway.app').replace(/\/$/, '');
 
-const cashfreeBase = () =>
-  String(process.env.CASHFREE_ENV || 'production').toLowerCase() === 'sandbox'
-    ? 'https://sandbox.cashfree.com/pg'
-    : 'https://api.cashfree.com/pg';
-
-const cashfreeVersion = () => process.env.CASHFREE_API_VERSION || '2025-01-01';
-
 const whatsappVersion = () => process.env.WHATSAPP_GRAPH_VERSION || 'v23.0';
 
 const normalizePhone = (value) => {
   let phone = String(value || '').replace(/[^0-9]/g, '');
-  if (phone.length === 10) phone = `91${phone}`;
+  if (phone.length === 10) phone = \`91\${phone}\`;
   return phone;
 };
 
-async function cashfreeRequest(path, options = {}) {
-  if (!cashfreeConfigured()) throw new Error('Cashfree is not configured.');
-
-  const response = await fetch(`${cashfreeBase()}${path}`, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      Accept: 'application/json',
-      'x-client-id': process.env.CASHFREE_CLIENT_ID,
-      'x-client-secret': process.env.CASHFREE_CLIENT_SECRET,
-      'x-api-version': cashfreeVersion(),
-      ...(options.headers || {}),
-    },
-  });
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.message || data?.error || `Cashfree request failed: ${response.status}`);
-  }
-  return data;
-}
-
 async function ensurePaymentColumns() {
-  await query(`
+  await query(\`
     ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(100) DEFAULT '',
@@ -108,8 +76,10 @@ async function ensurePaymentColumns() {
       ADD COLUMN IF NOT EXISTS payment_link_status VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_created_at TIMESTAMPTZ,
       ADD COLUMN IF NOT EXISTS payment_link_paid_amount NUMERIC(12,2) DEFAULT 0,
-      ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT '';
+      ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS payment_token VARCHAR(80) DEFAULT '';
     CREATE INDEX IF NOT EXISTS idx_invoices_payment_link_id ON invoices(payment_link_id);
+    CREATE INDEX IF NOT EXISTS idx_invoices_payment_token ON invoices(payment_token);
     CREATE TABLE IF NOT EXISTS notifications (
       id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, tenant_id INTEGER, invoice_id INTEGER,
       channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp', type VARCHAR(50) NOT NULL DEFAULT 'manual',
@@ -123,340 +93,76 @@ async function ensurePaymentColumns() {
       recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE, last_run_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
-    CREATE TABLE IF NOT EXISTS cashfree_vendors (
+    CREATE TABLE IF NOT EXISTS owner_payment_details (
       owner_id INTEGER PRIMARY KEY,
-      vendor_id VARCHAR(120) NOT NULL UNIQUE,
-      status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
-      settlement_method VARCHAR(20) NOT NULL DEFAULT '',
+      upi_id VARCHAR(255) DEFAULT '',
+      phone VARCHAR(40) DEFAULT '',
+      qr_code_data TEXT DEFAULT '',
+      payment_instructions TEXT DEFAULT '',
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
-  `);
+  \`);
 }
 
-async function getOwnerCashfreeVendor(ownerId) {
+async function getOwnerPaymentDetails(ownerId) {
   const result = await query(
-    'SELECT owner_id,vendor_id,status,settlement_method FROM cashfree_vendors WHERE owner_id=$1 LIMIT 1',
+    'SELECT owner_id,upi_id,phone,qr_code_data,payment_instructions,updated_at FROM owner_payment_details WHERE owner_id=$1 LIMIT 1',
     [ownerId],
   );
   return result.rows[0] || null;
 }
 
-async function createCashfreeVendor(owner, body) {
-  if (!cashfreeConfigured()) throw new Error('Cashfree is not configured.');
-
-  const vendorId = `PEACELY_OWNER_${owner.id}`;
-  const settlementMethod = clean(body?.settlement_method).toLowerCase();
-  const name = clean(body?.name || owner.name).replace(/[^a-zA-Z0-9 .\/&-]/g, '').slice(0, 100);
-  const email = clean(body?.email || owner.email);
-  const phone = normalizePhone(body?.phone || body?.mobile || '');
-
-  if (!name || !email || !phone) throw new Error('Owner name, email and phone are required.');
-
-  const payload = {
-    vendor_id: vendorId,
-    status: 'ACTIVE',
-    name,
-    email,
-    phone,
-    verify_account: true,
-    dashboard_access: false,
-    schedule_option: Number(body?.schedule_option || 1),
-    kyc_details: {
-      account_type: clean(body?.account_type || 'BUSINESS').toUpperCase(),
-      ...(clean(body?.business_type) ? { business_type: clean(body.business_type).toUpperCase() } : {}),
-      ...(clean(body?.pan) ? { pan: clean(body.pan).toUpperCase() } : {}),
-      ...(clean(body?.gst) ? { gst: clean(body.gst).toUpperCase() } : {}),
-      ...(body?.uidai ? { uidai: Number(body.uidai) } : {}),
-    },
-  };
-
-  if (settlementMethod === 'upi') {
-    const vpa = clean(body?.upi_vpa);
-    const accountHolder = clean(body?.account_holder || name);
-    if (!vpa) throw new Error('UPI ID is required.');
-    payload.upi = { vpa, account_holder: accountHolder };
-  } else {
-    const accountNumber = clean(body?.account_number);
-    const ifsc = clean(body?.ifsc).toUpperCase();
-    const accountHolder = clean(body?.account_holder || name);
-    if (!accountNumber || !ifsc) throw new Error('Bank account number and IFSC are required.');
-    payload.bank = { account_number: accountNumber, account_holder: accountHolder, ifsc };
-  }
-
-  const data = await cashfreeRequest('/easy-split/vendors', {
-    method: 'POST',
-    headers: {
-      'x-api-version': process.env.CASHFREE_EASY_SPLIT_API_VERSION || '2025-01-01',
-      'x-idempotency-key': `peacely-vendor-${owner.id}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const status = clean(data?.status || 'IN_BENE_CREATION').toUpperCase();
-
-  await query(
-    `INSERT INTO cashfree_vendors(owner_id,vendor_id,status,settlement_method,updated_at)
-     VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP)
-     ON CONFLICT(owner_id) DO UPDATE SET vendor_id=EXCLUDED.vendor_id,status=EXCLUDED.status,
-       settlement_method=EXCLUDED.settlement_method,updated_at=CURRENT_TIMESTAMP`,
-    [owner.id, vendorId, status, settlementMethod],
-  );
-
-  return { ...data, vendor_id: vendorId, status };
-}
-
-async function splitPaidOrderToOwner(orderId, invoiceId, amount) {
-  if (!orderId || !invoiceId || amount <= 0 || !cashfreeConfigured()) return null;
-
-  const ownerResult = await query(
-    `SELECT p.owner_id
-     FROM invoices i
-     INNER JOIN tenants t ON t.id=i.tenant_id
-     INNER JOIN properties p ON p.id=t.property_id
-     WHERE i.id=$1 LIMIT 1`,
-    [invoiceId],
-  );
-  const ownerId = ownerResult.rows[0]?.owner_id;
-  if (!ownerId) return null;
-
-  const vendor = await getOwnerCashfreeVendor(ownerId);
-  if (!vendor || clean(vendor.status).toUpperCase() !== 'ACTIVE') {
-    console.warn(`Cashfree vendor is not ACTIVE for owner ${ownerId}; payment remains in merchant ledger.`);
-    return null;
-  }
-
-  const result = await cashfreeRequest(`/easy-split/orders/${encodeURIComponent(orderId)}/split`, {
-    method: 'POST',
-    headers: {
-      'x-api-version': process.env.CASHFREE_EASY_SPLIT_API_VERSION || '2025-01-01',
-      'x-idempotency-key': `peacely-split-${invoiceId}`,
-    },
-    body: JSON.stringify({
-      split: [{
-        vendor_id: vendor.vendor_id,
-        amount: Number(amount),
-        tags: {
-          invoice_id: String(invoiceId),
-          peacely_owner_id: String(ownerId),
-        },
-      }],
-      disable_split: true,
-    }),
-  });
-
-  return result;
-}
-
-async function createPaymentLink(invoice) {
-  if (!cashfreeConfigured()) return null;
-
-  const tenantPhone = normalizePhone(invoice.phone);
-  const dueDate = new Date(`${invoice.due_date}T23:59:59+05:30`);
-  dueDate.setDate(dueDate.getDate() + 7);
-
-  const linkId = `PEACELY-${invoice.id}`;
-  const ownerResult = await query(
-    `SELECT p.owner_id FROM tenants t INNER JOIN properties p ON p.id=t.property_id WHERE t.id=$1 LIMIT 1`,
-    [invoice.tenant_id],
-  );
-  const ownerVendor = ownerResult.rows[0]?.owner_id ? await getOwnerCashfreeVendor(ownerResult.rows[0].owner_id) : null;
-  if (!ownerVendor || clean(ownerVendor.status).toUpperCase() !== 'ACTIVE') {
-    throw new Error('Owner Cashfree settlement account is not active. Connect and verify the owner payment account before creating a rent payment link.');
-  }
-  const notifyUrl = `${baseUrl()}/api/payment-automation/webhook/cashfree`;
-
-  const payload = {
-    customer_details: {
-      customer_name: invoice.tenant_name,
-      customer_phone: tenantPhone,
-      ...(invoice.email ? { customer_email: invoice.email } : {}),
-    },
-    link_amount: Number(invoice.amount),
-    link_auto_reminders: true,
-    link_currency: 'INR',
-    link_expiry_time: dueDate.toISOString(),
-    link_id: linkId,
-    link_partial_payments: false,
-    link_notes: {
-      invoice_id: String(invoice.id),
-      tenant_id: String(invoice.tenant_id),
-      ...(ownerVendor?.vendor_id ? { vendor_id: ownerVendor.vendor_id } : {}),
-    },
-    link_meta: {
-      notify_url: notifyUrl,
-      return_url: `${baseUrl()}/?payment=success&invoice=${invoice.id}`,
-      upi_intent: true,
-    },
-    link_purpose: `Rent ${invoice.month || ''} - ${invoice.invoice_number}`.trim(),
-  };
-
-  const data = await cashfreeRequest('/links', {
-    method: 'POST',
-    headers: {
-      'x-idempotency-key': `peacely-invoice-${invoice.id}`,
-    },
-    body: JSON.stringify(payload),
-  });
-
-  await query(
-    `UPDATE invoices
-     SET payment_provider='cashfree',
-         payment_link_id=$1,
-         payment_link_cf_id=$2,
-         payment_link_url=$3,
-         payment_link_status=$4,
-         payment_link_created_at=CURRENT_TIMESTAMP,
-         payment_link_paid_amount=$5,
-         updated_at=CURRENT_TIMESTAMP
-     WHERE id=$6`,
-    [
-      clean(data?.link_id) || linkId,
-      clean(data?.cf_link_id),
-      clean(data?.link_url),
-      clean(data?.link_status) || 'ACTIVE',
-      num(data?.link_amount_paid),
-      invoice.id,
-    ],
-  );
-
-  return data;
-}
-
 async function loadInvoice(invoiceId) {
   const result = await query(
-    `SELECT
+    \`SELECT
        i.id,i.invoice_number,i.tenant_id,i.amount,i.month,i.due_date,i.status,
-       i.paid_amount,i.payment_link_id,i.payment_link_cf_id,i.payment_link_url,i.payment_link_status,
+       i.paid_amount,i.payment_link_url,i.payment_link_status,i.payment_token,
        t.name AS tenant_name,t.phone,t.email,p.name AS property_name,p.address
      FROM invoices i
      INNER JOIN tenants t ON t.id=i.tenant_id
      INNER JOIN properties p ON p.id=t.property_id
      WHERE i.id=$1
-     LIMIT 1`,
+     LIMIT 1\`,
     [invoiceId],
   );
   return result.rows[0] || null;
 }
 
-async function ensureLinkForInvoice(invoiceId) {
-  const invoice = await loadInvoice(invoiceId);
-  if (!invoice) return null;
-  if (clean(invoice.payment_link_url)) return invoice;
-  if (!cashfreeConfigured()) return invoice;
-  try {
-    await createPaymentLink(invoice);
-    return await loadInvoice(invoiceId);
-  } catch (error) {
-    console.error(`Payment link creation failed for invoice ${invoiceId}:`, error.message);
-    return invoice;
-  }
-}
-
-function verifyCashfreeWebhook(req) {
-  const signature = clean(req.headers['x-webhook-signature']);
-  const timestamp = clean(req.headers['x-webhook-timestamp']);
-  const rawBody = String(req.rawBody || '');
-  const secret = process.env.CASHFREE_WEBHOOK_SECRET || process.env.CASHFREE_CLIENT_SECRET;
-
-  if (!signature || !timestamp || !rawBody || !secret) return false;
-
-  const expected = crypto
-    .createHmac('sha256', secret)
-    .update(timestamp + rawBody)
-    .digest('base64');
-
-  try {
-    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(signature));
-  } catch {
-    return false;
-  }
-}
-
-async function fetchCashfreeLink(linkId) {
-  if (!cashfreeConfigured() || !linkId) return null;
-  return cashfreeRequest(`/links/${encodeURIComponent(linkId)}`, { method: 'GET' });
-}
-
-async function markInvoicePaidFromCashfree(linkId, fallbackAmount = 0) {
-  if (!linkId) return null;
-
-  const reference = await query(
-    `SELECT id,payment_link_id
-     FROM invoices
-     WHERE payment_link_id=$1 OR payment_link_cf_id=$1
-     ORDER BY id DESC
-     LIMIT 1`,
-    [String(linkId)],
+async function ownerOwnsInvoice(ownerId, invoiceId) {
+  const result = await query(
+    \`SELECT i.id FROM invoices i
+     INNER JOIN tenants t ON t.id=i.tenant_id
+     INNER JOIN properties p ON p.id=t.property_id
+     WHERE i.id=$1 AND p.owner_id=$2 LIMIT 1\`,
+    [invoiceId, ownerId],
   );
+  return Boolean(result.rows.length);
+}
 
-  const merchantLinkId = reference.rows[0]?.payment_link_id || String(linkId);
-  const link = await fetchCashfreeLink(merchantLinkId);
-  if (!link) return null;
+async function createPaymentToken(invoiceId) {
+  const existing = await query(
+    'SELECT payment_token FROM invoices WHERE id=$1 LIMIT 1',
+    [invoiceId],
+  );
+  if (clean(existing.rows[0]?.payment_token)) return existing.rows[0].payment_token;
 
-  const notes = link.link_notes || {};
-  const invoiceId = Number(notes.invoice_id || reference.rows[0]?.id || 0);
-  if (!Number.isInteger(invoiceId) || invoiceId <= 0) return null;
-
-  const invoice = await loadInvoice(invoiceId);
-  if (!invoice) return null;
-
-  const paidFromLink = num(link.link_amount_paid, fallbackAmount);
-  const invoiceAmount = num(invoice.amount);
-  const paidAmount = Math.min(Math.max(paidFromLink, 0), invoiceAmount);
-
+  const token = crypto.randomBytes(24).toString('hex');
   await query(
-    `UPDATE invoices
-     SET paid_amount=$1,
-         payment_link_status=$2,
-         payment_link_paid_amount=$3,
-         status=CASE
-           WHEN $1 >= amount AND amount > 0 THEN 'Paid'
-           WHEN $1 > 0 THEN 'Partially Paid'
-           WHEN due_date < CURRENT_DATE THEN 'Overdue'
-           ELSE 'Pending'
-         END,
-         paid_at=CASE
-           WHEN $1 >= amount AND amount > 0 THEN COALESCE(paid_at,CURRENT_TIMESTAMP)
-           ELSE NULL
-         END,
-         updated_at=CURRENT_TIMESTAMP
-     WHERE id=$4`,
-    [paidAmount, clean(link.link_status), paidAmount, invoiceId],
+    'UPDATE invoices SET payment_token=$1,updated_at=CURRENT_TIMESTAMP WHERE id=$2',
+    [token, invoiceId],
   );
-
-  if (paidAmount > 0) {
-    const existing = await query(
-      'SELECT id FROM payments WHERE invoice_id=$1 AND payment_method=$2 ORDER BY id DESC LIMIT 1',
-      [invoiceId, 'Cashfree'],
-    );
-
-    if (!existing.rows.length) {
-      await query(
-        `INSERT INTO payments(tenant_id,invoice_id,amount,payment_date,payment_method,payment_month,notes)
-         VALUES($1,$2,$3,CURRENT_DATE,'Cashfree',$4,$5)`,
-        [
-          invoice.tenant_id,
-          invoiceId,
-          paidAmount,
-          invoice.month || '',
-          'Automatically recorded from Cashfree payment link.',
-        ],
-      );
-    }
-  }
-
-  return await loadInvoice(invoiceId);
+  return token;
 }
 
 async function sendWhatsAppTemplate(to, templateName, bodyTexts = []) {
   if (!whatsappConfigured() || !templateName) return null;
 
   const response = await fetch(
-    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    \`https://graph.facebook.com/\${whatsappVersion()}/\${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages\`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: \`Bearer \${process.env.WHATSAPP_ACCESS_TOKEN}\`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -484,7 +190,7 @@ async function sendWhatsAppTemplate(to, templateName, bodyTexts = []) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error?.message || `WhatsApp request failed: ${response.status}`);
+    throw new Error(data?.error?.message || \`WhatsApp request failed: \${response.status}\`);
   }
   return data;
 }
@@ -494,23 +200,24 @@ async function buildInvoicePdf(invoice) {
   const chunks = [];
 
   doc.on('data', (chunk) => chunks.push(chunk));
-
   const finished = new Promise((resolve) => doc.on('end', () => resolve(Buffer.concat(chunks))));
 
   doc.fontSize(24).text('Peacely', { align: 'center' });
   doc.moveDown();
   doc.fontSize(18).text('Paid Rent Invoice', { align: 'center' });
   doc.moveDown(1.5);
-  doc.fontSize(11).text(`Invoice: ${invoice.invoice_number}`);
-  doc.text(`Tenant: ${invoice.tenant_name}`);
-  doc.text(`Property: ${invoice.property_name}`);
-  doc.text(`Month: ${invoice.month || '-'}`);
-  doc.text(`Due date: ${invoice.due_date}`);
-  doc.text(`Payment status: PAID`);
+  doc.fontSize(11).text(\`Invoice: \${invoice.invoice_number}\`);
+  doc.text(\`Tenant: \${invoice.tenant_name}\`);
+  doc.text(\`Property: \${invoice.property_name}\`);
+  doc.text(\`Month: \${invoice.month || '-'}\`);
+  doc.text(\`Due date: \${invoice.due_date}\`);
+  doc.text('Payment status: PAID');
   doc.moveDown();
-  doc.fontSize(14).text(`Amount paid: ₹${num(invoice.paid_amount).toLocaleString('en-IN')}`);
+  doc.fontSize(14).text(\`Amount paid: ₹\${num(invoice.paid_amount).toLocaleString('en-IN')}\`);
   doc.moveDown(2);
-  doc.fontSize(10).text('Thank you for your payment.');
+  doc.fontSize(10).text('Payment was confirmed by the property owner in Peacely.');
+  doc.moveDown();
+  doc.text('Thank you for your payment.');
   doc.end();
 
   return finished;
@@ -526,21 +233,18 @@ async function sendPaidInvoice(invoiceId) {
   const token = crypto.randomBytes(24).toString('hex');
 
   await query(
-    `ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT ''`,
-  );
-  await query(
     'UPDATE invoices SET receipt_token=$1,updated_at=CURRENT_TIMESTAMP WHERE id=$2',
     [token, invoiceId],
   );
 
-  const publicUrl = `${baseUrl()}/api/payment-automation/receipt/${token}.pdf`;
+  const publicUrl = \`\${baseUrl()}/api/payment-automation/receipt/\${token}.pdf\`;
 
   const response = await fetch(
-    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
+    \`https://graph.facebook.com/\${whatsappVersion()}/\${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages\`,
     {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
+        Authorization: \`Bearer \${process.env.WHATSAPP_ACCESS_TOKEN}\`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -550,8 +254,8 @@ async function sendPaidInvoice(invoiceId) {
         type: 'document',
         document: {
           link: publicUrl,
-          filename: `${invoice.invoice_number}.pdf`,
-          caption: `Paid rent invoice ${invoice.invoice_number}`,
+          filename: \`\${invoice.invoice_number}.pdf\`,
+          caption: \`Paid rent invoice \${invoice.invoice_number}\`,
         },
       }),
     },
@@ -559,10 +263,81 @@ async function sendPaidInvoice(invoiceId) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error?.message || `WhatsApp receipt failed: ${response.status}`);
+    throw new Error(data?.error?.message || \`WhatsApp receipt failed: \${response.status}\`);
   }
 
   return true;
+}
+
+async function markInvoicePaidManually(ownerId, invoiceId) {
+  const invoice = await loadInvoice(invoiceId);
+  if (!invoice || !await ownerOwnsInvoice(ownerId, invoiceId)) {
+    throw new Error('Invoice not found.');
+  }
+
+  const amount = num(invoice.amount);
+  const paidAmount = num(invoice.paid_amount);
+  const balance = Math.max(amount - paidAmount, 0);
+
+  if (clean(invoice.status).toLowerCase() === 'cancelled') {
+    throw new Error('Cancelled invoices cannot be marked as paid.');
+  }
+  if (balance <= 0 || clean(invoice.status).toLowerCase() === 'paid') {
+    return { invoice, alreadyPaid: true };
+  }
+
+  await query(
+    \`UPDATE invoices
+     SET paid_amount=amount,
+         status='Paid',
+         paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP),
+         payment_link_status='manual_owner_confirmed',
+         updated_at=CURRENT_TIMESTAMP
+     WHERE id=$1 AND paid_amount < amount\`,
+    [invoiceId],
+  );
+
+  const existing = await query(
+    'SELECT id FROM payments WHERE invoice_id=$1 AND LOWER(COALESCE(payment_method,\\'\\'))=LOWER($2) ORDER BY id DESC LIMIT 1',
+    [invoiceId, 'UPI - Owner Confirmed'],
+  );
+
+  if (!existing.rows.length) {
+    await query(
+      \`INSERT INTO payments(tenant_id,invoice_id,amount,payment_date,payment_method,payment_month,notes)
+       VALUES($1,$2,$3,CURRENT_DATE,$4,$5,$6)\`,
+      [
+        invoice.tenant_id,
+        invoiceId,
+        balance,
+        'UPI - Owner Confirmed',
+        invoice.month || '',
+        'Owner confirmed that the tenant payment was received directly.',
+      ],
+    );
+  }
+
+  const updatedInvoice = await loadInvoice(invoiceId);
+
+  await query(
+    \`INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,sent_at)
+     VALUES($1,$2,$3,'system','payment_confirmed',$4,$5,'sent',CURRENT_TIMESTAMP)\`,
+    [
+      ownerId,
+      updatedInvoice.tenant_id,
+      invoiceId,
+      normalizePhone(updatedInvoice.phone),
+      \`Payment confirmed for \${updatedInvoice.invoice_number}: ₹\${num(updatedInvoice.amount).toLocaleString('en-IN')}\`,
+    ],
+  );
+
+  try {
+    await sendPaidInvoice(invoiceId);
+  } catch (error) {
+    console.error(\`Paid invoice WhatsApp failed for invoice \${invoiceId}:\`, error.message);
+  }
+
+  return { invoice: await loadInvoice(invoiceId), alreadyPaid: false };
 }
 
 function addDays(date, days) {
@@ -581,13 +356,13 @@ function dueDateForMonth(year, monthIndex, dueDay) {
 }
 
 async function createDueInvoices() {
-  const owners = await query(`
+  const owners = await query(\`
     SELECT DISTINCT p.owner_id
     FROM properties p
     INNER JOIN tenants t ON t.property_id=p.id
     WHERE LOWER(COALESCE(t.status,''))='active'
       AND COALESCE(t.monthly_rent,0)>0
-  `);
+  \`);
 
   let created = 0;
 
@@ -611,10 +386,10 @@ async function createDueInvoices() {
     const reminderDays = Math.max(0, Math.min(30, Number(settings.reminder_days_before || 3)));
 
     const tenants = await query(
-      `SELECT t.id,t.name,t.phone,t.email,t.monthly_rent,t.due_date,p.name AS property_name
+      \`SELECT t.id,t.name,t.phone,t.email,t.monthly_rent,t.due_date,p.name AS property_name
        FROM tenants t
        INNER JOIN properties p ON p.id=t.property_id
-       WHERE p.owner_id=$1 AND LOWER(COALESCE(t.status,''))='active' AND COALESCE(t.monthly_rent,0)>0`,
+       WHERE p.owner_id=$1 AND LOWER(COALESCE(t.status,''))='active' AND COALESCE(t.monthly_rent,0)>0\`,
       [owner.owner_id],
     );
 
@@ -628,30 +403,39 @@ async function createDueInvoices() {
       if (todayIso < isoDate(threshold)) continue;
 
       const existing = await query(
-        `SELECT id,status,payment_link_url FROM invoices
+        \`SELECT id,status FROM invoices
          WHERE tenant_id=$1 AND due_date >= date_trunc('month',$2::date)
            AND due_date < date_trunc('month',$2::date)+INTERVAL '1 month'
-         ORDER BY id DESC LIMIT 1`,
+         ORDER BY id DESC LIMIT 1\`,
         [tenant.id, dueIso],
       );
 
       let invoiceId = existing.rows[0]?.id || null;
 
       if (!invoiceId) {
-        const invoiceNumber = `INV-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
+        const invoiceNumber = \`INV-\${Date.now()}-\${crypto.randomBytes(3).toString('hex').toUpperCase()}\`;
         const result = await query(
-          `INSERT INTO invoices(invoice_number,tenant_id,amount,month,due_date,status,paid_amount,delivery_status)
+          \`INSERT INTO invoices(invoice_number,tenant_id,amount,month,due_date,status,paid_amount,delivery_status,payment_token)
            VALUES($1,$2,$3,$4,$5::date,
              CASE WHEN $5::date < CURRENT_DATE THEN 'Overdue' ELSE 'Pending' END,
-             0,'Not Sent')
-           RETURNING id`,
-          [invoiceNumber, tenant.id, num(tenant.monthly_rent), monthLabel, dueIso],
+             0,'Not Sent',$6)
+           RETURNING id\`,
+          [
+            invoiceNumber,
+            tenant.id,
+            num(tenant.monthly_rent),
+            monthLabel,
+            dueIso,
+            crypto.randomBytes(24).toString('hex'),
+          ],
         );
         invoiceId = result.rows[0].id;
         created += 1;
+      } else {
+        await createPaymentToken(invoiceId);
       }
 
-      const invoice = await ensureLinkForInvoice(invoiceId);
+      const invoice = await loadInvoice(invoiceId);
       if (invoice) {
         await sendDueReminderIfNeeded(invoice, settings);
       }
@@ -663,57 +447,80 @@ async function createDueInvoices() {
 
 async function sendDueReminderIfNeeded(invoice, settings) {
   if (!whatsappConfigured()) return false;
-  if (!clean(invoice.payment_link_url)) return false;
   if (!settings.reminders_enabled) return false;
   if (clean(invoice.status).toLowerCase() === 'paid') return false;
 
+  const paymentDetails = await getOwnerPaymentDetails(
+    (await query(
+      \`SELECT p.owner_id
+       FROM invoices i
+       INNER JOIN tenants t ON t.id=i.tenant_id
+       INNER JOIN properties p ON p.id=t.property_id
+       WHERE i.id=$1 LIMIT 1\`,
+      [invoice.id],
+    )).rows[0]?.owner_id,
+  );
+
+  if (!paymentDetails || (!clean(paymentDetails.upi_id) && !clean(paymentDetails.phone) && !clean(paymentDetails.qr_code_data))) {
+    console.warn(\`No owner payment details configured for invoice \${invoice.id}; reminder skipped.\`);
+    return false;
+  }
+
   const today = new Date();
-  const due = new Date(`${invoice.due_date}T00:00:00Z`);
+  const due = new Date(\`\${invoice.due_date}T00:00:00Z\`);
   const daysUntilDue = Math.round((due.getTime() - new Date(isoDate(today)).getTime()) / 86400000);
   const reminderType = daysUntilDue < 0 ? 'payment_overdue' : 'payment_due';
   if (daysUntilDue < 0 && !settings.overdue_reminders_enabled) return false;
 
   const exists = await query(
-    `SELECT id FROM notifications
+    \`SELECT id FROM notifications
      WHERE invoice_id=$1 AND type=$2 AND created_at::date=CURRENT_DATE
-     LIMIT 1`,
+     LIMIT 1\`,
     [invoice.id, reminderType],
   );
-
   if (exists.rows.length) return false;
 
+  const paymentToken = await createPaymentToken(invoice.id);
+  const paymentPageUrl = \`\${baseUrl()}/api/payment-automation/pay/\${paymentToken}\`;
   const template = process.env.WHATSAPP_REMINDER_TEMPLATE || 'peacely_rent_due';
+
+  const paymentSummary = [
+    clean(paymentDetails.upi_id) ? \`UPI: \${paymentDetails.upi_id}\` : '',
+    clean(paymentDetails.phone) ? \`Phone: \${paymentDetails.phone}\` : '',
+    paymentPageUrl,
+  ].filter(Boolean).join(' | ');
+
   try {
     const result = await sendWhatsAppTemplate(
       invoice.phone,
       template,
       [
         invoice.tenant_name,
-        `₹${num(invoice.amount).toLocaleString('en-IN')}`,
+        \`₹\${num(invoice.amount).toLocaleString('en-IN')}\`,
         invoice.due_date,
-        invoice.payment_link_url,
+        paymentPageUrl,
       ],
     );
 
     await query(
-      `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,provider_message_id,sent_at)
+      \`INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,provider_message_id,sent_at)
        SELECT p.owner_id,$1,$2,'whatsapp',$3,$4,$5,'sent',$6,CURRENT_TIMESTAMP
        FROM properties p
        INNER JOIN tenants t ON t.property_id=p.id
        WHERE t.id=$1
-       LIMIT 1`,
+       LIMIT 1\`,
       [
         invoice.tenant_id,
         invoice.id,
         reminderType,
         normalizePhone(invoice.phone),
-        `Automatic rent payment reminder: ${invoice.payment_link_url}`,
+        \`Automatic rent reminder. Pay directly to owner. \${paymentSummary}\`,
         result?.messages?.[0]?.id || '',
       ],
     );
     return true;
   } catch (error) {
-    console.error(`WhatsApp reminder failed for invoice ${invoice.id}:`, error.message);
+    console.error(\`WhatsApp reminder failed for invoice \${invoice.id}:\`, error.message);
     return false;
   }
 }
@@ -732,72 +539,231 @@ router.get('/payment-automation/status', auth, async (req, res) => {
 
   const [pending, recent] = await Promise.all([
     query(
-      `SELECT COUNT(*)::integer AS count
+      \`SELECT COUNT(*)::integer AS count
        FROM invoices i
        INNER JOIN tenants t ON t.id=i.tenant_id
        INNER JOIN properties p ON p.id=t.property_id
        WHERE p.owner_id=$1
          AND LOWER(COALESCE(i.status,'')) NOT IN ('paid','cancelled')
-         AND GREATEST(i.amount-COALESCE(i.paid_amount,0),0)>0`,
+         AND GREATEST(i.amount-COALESCE(i.paid_amount,0),0)>0\`,
       [req.paymentOwner.id],
     ),
     query(
-      `SELECT COUNT(*)::integer AS count
+      \`SELECT COUNT(*)::integer AS count
        FROM invoices i
        INNER JOIN tenants t ON t.id=i.tenant_id
        INNER JOIN properties p ON p.id=t.property_id
        WHERE p.owner_id=$1
          AND LOWER(COALESCE(i.status,''))='paid'
-         AND i.paid_at::date >= CURRENT_DATE-INTERVAL '30 days'`,
+         AND i.paid_at::date >= CURRENT_DATE-INTERVAL '30 days'\`,
       [req.paymentOwner.id],
     ),
   ]);
 
-  const vendor = await getOwnerCashfreeVendor(req.paymentOwner.id);
+  const paymentDetails = await getOwnerPaymentDetails(req.paymentOwner.id);
 
   res.json({
     success: true,
-    provider: 'Cashfree',
-    automatic: cashfreeConfigured(),
+    provider: 'Owner Direct UPI',
+    automatic: Boolean(paymentDetails && (
+      clean(paymentDetails.upi_id) ||
+      clean(paymentDetails.phone) ||
+      clean(paymentDetails.qr_code_data)
+    )),
     whatsapp: whatsappConfigured(),
-    owner_vendor: Boolean(vendor),
-    owner_vendor_status: vendor?.status || 'NOT_CONFIGURED',
-    recurring_invoices: true,
+    owner_payment_details: Boolean(paymentDetails),
     pending_invoices: Number(pending.rows[0]?.count || 0),
     paid_last_30_days: Number(recent.rows[0]?.count || 0),
   });
 });
 
-router.get('/payment-automation/vendor', auth, async (req, res) => {
+router.get('/payment-automation/payment-details', auth, async (req, res) => {
   await ensurePaymentColumns();
-  const vendor = await getOwnerCashfreeVendor(req.paymentOwner.id);
+  const details = await getOwnerPaymentDetails(req.paymentOwner.id);
   return res.json({
     success: true,
-    configured: Boolean(vendor),
-    vendor: vendor ? {
-      vendor_id: vendor.vendor_id,
-      status: vendor.status,
-      settlement_method: vendor.settlement_method,
-    } : null,
+    configured: Boolean(details),
+    payment_details: details ? {
+      upi_id: details.upi_id || '',
+      phone: details.phone || '',
+      qr_code_data: details.qr_code_data || '',
+      payment_instructions: details.payment_instructions || '',
+    } : {
+      upi_id: '',
+      phone: '',
+      qr_code_data: '',
+      payment_instructions: '',
+    },
   });
 });
 
-router.post('/payment-automation/vendor', auth, async (req, res) => {
+router.put('/payment-automation/payment-details', auth, async (req, res) => {
   await ensurePaymentColumns();
+
+  const upiId = clean(req.body?.upi_id);
+  const phone = clean(req.body?.phone);
+  const qrCodeData = clean(req.body?.qr_code_data);
+  const paymentInstructions = clean(req.body?.payment_instructions);
+
+  if (!upiId && !phone && !qrCodeData) {
+    return res.status(400).json({
+      success: false,
+      error: 'Add at least a UPI ID, phone number, or QR code.',
+    });
+  }
+
+  if (qrCodeData && !/^data:image\/(png|jpe?g|webp);base64,/i.test(qrCodeData)) {
+    return res.status(400).json({
+      success: false,
+      error: 'QR code must be a PNG, JPG, JPEG, or WebP image.',
+    });
+  }
+
+  await query(
+    \`INSERT INTO owner_payment_details(owner_id,upi_id,phone,qr_code_data,payment_instructions,updated_at)
+     VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
+     ON CONFLICT(owner_id) DO UPDATE SET
+       upi_id=EXCLUDED.upi_id,
+       phone=EXCLUDED.phone,
+       qr_code_data=EXCLUDED.qr_code_data,
+       payment_instructions=EXCLUDED.payment_instructions,
+       updated_at=CURRENT_TIMESTAMP\`,
+    [req.paymentOwner.id, upiId, phone, qrCodeData, paymentInstructions],
+  );
+
+  const details = await getOwnerPaymentDetails(req.paymentOwner.id);
+  return res.json({
+    success: true,
+    payment_details: {
+      upi_id: details?.upi_id || '',
+      phone: details?.phone || '',
+      qr_code_data: details?.qr_code_data || '',
+      payment_instructions: details?.payment_instructions || '',
+    },
+  });
+});
+
+router.post('/payment-automation/invoices/:id/mark-paid', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ success: false, error: 'Invalid invoice.' });
+  }
+
   try {
-    const vendor = await createCashfreeVendor(req.paymentOwner, req.body || {});
+    const result = await markInvoicePaidManually(req.paymentOwner.id, id);
     return res.json({
       success: true,
-      vendor: {
-        vendor_id: vendor.vendor_id,
-        status: vendor.status,
-        settlement_method: clean(req.body?.settlement_method).toLowerCase(),
-      },
+      already_paid: result.alreadyPaid,
+      invoice: result.invoice,
+      receipt_sent: whatsappConfigured(),
+      message: result.alreadyPaid
+        ? 'Invoice is already paid.'
+        : 'Payment confirmed and invoice marked as paid.',
     });
   } catch (error) {
-    console.error('Cashfree vendor onboarding failed:', error);
-    return res.status(400).json({ success: false, error: error.message || 'Could not onboard owner for payments.' });
+    console.error('Manual payment confirmation failed:', error);
+    return res.status(400).json({ success: false, error: error.message || 'Could not mark invoice as paid.' });
   }
+});
+
+router.get('/payment-automation/pay/:token', async (req, res) => {
+  const token = clean(req.params.token);
+  if (!token) return res.status(404).end();
+
+  await ensurePaymentColumns();
+  const result = await query(
+    \`SELECT
+       i.id,i.invoice_number,i.amount,i.month,i.due_date,i.status,i.paid_amount,
+       t.name AS tenant_name,p.name AS property_name,
+       p.owner_id,o.name AS owner_name,
+       opd.upi_id,opd.phone,opd.qr_code_data,opd.payment_instructions
+     FROM invoices i
+     INNER JOIN tenants t ON t.id=i.tenant_id
+     INNER JOIN properties p ON p.id=t.property_id
+     INNER JOIN owners o ON o.id=p.owner_id
+     LEFT JOIN owner_payment_details opd ON opd.owner_id=p.owner_id
+     WHERE i.payment_token=$1
+     LIMIT 1\`,
+    [token],
+  );
+
+  if (!result.rows.length) return res.status(404).send('Payment request not found.');
+  const invoice = result.rows[0];
+  const qr = clean(invoice.qr_code_data);
+
+  const escapeHtml = (value) => String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+
+  const upiLink = clean(invoice.upi_id)
+    ? \`upi://pay?pa=\${encodeURIComponent(invoice.upi_id)}&pn=\${encodeURIComponent(invoice.owner_name || 'Owner')}&am=\${encodeURIComponent(num(invoice.amount))}&cu=INR\`
+    : '';
+
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(\`<!doctype html>
+<html lang="en">
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pay Rent - Peacely</title>
+<style>
+body{font-family:Arial,sans-serif;background:#f6f7fb;margin:0;padding:24px;color:#172033}
+.card{max-width:520px;margin:0 auto;background:#fff;border-radius:20px;padding:24px;box-shadow:0 10px 35px rgba(0,0,0,.08)}
+h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;margin:18px 0}.pay{display:block;text-align:center;background:#111827;color:#fff;text-decoration:none;padding:14px;border-radius:12px;font-weight:700;margin:18px 0}.detail{padding:14px;background:#f4f6f8;border-radius:12px;margin-top:10px}.qr{max-width:260px;width:100%;display:block;margin:18px auto;border-radius:12px}.note{white-space:pre-wrap}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="muted">Peacely rent payment</div>
+  <h1>\${escapeHtml(invoice.property_name || 'Property')}</h1>
+  <div class="muted">Tenant: \${escapeHtml(invoice.tenant_name)}</div>
+  <div class="amount">₹\${num(invoice.amount).toLocaleString('en-IN')}</div>
+  <div class="muted">Invoice \${escapeHtml(invoice.invoice_number)} · Due \${escapeHtml(invoice.due_date)}</div>
+  \${upiLink ? \`<a class="pay" href="\${upiLink}">Pay with UPI</a>\` : ''}
+  \${clean(invoice.upi_id) ? \`<div class="detail"><strong>UPI ID</strong><br>\${escapeHtml(invoice.upi_id)}</div>\` : ''}
+  \${clean(invoice.phone) ? \`<div class="detail"><strong>Phone</strong><br>\${escapeHtml(invoice.phone)}</div>\` : ''}
+  \${qr ? \`<img class="qr" src="\${qr}" alt="Owner UPI QR code">\` : ''}
+  \${clean(invoice.payment_instructions) ? \`<div class="detail note">\${escapeHtml(invoice.payment_instructions)}</div>\` : ''}
+  <div class="detail"><strong>After paying</strong><br>Inform the property owner. The owner will confirm the payment in Peacely and your paid invoice will be sent automatically.</div>
+</div>
+</body>
+</html>\`);
+});
+
+router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
+  const token = clean(req.params.token);
+  if (!token) return res.status(404).end();
+
+  await ensurePaymentColumns();
+  const result = await query(
+    \`SELECT i.*,t.name AS tenant_name,t.phone,p.name AS property_name
+     FROM invoices i
+     INNER JOIN tenants t ON t.id=i.tenant_id
+     INNER JOIN properties p ON p.id=t.property_id
+     WHERE i.receipt_token=$1 AND LOWER(COALESCE(i.status,''))='paid'
+     LIMIT 1\`,
+    [token],
+  );
+
+  if (!result.rows.length) return res.status(404).end();
+
+  const pdf = await buildInvoicePdf(result.rows[0]);
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', \`inline; filename="\${result.rows[0].invoice_number}.pdf"\`);
+  res.end(pdf);
+});
+
+router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !await ownerOwnsInvoice(req.paymentOwner.id, id)) {
+    return res.status(404).json({ success: false, error: 'Invoice not found.' });
+  }
+  const token = await createPaymentToken(id);
+  return res.json({ success: true, url: \`\${baseUrl()}/api/payment-automation/pay/\${token}\` });
 });
 
 router.get('/payment-automation/settings', auth, async (req, res) => {
@@ -844,104 +810,6 @@ router.put('/payment-automation/settings', auth, async (req, res) => {
       recurring_invoices_enabled: recurringEnabled,
     },
   });
-});
-
-router.post('/payment-automation/invoices/:id/link', auth, async (req, res) => {
-  await ensurePaymentColumns();
-  const id = Number(req.params.id);
-  const invoice = await loadInvoice(id);
-  if (!invoice || !await ownerOwnsInvoice(req.paymentOwner.id, id)) {
-    return res.status(404).json({ success: false, error: 'Invoice not found.' });
-  }
-  const result = await ensureLinkForInvoice(id);
-  return res.json({ success: true, invoice: result });
-});
-
-async function ownerOwnsInvoice(ownerId, invoiceId) {
-  const result = await query(
-    `SELECT i.id FROM invoices i
-     INNER JOIN tenants t ON t.id=i.tenant_id
-     INNER JOIN properties p ON p.id=t.property_id
-     WHERE i.id=$1 AND p.owner_id=$2 LIMIT 1`,
-    [invoiceId, ownerId],
-  );
-  return Boolean(result.rows.length);
-}
-
-router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
-  const token = clean(req.params.token);
-  if (!token) return res.status(404).end();
-
-  await ensurePaymentColumns();
-  await query('ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT \'\'');
-
-  const result = await query(
-    `SELECT i.*,t.name AS tenant_name,t.phone,p.name AS property_name
-     FROM invoices i
-     INNER JOIN tenants t ON t.id=i.tenant_id
-     INNER JOIN properties p ON p.id=t.property_id
-     WHERE i.receipt_token=$1 AND LOWER(COALESCE(i.status,''))='paid'
-     LIMIT 1`,
-    [token],
-  );
-
-  if (!result.rows.length) return res.status(404).end();
-
-  const pdf = await buildInvoicePdf(result.rows[0]);
-  res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', `inline; filename="${result.rows[0].invoice_number}.pdf"`);
-  res.end(pdf);
-});
-
-router.post('/payment-automation/webhook/cashfree', async (req, res) => {
-  if (!verifyCashfreeWebhook(req)) {
-    return res.status(401).json({ success: false, error: 'Invalid webhook signature.' });
-  }
-
-  try {
-    const payload = req.body || {};
-    const type = clean(payload.type || payload.event_type).toUpperCase();
-    const success = type === 'PAYMENT_SUCCESS_WEBHOOK' || type.includes('PAYMENT_SUCCESS');
-
-    if (!success) return res.json({ success: true, ignored: true });
-
-    const order = payload?.data?.order || {};
-    const payment = payload?.data?.payment || {};
-    const cfLinkId =
-      clean(order?.order_tags?.cf_link_id) ||
-      clean(order?.order_tags?.payment_link_id) ||
-      clean(payload?.data?.link?.link_id) ||
-      clean(payload?.link_id);
-
-    if (!cfLinkId) return res.json({ success: true, ignored: true });
-
-    const orderId = clean(order?.order_id || order?.orderId || payload?.data?.order_id);
-    const invoice = await markInvoicePaidFromCashfree(
-      cfLinkId,
-      num(payment?.payment_amount),
-    );
-
-    if (invoice?.status === 'Paid' && orderId) {
-      try {
-        await splitPaidOrderToOwner(orderId, invoice.id, num(invoice.amount));
-      } catch (error) {
-        console.error(`Cashfree Easy Split failed for invoice ${invoice.id}:`, error.message);
-      }
-    }
-
-    if (invoice?.status === 'Paid') {
-      try {
-        await sendPaidInvoice(invoice.id);
-      } catch (error) {
-        console.error(`Paid invoice WhatsApp failed for invoice ${invoice.id}:`, error.message);
-      }
-    }
-
-    return res.json({ success: true, invoice_id: invoice?.id || null, status: invoice?.status || null });
-  } catch (error) {
-    console.error('Cashfree webhook processing failed:', error);
-    return res.status(500).json({ success: false, error: 'Webhook processing failed.' });
-  }
 });
 
 export { runPaymentAutomation };
