@@ -4260,8 +4260,19 @@ function PaymentAutomationCard() {
   const [status, setStatus] = useState<{
     automatic: boolean;
     whatsapp: boolean;
+    owner_vendor: boolean;
+    owner_vendor_status: string;
     pending_invoices: number;
     paid_last_30_days: number;
+  } | null>(null);
+
+  const [vendor, setVendor] = useState<{
+    configured: boolean;
+    vendor?: {
+      vendor_id: string;
+      status: string;
+      settlement_method: string;
+    } | null;
   } | null>(null);
 
   const [settings, setSettings] = useState({
@@ -4271,26 +4282,49 @@ function PaymentAutomationCard() {
     recurring_invoices_enabled: true,
   });
 
+  const [settlement, setSettlement] = useState({
+    settlement_method: 'bank',
+    name: '',
+    email: '',
+    phone: '',
+    account_holder: '',
+    account_number: '',
+    ifsc: '',
+    upi_vpa: '',
+    pan: '',
+  });
+
   const [savingSettings, setSavingSettings] = useState(false);
+  const [savingVendor, setSavingVendor] = useState(false);
   const [settingsMessage, setSettingsMessage] = useState('');
+  const [vendorMessage, setVendorMessage] = useState('');
 
   const loadPaymentAutomation = async () => {
-    const [statusResult, settingsResult] = await Promise.allSettled([
+    const [statusResult, settingsResult, vendorResult] = await Promise.allSettled([
       apiRequest<{
         automatic: boolean;
         whatsapp: boolean;
+        owner_vendor: boolean;
+        owner_vendor_status: string;
         pending_invoices: number;
         paid_last_30_days: number;
       }>('/payment-automation/status'),
+      apiRequest<{ settings: typeof settings }>('/payment-automation/settings'),
       apiRequest<{
-        settings: typeof settings;
-      }>('/payment-automation/settings'),
+        configured: boolean;
+        vendor?: {
+          vendor_id: string;
+          status: string;
+          settlement_method: string;
+        } | null;
+      }>('/payment-automation/vendor'),
     ]);
 
     if (statusResult.status === 'fulfilled') setStatus(statusResult.value);
     if (settingsResult.status === 'fulfilled' && settingsResult.value?.settings) {
       setSettings(settingsResult.value.settings);
     }
+    if (vendorResult.status === 'fulfilled') setVendor(vendorResult.value);
   };
 
   useEffect(() => {
@@ -4301,9 +4335,7 @@ function PaymentAutomationCard() {
     setSavingSettings(true);
     setSettingsMessage('');
     try {
-      const result = await apiRequest<{
-        settings: typeof settings;
-      }>('/payment-automation/settings', {
+      const result = await apiRequest<{ settings: typeof settings }>('/payment-automation/settings', {
         method: 'PUT',
         body: JSON.stringify(settings),
       });
@@ -4317,66 +4349,150 @@ function PaymentAutomationCard() {
     }
   };
 
+  const saveVendor = async () => {
+    setSavingVendor(true);
+    setVendorMessage('');
+    try {
+      const result = await apiRequest<{
+        vendor: {
+          vendor_id: string;
+          status: string;
+          settlement_method: string;
+        };
+      }>('/payment-automation/vendor', {
+        method: 'POST',
+        body: JSON.stringify(settlement),
+      });
+      setVendor({
+        configured: true,
+        vendor: result.vendor,
+      });
+      setVendorMessage(
+        result.vendor.status === 'ACTIVE'
+          ? 'Owner settlement account verified and ready.'
+          : 'Owner settlement details submitted to Cashfree. The account will become available after Cashfree verification.',
+      );
+      await loadPaymentAutomation();
+    } catch (error) {
+      setVendorMessage(error instanceof Error ? error.message : 'Could not save the owner settlement account.');
+    } finally {
+      setSavingVendor(false);
+    }
+  };
+
+  const vendorReady = vendor?.configured && vendor.vendor?.status === 'ACTIVE';
+
   return (
     <div className="glass-card">
       <div className="glass-header">
         <div>
           <h3>Automatic Rent Payments</h3>
-          <p>Send rent reminders with a payment link and update payments automatically.</p>
+          <p>Tenants pay through Cashfree and the rent is settled to this owner's bank account or UPI. Peacely does not take a rent commission.</p>
         </div>
-        <span className={status?.automatic && status?.whatsapp ? 'badge badge-emerald' : 'badge'}>
-          {status?.automatic && status?.whatsapp ? 'Active' : 'Setup Required'}
+        <span className={vendorReady && status?.automatic ? 'badge badge-emerald' : 'badge'}>
+          {vendorReady && status?.automatic ? 'Ready' : 'Setup Required'}
         </span>
       </div>
 
       <div className="metrics-row">
         <MiniMetric label="Pending" value={status ? status.pending_invoices : '—'} />
         <MiniMetric label="Paid · 30 days" value={status ? status.paid_last_30_days : '—'} />
-        <MiniMetric label="Payment Gateway" value={status?.automatic ? 'Connected' : 'Not connected'} />
-        <MiniMetric label="WhatsApp" value={status?.whatsapp ? 'Connected' : 'Not connected'} />
+        <MiniMetric label="Cashfree" value={status?.automatic ? 'Connected' : 'Not connected'} />
+        <MiniMetric label="Owner settlement" value={vendor?.vendor?.status || 'Not configured'} />
       </div>
+
+      <div className="small-empty">
+        <strong>Owner payment account</strong><br />
+        This is where tenant rent will be settled. Peacely's future monthly subscription is separate and is not deducted from rent.
+      </div>
+
+      {vendorReady ? (
+        <div className="detail-grid">
+          <div className="detail-item">
+            <span>Settlement method</span>
+            <strong>{vendor?.vendor?.settlement_method === 'upi' ? 'UPI' : 'Bank account'}</strong>
+          </div>
+          <div className="detail-item">
+            <span>Cashfree vendor</span>
+            <strong>{vendor?.vendor?.status}</strong>
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="detail-grid">
+            <label className="detail-item">
+              <span>Owner name</span>
+              <input className="modal-input" value={settlement.name} onChange={(e) => setSettlement((v) => ({ ...v, name: e.target.value }))} placeholder="Full name" />
+            </label>
+            <label className="detail-item">
+              <span>Email</span>
+              <input className="modal-input" type="email" value={settlement.email} onChange={(e) => setSettlement((v) => ({ ...v, email: e.target.value }))} placeholder="owner@email.com" />
+            </label>
+            <label className="detail-item">
+              <span>Phone</span>
+              <input className="modal-input" inputMode="numeric" value={settlement.phone} onChange={(e) => setSettlement((v) => ({ ...v, phone: e.target.value }))} placeholder="10 digit mobile" />
+            </label>
+            <label className="detail-item">
+              <span>PAN</span>
+              <input className="modal-input" value={settlement.pan} onChange={(e) => setSettlement((v) => ({ ...v, pan: e.target.value.toUpperCase() }))} placeholder="PAN" />
+            </label>
+            <label className="detail-item">
+              <span>Receive rent by</span>
+              <select className="modal-input" value={settlement.settlement_method} onChange={(e) => setSettlement((v) => ({ ...v, settlement_method: e.target.value }))}>
+                <option value="bank">Bank account</option>
+                <option value="upi">UPI ID</option>
+              </select>
+            </label>
+            <label className="detail-item">
+              <span>Account holder</span>
+              <input className="modal-input" value={settlement.account_holder} onChange={(e) => setSettlement((v) => ({ ...v, account_holder: e.target.value }))} placeholder="Name on account" />
+            </label>
+            {settlement.settlement_method === 'bank' ? (
+              <>
+                <label className="detail-item">
+                  <span>Bank account number</span>
+                  <input className="modal-input" inputMode="numeric" value={settlement.account_number} onChange={(e) => setSettlement((v) => ({ ...v, account_number: e.target.value }))} placeholder="Account number" />
+                </label>
+                <label className="detail-item">
+                  <span>IFSC</span>
+                  <input className="modal-input" value={settlement.ifsc} onChange={(e) => setSettlement((v) => ({ ...v, ifsc: e.target.value.toUpperCase() }))} placeholder="IFSC code" />
+                </label>
+              </>
+            ) : (
+              <label className="detail-item">
+                <span>UPI ID</span>
+                <input className="modal-input" value={settlement.upi_vpa} onChange={(e) => setSettlement((v) => ({ ...v, upi_vpa: e.target.value }))} placeholder="name@upi" />
+              </label>
+            )}
+          </div>
+
+          <div className="modal-actions">
+            <button className="btn-primary" onClick={saveVendor} disabled={savingVendor || !status?.automatic}>
+              {savingVendor ? 'Connecting...' : 'Connect Owner Payment Account'}
+            </button>
+          </div>
+          {vendorMessage && <div className="small-empty">{vendorMessage}</div>}
+        </>
+      )}
 
       <div className="detail-grid">
         <label className="detail-item">
           <span>Automatic invoices</span>
-          <select
-            className="modal-input"
-            value={settings.recurring_invoices_enabled ? 'on' : 'off'}
-            onChange={(e) => setSettings((current) => ({
-              ...current,
-              recurring_invoices_enabled: e.target.value === 'on',
-            }))}
-          >
+          <select className="modal-input" value={settings.recurring_invoices_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, recurring_invoices_enabled: e.target.value === 'on' }))}>
             <option value="on">On</option>
             <option value="off">Off</option>
           </select>
         </label>
-
         <label className="detail-item">
           <span>Reminders</span>
-          <select
-            className="modal-input"
-            value={settings.reminders_enabled ? 'on' : 'off'}
-            onChange={(e) => setSettings((current) => ({
-              ...current,
-              reminders_enabled: e.target.value === 'on',
-            }))}
-          >
+          <select className="modal-input" value={settings.reminders_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, reminders_enabled: e.target.value === 'on' }))}>
             <option value="on">On</option>
             <option value="off">Off</option>
           </select>
         </label>
-
         <label className="detail-item">
           <span>Remind before due date</span>
-          <select
-            className="modal-input"
-            value={String(settings.reminder_days_before)}
-            onChange={(e) => setSettings((current) => ({
-              ...current,
-              reminder_days_before: Number(e.target.value),
-            }))}
-          >
+          <select className="modal-input" value={String(settings.reminder_days_before)} onChange={(e) => setSettings((current) => ({ ...current, reminder_days_before: Number(e.target.value) }))}>
             <option value="0">On due date</option>
             <option value="1">1 day before</option>
             <option value="2">2 days before</option>
@@ -4385,17 +4501,9 @@ function PaymentAutomationCard() {
             <option value="7">7 days before</option>
           </select>
         </label>
-
         <label className="detail-item">
           <span>Overdue reminders</span>
-          <select
-            className="modal-input"
-            value={settings.overdue_reminders_enabled ? 'on' : 'off'}
-            onChange={(e) => setSettings((current) => ({
-              ...current,
-              overdue_reminders_enabled: e.target.value === 'on',
-            }))}
-          >
+          <select className="modal-input" value={settings.overdue_reminders_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, overdue_reminders_enabled: e.target.value === 'on' }))}>
             <option value="on">On</option>
             <option value="off">Off</option>
           </select>
@@ -4412,8 +4520,10 @@ function PaymentAutomationCard() {
 
       <div className="small-empty">
         {status?.automatic && status?.whatsapp
-          ? 'Tenant receives the WhatsApp reminder and Pay Now link. Successful online payment updates the invoice automatically and sends the paid invoice.'
-          : 'Connect Cashfree and WhatsApp Cloud API in Railway environment variables to turn on automatic collection.'}
+          ? vendorReady
+            ? 'Ready: tenant gets the WhatsApp reminder and Pay Now link. After payment, Cashfree splits the full rent to the owner and Peacely marks the invoice Paid.'
+            : 'Connect the owner settlement account above before sending live rent payment links.'
+          : 'Connect Cashfree and WhatsApp Cloud API in Railway environment variables first.'}
       </div>
     </div>
   );
