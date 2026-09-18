@@ -1008,7 +1008,9 @@ function App() {
         throw new Error('Payment page URL was not generated.');
       }
 
-      window.open(result.url, '_blank', 'noopener,noreferrer');
+      // Navigate directly so mobile browsers do not block the payment page
+      // as a popup after the authenticated API request completes.
+      window.location.assign(result.url);
     } catch (err) {
       setError(
         err instanceof Error
