@@ -3991,6 +3991,115 @@ app.post(
 );
 
 // =====================================================
+// EXPENSES
+// =====================================================
+
+app.get(
+  '/api/expenses',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const result = await safeQuery(
+      `
+        SELECT
+          e.id,
+          e.owner_id,
+          e.property_id,
+          e.category,
+          e.amount,
+          e.expense_date,
+          e.note,
+          e.created_at,
+          p.name AS property_name
+        FROM expenses e
+        LEFT JOIN properties p
+          ON p.id = e.property_id
+         AND p.owner_id = e.owner_id
+        WHERE e.owner_id = $1
+        ORDER BY e.expense_date DESC, e.id DESC
+      `,
+      [req.owner.id],
+    );
+
+    return res.json({
+      success: true,
+      expenses: result.rows.map((row) => ({
+        ...row,
+        amount: Number(row.amount || 0),
+      })),
+    });
+  }),
+);
+
+app.post(
+  '/api/expenses',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const category = cleanString(req.body?.category) || 'Other';
+    const amount = toNumber(req.body?.amount, 0);
+    const expenseDate = cleanString(req.body?.expense_date) || new Date().toISOString().slice(0, 10);
+    const note = cleanString(req.body?.note);
+    const propertyId = req.body?.property_id ? Number(req.body.property_id) : null;
+
+    if (amount <= 0) {
+      return sendError(res, 400, 'Expense amount must be greater than zero.');
+    }
+
+    if (propertyId !== null && !Number.isInteger(propertyId)) {
+      return sendError(res, 400, 'Invalid property.');
+    }
+
+    if (propertyId !== null) {
+      const propertyResult = await safeQuery(
+        'SELECT id FROM properties WHERE id = $1 AND owner_id = $2 LIMIT 1',
+        [propertyId, req.owner.id],
+      );
+      if (propertyResult.rows.length === 0) {
+        return sendError(res, 404, 'Property not found.');
+      }
+    }
+
+    const result = await safeQuery(
+      `
+        INSERT INTO expenses(owner_id, property_id, category, amount, expense_date, note)
+        VALUES($1, $2, $3, $4, $5::date, $6)
+        RETURNING *
+      `,
+      [req.owner.id, propertyId, category, amount, expenseDate, note],
+    );
+
+    return res.status(201).json({
+      success: true,
+      expense: {
+        ...result.rows[0],
+        amount: Number(result.rows[0].amount || 0),
+      },
+    });
+  }),
+);
+
+app.delete(
+  '/api/expenses/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      return sendError(res, 400, 'Invalid expense.');
+    }
+
+    const result = await safeQuery(
+      'DELETE FROM expenses WHERE id = $1 AND owner_id = $2 RETURNING id',
+      [id, req.owner.id],
+    );
+
+    if (result.rows.length === 0) {
+      return sendError(res, 404, 'Expense not found.');
+    }
+
+    return res.json({ success: true });
+  }),
+);
+
+// =====================================================
 // FINANCE SUMMARY
 // =====================================================
 
