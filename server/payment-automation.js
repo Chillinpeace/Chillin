@@ -473,6 +473,8 @@ async function createDueInvoices() {
       recurring_invoices_enabled: true,
     };
 
+    if (!settings.recurring_invoices_enabled) continue;
+
     const today = new Date();
     const year = today.getUTCFullYear();
     const monthIndex = today.getUTCMonth();
