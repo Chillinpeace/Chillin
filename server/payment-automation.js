@@ -766,7 +766,9 @@ router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, re
   // Redirect directly to the public payment page. This avoids the
   // mobile-browser popup/async-navigation problem caused by returning
   // a JSON URL and then navigating after an awaited fetch.
-  return res.redirect(302, `${baseUrl()}/api/payment-automation/pay/${token}`);
+  // Keep the redirect on the current Peacely origin. Using a relative
+  // redirect avoids any APP_BASE_URL mismatch on Railway.
+  return res.redirect(302, `/api/payment-automation/pay/${token}`);
 });
 
 router.get('/payment-automation/settings', auth, async (req, res) => {
