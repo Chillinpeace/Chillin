@@ -66,6 +66,10 @@ interface Tenant {
   move_in_date?: string;
   move_out_date?: string;
   status: string;
+  gender?: string;
+  id_proof_type?: string;
+  id_photo_front?: string;
+  id_photo_back?: string;
 }
 
 interface Payment {
@@ -294,6 +298,14 @@ function App() {
   const [tenantName, setTenantName] =
     useState('');
   const [tenantPhone, setTenantPhone] =
+    useState('');
+  const [tenantGender, setTenantGender] =
+    useState('');
+  const [tenantIdProofType, setTenantIdProofType] =
+    useState('');
+  const [tenantIdPhotoFront, setTenantIdPhotoFront] =
+    useState('');
+  const [tenantIdPhotoBack, setTenantIdPhotoBack] =
     useState('');
   const [tenantEmail, setTenantEmail] =
     useState('');
@@ -639,6 +651,10 @@ function App() {
 
     setTenantName('');
     setTenantPhone('');
+    setTenantGender('');
+    setTenantIdProofType('');
+    setTenantIdPhotoFront('');
+    setTenantIdPhotoBack('');
     setTenantEmail('');
     setTenantPropertyId('');
     setTenantRoomId('');
@@ -825,10 +841,14 @@ function App() {
     if (
       !tenantName.trim() ||
       !tenantPhone.trim() ||
+      !tenantGender ||
+      !tenantIdProofType ||
+      !tenantIdPhotoFront ||
+      !tenantIdPhotoBack ||
       !tenantPropertyId
     ) {
       setError(
-        'Name, phone and property are required.',
+        'Name, phone, gender, ID proof, both ID photos and property are required.',
       );
       return;
     }
@@ -842,7 +862,11 @@ function App() {
         body: JSON.stringify({
           name: tenantName.trim(),
           phone: tenantPhone.trim(),
-          email: tenantEmail.trim(),
+          email: '',
+          gender: tenantGender,
+          id_proof_type: tenantIdProofType,
+          id_photo_front: tenantIdPhotoFront,
+          id_photo_back: tenantIdPhotoBack,
           property_id:
             Number(tenantPropertyId),
           room_id: tenantRoomId
@@ -2519,12 +2543,12 @@ function App() {
             >
               <ModalTitle
                 title="Add Tenant"
-                subtitle="Add a resident and assign a room or bed."
+                subtitle="Enter tenant identity details and assign a room or bed."
               />
 
               <input
                 className="modal-input"
-                placeholder="Tenant name"
+                placeholder="Full name"
                 value={
                   tenantName
                 }
@@ -2537,7 +2561,8 @@ function App() {
 
               <input
                 className="modal-input"
-                placeholder="Phone number"
+                placeholder="Mobile number"
+                type="tel"
                 value={
                   tenantPhone
                 }
@@ -2548,19 +2573,110 @@ function App() {
                 }
               />
 
-              <input
+              <select
                 className="modal-input"
-                type="email"
-                placeholder="Email (optional)"
                 value={
-                  tenantEmail
+                  tenantGender
                 }
                 onChange={(e) =>
-                  setTenantEmail(
+                  setTenantGender(
                     e.target.value,
                   )
                 }
-              />
+              >
+                <option value="">
+                  Select gender
+                </option>
+                <option value="Male">
+                  Male
+                </option>
+                <option value="Female">
+                  Female
+                </option>
+                <option value="Other">
+                  Other
+                </option>
+              </select>
+
+              <select
+                className="modal-input"
+                value={
+                  tenantIdProofType
+                }
+                onChange={(e) =>
+                  setTenantIdProofType(
+                    e.target.value,
+                  )
+                }
+              >
+                <option value="">
+                  Select ID proof type
+                </option>
+                <option value="Aadhaar">
+                  Aadhaar
+                </option>
+                <option value="PAN">
+                  PAN
+                </option>
+                <option value="Voter ID">
+                  Voter ID
+                </option>
+                <option value="Passport">
+                  Passport
+                </option>
+              </select>
+
+              <label className="modal-input" style={{ display: 'block' }}>
+                ID photo — front
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'block', width: '100%', marginTop: '8px' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 800 * 1024) {
+                      setError('Front ID photo must be 800 KB or smaller.');
+                      e.currentTarget.value = '';
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setTenantIdPhotoFront(String(reader.result || ''));
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                {tenantIdPhotoFront && (
+                  <small style={{ display: 'block', marginTop: '6px' }}>
+                    Front photo selected
+                  </small>
+                )}
+              </label>
+
+              <label className="modal-input" style={{ display: 'block' }}>
+                ID photo — back
+                <input
+                  type="file"
+                  accept="image/*"
+                  style={{ display: 'block', width: '100%', marginTop: '8px' }}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (!file) return;
+                    if (file.size > 800 * 1024) {
+                      setError('Back ID photo must be 800 KB or smaller.');
+                      e.currentTarget.value = '';
+                      return;
+                    }
+                    const reader = new FileReader();
+                    reader.onload = () => setTenantIdPhotoBack(String(reader.result || ''));
+                    reader.readAsDataURL(file);
+                  }}
+                />
+                {tenantIdPhotoBack && (
+                  <small style={{ display: 'block', marginTop: '6px' }}>
+                    Back photo selected
+                  </small>
+                )}
+              </label>
 
               <select
                 className="modal-input"
