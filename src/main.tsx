@@ -998,26 +998,12 @@ function App() {
     }
   };
 
-  const handleViewPaymentPage = async (invoice: Invoice) => {
-    try {
-      const result = await apiRequest<{ success: boolean; url: string }>(
-        `/payment-automation/invoices/${invoice.id}/payment-page`,
-      );
-
-      if (!result?.url) {
-        throw new Error('Payment page URL was not generated.');
-      }
-
-      // Navigate directly so mobile browsers do not block the payment page
-      // as a popup after the authenticated API request completes.
-      window.location.assign(result.url);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to open the payment page.',
-      );
-    }
+  const handleViewPaymentPage = (invoice: Invoice) => {
+    // The server authenticates the owner, creates the secure payment token,
+    // and redirects directly to the public payment page.
+    window.location.assign(
+      `${API}/payment-automation/invoices/${invoice.id}/payment-page`,
+    );
   };
 
   const handleCreateTenant = async (
