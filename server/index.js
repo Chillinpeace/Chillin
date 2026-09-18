@@ -660,6 +660,8 @@ app.get(
           p.id,
           p.name,
           p.address,
+          p.property_type,
+          p.rent_cycle,
           p.created_at,
 
           COALESCE(
@@ -788,6 +790,9 @@ app.post(
       req.body?.address,
     );
 
+    const propertyType = cleanString(req.body?.property_type) || 'Gents';
+    const rentCycle = cleanString(req.body?.rent_cycle) || '1st of every month';
+
     if (!name) {
       return sendError(
         res,
@@ -801,22 +806,30 @@ app.post(
         INSERT INTO properties (
           name,
           address,
+          property_type,
+          rent_cycle,
           owner_id
         )
         VALUES (
           $1,
           $2,
-          $3
+          $3,
+          $4,
+          $5
         )
         RETURNING
           id,
           name,
           address,
+          property_type,
+          rent_cycle,
           created_at
       `,
       [
         name,
         address,
+        propertyType,
+        rentCycle,
         req.owner.id,
       ],
     );
@@ -963,6 +976,9 @@ app.get(
           r.property_id,
           r.room_number,
           r.sharing_type,
+          r.room_type,
+          r.floor_name,
+          r.per_day_rent,
           r.rent_amount,
           r.created_at,
 
@@ -989,6 +1005,9 @@ app.get(
           r.property_id,
           r.room_number,
           r.sharing_type,
+          r.room_type,
+          r.floor_name,
+          r.per_day_rent,
           r.rent_amount,
           r.created_at,
           p.name
@@ -1005,6 +1024,9 @@ app.get(
       rooms:
         result.rows.map((row) => ({
           ...row,
+          room_type: row.room_type || 'Non AC',
+          floor_name: row.floor_name || 'Ground Floor',
+          per_day_rent: Number(row.per_day_rent || 0),
           rent_amount:
             Number(
               row.rent_amount || 0,
@@ -1037,6 +1059,10 @@ app.post(
         req.body?.sharing_type ||
           'Single',
       );
+
+    const roomType = cleanString(req.body?.room_type) || 'Non AC';
+    const floorName = cleanString(req.body?.floor_name) || 'Ground Floor';
+    const perDayRent = toNumber(req.body?.per_day_rent, 0);
 
     const rentAmount =
       toNumber(
@@ -1121,19 +1147,28 @@ app.post(
           property_id,
           room_number,
           sharing_type,
+          room_type,
+          floor_name,
+          per_day_rent,
           rent_amount
         )
         VALUES (
           $1,
           $2,
           $3,
-          $4
+          $4,
+          $5,
+          $6,
+          $7
         )
         RETURNING
           id,
           property_id,
           room_number,
           sharing_type,
+          room_type,
+          floor_name,
+          per_day_rent,
           rent_amount,
           created_at
       `,
@@ -1141,14 +1176,33 @@ app.post(
         propertyId,
         roomNumber,
         sharingType,
+        roomType,
+        floorName,
+        perDayRent,
         rentAmount,
       ],
     );
 
+    const normalizedSharing = sharingType.toLowerCase();
+    const sharingBeds = normalizedSharing === 'single'
+      ? 1
+      : normalizedSharing === 'double'
+        ? 2
+        : normalizedSharing === 'triple'
+          ? 3
+          : Number(normalizedSharing.match(/\b(\d+)\b/)?.[1] || 0);
+
+    for (let index = 1; index <= Math.min(Math.max(sharingBeds, 0), 20); index += 1) {
+      await safeQuery(
+        'INSERT INTO beds (room_id, bed_number, is_occupied) VALUES ($1, $2, FALSE)',
+        [result.rows[0].id, `Bed ${index}`],
+      );
+    }
+
     return res.status(201).json({
       success: true,
-      room:
-        result.rows[0],
+      room: result.rows[0],
+      beds_created: Math.min(Math.max(sharingBeds, 0), 20),
     });
   }),
 );
@@ -1583,6 +1637,32 @@ app.patch(
       bed:
         result.rows[0],
     });
+  }),
+);
+
+// =====================================================
+// REMOVE BED
+// =====================================================
+
+app.delete(
+  '/api/beds/:id',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const bedId = Number(req.params.id);
+    if (!Number.isInteger(bedId)) return sendError(res, 400, 'Invalid bed ID.');
+
+    const bed = await safeQuery(
+      `SELECT b.id,b.is_occupied FROM beds b
+       INNER JOIN rooms r ON r.id=b.room_id
+       INNER JOIN properties p ON p.id=r.property_id
+       WHERE b.id=$1 AND p.owner_id=$2 LIMIT 1`,
+      [bedId, req.owner.id],
+    );
+    if (!bed.rows.length) return sendError(res, 404, 'Bed not found.');
+    if (bed.rows[0].is_occupied) return sendError(res, 409, 'Occupied beds cannot be removed.');
+
+    await safeQuery('DELETE FROM beds WHERE id=$1', [bedId]);
+    return res.json({success:true});
   }),
 );
 
