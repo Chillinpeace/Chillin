@@ -703,6 +703,40 @@ function App() {
     setActiveTab('dashboard');
   };
 
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Delete your Peacely account?\n\nAll your account information, properties, rooms, beds, tenants, tenant documents, payments, invoices, expenses, maintenance records, notifications and settings will be permanently deleted.\n\nThis action cannot be undone.\n\nAre you sure?',
+    );
+
+    if (!confirmed) return;
+
+    try {
+      await apiRequest('/auth/account', { method: 'DELETE' });
+
+      setOwner(null);
+      setAuthenticated(false);
+      setProperties([]);
+      setRooms([]);
+      setBeds([]);
+      setPropertyLevels([]);
+      setTenants([]);
+      setPayments([]);
+      setInvoices([]);
+      setActiveTab('dashboard');
+      setActiveModal('none');
+      setAuthMode('login');
+      setAuthError('');
+      setError('');
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to delete your account.',
+      );
+    }
+  };
+
+
   const resetForms = () => {
     setPropName('');
     setPropAddress('');
@@ -2234,6 +2268,7 @@ function App() {
         <Header
         owner={owner}
         onLogout={handleLogout}
+        onDeleteAccount={handleDeleteAccount}
         onAccountSettings={() => openModal('accountSettings')}
       />
 
@@ -2262,6 +2297,7 @@ function App() {
       <Header
         owner={owner}
         onLogout={handleLogout}
+        onDeleteAccount={handleDeleteAccount}
         onAccountSettings={() => openModal('accountSettings')}
       />
 
@@ -3138,10 +3174,12 @@ function App() {
 function Header({
   owner,
   onLogout,
+  onDeleteAccount,
   onAccountSettings,
 }: {
   owner: Owner | null;
   onLogout: () => void;
+  onDeleteAccount: () => void;
   onAccountSettings: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -3286,6 +3324,16 @@ function Header({
             <div className="profile-menu-divider"></div>
             <button className="profile-menu-item logout-menu-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
               <span>↪</span><span>Logout</span>
+            </button>
+            <button
+              className="profile-menu-item delete-account-menu-item"
+              type="button"
+              onClick={() => {
+                setMenuOpen(false);
+                onDeleteAccount();
+              }}
+            >
+              <span>🗑️</span><span>Delete account</span>
             </button>
           </aside>
         </div>
