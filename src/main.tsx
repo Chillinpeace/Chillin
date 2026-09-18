@@ -117,6 +117,7 @@ interface Invoice {
   updated_at?: string;
   payment_provider?: string;
   payment_link_id?: string;
+  payment_link_cf_id?: string;
   payment_link_url?: string;
   payment_link_status?: string;
   payment_link_created_at?: string;
