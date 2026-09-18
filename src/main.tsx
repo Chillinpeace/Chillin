@@ -292,6 +292,9 @@ function App() {
   const [propertyFilter, setPropertyFilter] =
     useState('');
 
+  const [managedPropertyId, setManagedPropertyId] =
+    useState<number | null>(null);
+
   const [propName, setPropName] =
     useState('');
   const [propAddress, setPropAddress] =
@@ -853,6 +856,31 @@ function App() {
         err instanceof Error
           ? err.message
           : 'Failed to remove bed.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProperty = async (property: Property) => {
+    if (!window.confirm(`Delete property "${property.name}"? This will also remove its rooms, beds and tenants.`)) {
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest(`/properties/${property.id}`, {
+        method: 'DELETE',
+      });
+      setManagedPropertyId(null);
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to delete property.',
       );
     } finally {
       setSaving(false);
@@ -2261,6 +2289,8 @@ function App() {
             rooms={rooms}
             beds={beds}
             propertyLevels={propertyLevels}
+            managedPropertyId={managedPropertyId}
+            setManagedPropertyId={setManagedPropertyId}
             openModal={
               openModal
             }
@@ -2268,6 +2298,7 @@ function App() {
             setRoomFloorName={setRoomFloorName}
             setFloorPropertyId={setFloorPropertyId}
             removeBed={handleRemoveBed}
+            deleteProperty={handleDeleteProperty}
           />
         )}
 
@@ -4073,197 +4104,173 @@ function Dashboard({
 }
 
 function PropertiesView({
-  properties,
-  rooms,
-  beds,
-  propertyLevels,
-  openModal,
-  setRoomPropertyId,
-  setRoomFloorName,
-  setFloorPropertyId,
-  removeBed,
+  properties, rooms, beds, propertyLevels, managedPropertyId,
+  setManagedPropertyId, openModal, setRoomPropertyId, setRoomFloorName,
+  setFloorPropertyId, removeBed, deleteProperty,
 }: {
-  properties: Property[];
-  rooms: Room[];
-  beds: Bed[];
-  propertyLevels: PropertyLevel[];
-  openModal: (modal: Modal) => void;
-  setRoomPropertyId: (value: string) => void;
-  setRoomFloorName: (value: string) => void;
-  setFloorPropertyId: (value: string) => void;
-  removeBed: (bed: Bed) => void;
+  properties: Property[]; rooms: Room[]; beds: Bed[]; propertyLevels: PropertyLevel[];
+  managedPropertyId: number | null; setManagedPropertyId: (value: number | null) => void;
+  openModal: (modal: Modal) => void; setRoomPropertyId: (value: string) => void;
+  setRoomFloorName: (value: string) => void; setFloorPropertyId: (value: string) => void;
+  removeBed: (bed: Bed) => void; deleteProperty: (property: Property) => void;
 }) {
+  const managedProperty = properties.find((property) => property.id === managedPropertyId) || null;
+
+  if (managedProperty) {
+    const propertyRooms = rooms.filter((room) => room.property_id === managedProperty.id);
+    const propertyBeds = beds.filter((bed) => propertyRooms.some((room) => room.id === bed.room_id));
+    const propertyLevelsForProperty = propertyLevels.filter((level) => level.property_id === managedProperty.id);
+
+    return (
+      <div className="view-container">
+        <PageHeader
+          title={managedProperty.name}
+          subtitle="Manage property, floors, rooms and beds"
+          action={<button className="btn-secondary" onClick={() => setManagedPropertyId(null)}>← Back</button>}
+        />
+
+        <div className="glass-card">
+          <div className="glass-header">
+            <div>
+              <h3>Property Details</h3>
+              <p>{managedProperty.address || 'No address'}</p>
+            </div>
+            <button className="btn-secondary" onClick={() => deleteProperty(managedProperty)}>
+              Delete Property
+            </button>
+          </div>
+          <div className="metrics-row">
+            <MiniMetric label="Property Type" value={managedProperty.property_type || 'Gents'} />
+            <MiniMetric label="Rental Cycle" value={managedProperty.rent_cycle || '1st of every month'} />
+            <MiniMetric label="Rooms" value={propertyRooms.length} />
+            <MiniMetric label="Beds" value={propertyBeds.length} />
+            <MiniMetric label="Occupied" value={propertyBeds.filter((bed) => bed.is_occupied).length} />
+          </div>
+        </div>
+
+        <div className="glass-card">
+          <SectionHeading
+            title="Floors"
+            subtitle="Add floors before adding rooms"
+            action={
+              <button className="btn-secondary" onClick={() => {
+                setFloorPropertyId(String(managedProperty.id));
+                openModal('floor');
+              }}>
+                + Floor
+              </button>
+            }
+          />
+          {propertyLevelsForProperty.length === 0 ? (
+            <div className="small-empty">No floors added yet.</div>
+          ) : (
+            <div className="bed-list">
+              {propertyLevelsForProperty.map((level) => (
+                <span className="badge" key={level.id}>{level.floor_name}</span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        <div className="glass-card">
+          <SectionHeading
+            title="Rooms & Beds"
+            subtitle="All rooms and automatically created beds for this property"
+            action={
+              <button className="btn-primary" onClick={() => {
+                const firstFloor = propertyLevelsForProperty[0]?.floor_name || propertyRooms[0]?.floor_name;
+                setRoomPropertyId(String(managedProperty.id));
+                if (!firstFloor) {
+                  setFloorPropertyId(String(managedProperty.id));
+                  openModal('floor');
+                  return;
+                }
+                setRoomFloorName(firstFloor);
+                openModal('room');
+              }}>
+                + Room
+              </button>
+            }
+          />
+          {propertyRooms.length === 0 ? (
+            <div className="small-empty">No rooms added yet. Add a floor first, then add rooms.</div>
+          ) : (
+            propertyRooms.map((room) => {
+              const roomBeds = beds.filter((bed) => bed.room_id === room.id);
+              return (
+                <div className="glass-card" key={room.id} style={{ marginTop: '12px' }}>
+                  <div className="glass-header">
+                    <div>
+                      <h3>Room {room.room_number}</h3>
+                      <p>{room.floor_name || 'Ground Floor'} · {room.room_type || 'Non AC'} · {room.sharing_type}</p>
+                    </div>
+                  </div>
+                  <div className="metrics-row">
+                    <MiniMetric label="Per Day" value={money(room.per_day_rent || 0)} />
+                    <MiniMetric label="Monthly" value={money(room.rent_amount || 0)} />
+                    <MiniMetric label="Beds" value={roomBeds.length} />
+                  </div>
+                  <div className="bed-list">
+                    {roomBeds.length === 0 ? <span className="muted">No beds</span> : roomBeds.map((bed) => (
+                      <span className={bed.is_occupied ? 'bed-chip occupied' : 'bed-chip available'} key={bed.id}>
+                        Bed {bed.bed_number}
+                        <small>{bed.is_occupied ? 'Occupied' : 'Available'}</small>
+                        {!bed.is_occupied && (
+                          <button type="button" className="mini-action" onClick={() => removeBed(bed)}>Remove</button>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <button className="btn-secondary full-btn" onClick={() => deleteProperty(managedProperty)}>
+          Delete Property
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="view-container">
       <PageHeader
         title="Properties"
-        subtitle="Property setup, floors, rooms and beds"
-        action={
-          <button
-            className="btn-primary"
-            onClick={() => openModal('property')}
-          >
-            + Property
-          </button>
-        }
+        subtitle="Your properties at a glance"
+        action={<button className="btn-primary" onClick={() => openModal('property')}>+ Property</button>}
       />
 
       {properties.map((property) => {
-        const propertyRooms = rooms.filter(
-          (room) => room.property_id === property.id,
-        );
-        const propertyLevelsForProperty = propertyLevels.filter(
-          (level) => level.property_id === property.id,
-        );
-
+        const propertyRooms = rooms.filter((room) => room.property_id === property.id);
         return (
           <div className="glass-card" key={property.id}>
             <div className="glass-header">
               <div>
                 <h3>{property.name}</h3>
                 <p>{property.address || 'No address'}</p>
-                <small>
-                  {property.property_type || 'Gents'} · {property.rent_cycle || '1st of every month'}
-                </small>
               </div>
-
-              <span className="badge badge-emerald">
-                {property.occupancy_rate || 0}%
-              </span>
             </div>
-
             <div className="metrics-row">
+              <MiniMetric label="Type" value={property.property_type || 'Gents'} />
+              <MiniMetric label="Rental Cycle" value={property.rent_cycle || '1st of every month'} />
               <MiniMetric label="Rooms" value={propertyRooms.length} />
               <MiniMetric label="Beds" value={property.bed_count || 0} />
               <MiniMetric label="Occupied" value={property.occupied_bed_count || 0} />
+              <MiniMetric label="Occupancy" value={`${property.occupancy_rate || 0}%`} />
             </div>
-
             <div className="tenant-actions">
-              <button
-                className="btn-secondary"
-                onClick={() => {
-                  setFloorPropertyId(String(property.id));
-                  openModal('floor');
-                }}
-              >
-                + Floor
-              </button>
-
-              <button
-                className="btn-primary"
-                onClick={() => {
-                  const firstFloor =
-                    propertyLevelsForProperty[0]?.floor_name ||
-                    propertyRooms[0]?.floor_name;
-
-                  setRoomPropertyId(String(property.id));
-
-                  if (!firstFloor) {
-                    setFloorPropertyId(String(property.id));
-                    openModal('floor');
-                    return;
-                  }
-
-                  setRoomFloorName(firstFloor);
-                  openModal('room');
-                }}
-              >
-                + Room
-              </button>
+              <button className="btn-primary" onClick={() => setManagedPropertyId(property.id)}>Manage</button>
+              <button className="btn-secondary" onClick={() => deleteProperty(property)}>Delete Property</button>
             </div>
-
-            {propertyLevelsForProperty.length > 0 && (
-              <div className="bed-list" style={{ marginTop: '12px' }}>
-                {propertyLevelsForProperty.map((level) => (
-                  <span className="badge" key={level.id}>
-                    Floor: {level.floor_name}
-                  </span>
-                ))}
-              </div>
-            )}
-
-            {propertyRooms.length === 0 ? (
-              <div className="small-empty" style={{ marginTop: '12px' }}>
-                No rooms added yet. Add a floor first, then add rooms.
-              </div>
-            ) : (
-              propertyRooms.map((room) => {
-                const roomBeds = beds.filter(
-                  (bed) => bed.room_id === room.id,
-                );
-
-                return (
-                  <div
-                    className="glass-card"
-                    key={room.id}
-                    style={{ marginTop: '12px' }}
-                  >
-                    <div className="glass-header">
-                      <div>
-                        <h3>Room {room.room_number}</h3>
-                        <p>
-                          {room.floor_name || 'Ground Floor'} · {room.room_type || 'Non AC'} · {room.sharing_type}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="metrics-row">
-                      <MiniMetric label="Per Day" value={money(room.per_day_rent || 0)} />
-                      <MiniMetric label="Monthly" value={money(room.rent_amount || 0)} />
-                      <MiniMetric label="Beds" value={roomBeds.length} />
-                    </div>
-
-                    <div className="bed-list">
-                      {roomBeds.length === 0 ? (
-                        <span className="muted">No beds</span>
-                      ) : (
-                        roomBeds.map((bed) => (
-                          <span
-                            className={
-                              bed.is_occupied
-                                ? 'bed-chip occupied'
-                                : 'bed-chip available'
-                            }
-                            key={bed.id}
-                          >
-                            Bed {bed.bed_number}
-                            <small>
-                              {bed.is_occupied ? 'Occupied' : 'Available'}
-                            </small>
-                            {!bed.is_occupied && (
-                              <button
-                                type="button"
-                                className="mini-action"
-                                onClick={() => removeBed(bed)}
-                              >
-                                Remove
-                              </button>
-                            )}
-                          </span>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                );
-              })
-            )}
           </div>
         );
       })}
 
       {properties.length === 0 && (
-        <EmptyCard
-          icon="🏠"
-          title="No properties yet"
-          text="Add your first property to begin."
-          action={
-            <button
-              className="btn-primary"
-              onClick={() => openModal('property')}
-            >
-              Add Property
-            </button>
-          }
+        <EmptyCard icon="🏠" title="No properties yet" text="Add your first property to begin."
+          action={<button className="btn-primary" onClick={() => openModal('property')}>Add Property</button>}
         />
       )}
     </div>
