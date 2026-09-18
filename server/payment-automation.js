@@ -699,8 +699,18 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
+  // Keep the UPI intent deliberately simple for broad compatibility across
+  // UPI apps. Some apps can decline intents when optional payee metadata is
+  // supplied even though the same UPI ID works for a normal manual transfer.
+  // The invoice number is used as a transaction reference/note so the owner
+  // can identify the payment without changing the actual payment destination.
+  const upiAmount = Math.max(0, num(invoice.amount)).toFixed(2);
+  const upiReference = clean(invoice.invoice_number || ('PEACELY-' + invoice.id))
+    .replace(/[^A-Za-z0-9._-]/g, '')
+    .slice(0, 50);
+  const upiNote = ('Peacely Rent ' + upiReference).slice(0, 80);
   const upiLink = clean(invoice.upi_id)
-    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&pn=${encodeURIComponent(invoice.owner_name || 'Owner')}&am=${encodeURIComponent(num(invoice.amount))}&cu=INR`
+    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&am=${encodeURIComponent(upiAmount)}&cu=INR&tr=${encodeURIComponent(upiReference)}&tn=${encodeURIComponent(upiNote)}`
     : '';
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
