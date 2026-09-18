@@ -131,6 +131,16 @@ interface OwnerPaymentDetails {
   payment_instructions: string;
 }
 
+interface Expense {
+  id: number;
+  property_id?: number | null;
+  property_name?: string;
+  category: string;
+  amount: number;
+  expense_date: string;
+  note?: string;
+}
+
 interface FinanceSummary {
   expected: number;
   collected: number;
@@ -3233,6 +3243,7 @@ function App() {
             <AccountSettingsModal
               onClose={closeModal}
               financeSummary={financeSummary}
+              properties={properties}
             />
           )}
 
@@ -4667,9 +4678,11 @@ function TenantsView({
 function AccountSettingsModal({
   onClose,
   financeSummary,
+  properties,
 }: {
   onClose: () => void;
   financeSummary: FinanceSummary;
+  properties: Property[];
 }) {
   const [paymentDetails, setPaymentDetails] =
     useState<OwnerPaymentDetails>({
@@ -4686,9 +4699,21 @@ function AccountSettingsModal({
     recurring_invoices_enabled: true,
   });
 
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseCategory, setExpenseCategory] = useState('Maintenance');
+  const [expenseAmount, setExpenseAmount] = useState('');
+  const [expenseDate, setExpenseDate] = useState(today());
+  const [expensePropertyId, setExpensePropertyId] = useState('');
+  const [expenseNote, setExpenseNote] = useState('');
+  const [savingExpense, setSavingExpense] = useState(false);
   const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
   const [savingAutomation, setSavingAutomation] = useState(false);
   const [message, setMessage] = useState('');
+
+  const loadExpenses = async () => {
+    const result = await apiRequest<{ expenses: Expense[] }>('/expenses');
+    setExpenses(result.expenses || []);
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -4708,6 +4733,7 @@ function AccountSettingsModal({
         if (automationResult?.settings) {
           setAutomationSettings(automationResult.settings);
         }
+        await loadExpenses();
       } catch (error) {
         setMessage(
           error instanceof Error
@@ -4795,6 +4821,71 @@ function AccountSettingsModal({
       setSavingAutomation(false);
     }
   };
+
+  const saveExpense = async () => {
+    const amount = Number(expenseAmount);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Enter a valid expense amount.');
+      return;
+    }
+
+    setSavingExpense(true);
+    setMessage('');
+
+    try {
+      await apiRequest('/expenses', {
+        method: 'POST',
+        body: JSON.stringify({
+          category: expenseCategory,
+          amount,
+          expense_date: expenseDate,
+          property_id: expensePropertyId || null,
+          note: expenseNote,
+        }),
+      });
+
+      setExpenseAmount('');
+      setExpenseDate(today());
+      setExpensePropertyId('');
+      setExpenseNote('');
+      await loadExpenses();
+      setMessage('Expense added.');
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not add expense.',
+      );
+    } finally {
+      setSavingExpense(false);
+    }
+  };
+
+  const deleteExpense = async (expense: Expense) => {
+    if (!window.confirm('Delete this expense?')) return;
+
+    try {
+      await apiRequest('/expenses/' + expense.id, {
+        method: 'DELETE',
+      });
+      await loadExpenses();
+      setMessage('Expense deleted.');
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not delete expense.',
+      );
+    }
+  };
+
+  const totalExpenses = expenses.reduce(
+    (sum, expense) => sum + Number(expense.amount || 0),
+    0,
+  );
+
+  const net = financeSummary.collected - totalExpenses;
 
   return (
     <div>
@@ -4886,6 +4977,102 @@ function AccountSettingsModal({
       >
         {savingPaymentDetails ? 'Saving...' : 'Save Payment Details'}
       </button>
+
+      <div className="small-empty" style={{ marginTop: 18 }}>
+        <strong>Expenses</strong><br />
+        Record property expenses here. They are kept separate from tenant rent payments.
+      </div>
+
+      <select
+        className="modal-input"
+        value={expenseCategory}
+        onChange={(e) => setExpenseCategory(e.target.value)}
+      >
+        <option value="Maintenance">Maintenance</option>
+        <option value="Electricity">Electricity</option>
+        <option value="Water">Water</option>
+        <option value="Internet">Internet</option>
+        <option value="Cleaning">Cleaning</option>
+        <option value="Staff">Staff</option>
+        <option value="Supplies">Supplies</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <input
+        className="modal-input"
+        type="number"
+        min="0"
+        step="0.01"
+        placeholder="Expense amount"
+        value={expenseAmount}
+        onChange={(e) => setExpenseAmount(e.target.value)}
+      />
+
+      <input
+        className="modal-input"
+        type="date"
+        value={expenseDate}
+        onChange={(e) => setExpenseDate(e.target.value)}
+      />
+
+      <select
+        className="modal-input"
+        value={expensePropertyId}
+        onChange={(e) => setExpensePropertyId(e.target.value)}
+      >
+        <option value="">All / General</option>
+        {properties.map((property) => (
+          <option key={property.id} value={property.id}>
+            {property.name}
+          </option>
+        ))}
+      </select>
+
+      <input
+        className="modal-input"
+        placeholder="Optional note"
+        value={expenseNote}
+        onChange={(e) => setExpenseNote(e.target.value)}
+      />
+
+      <button
+        type="button"
+        className="btn-primary full-btn"
+        onClick={saveExpense}
+        disabled={savingExpense}
+      >
+        {savingExpense ? 'Saving...' : 'Add Expense'}
+      </button>
+
+      <div className="small-empty" style={{ marginTop: 12 }}>
+        <div className="menu-detail-row"><span>Total Expenses</span><strong>{money(totalExpenses)}</strong></div>
+        <div className="menu-detail-row"><span>Rent Collected</span><strong>{money(financeSummary.collected)}</strong></div>
+        <div className="menu-detail-row"><span>Collected Less Expenses</span><strong>{money(net)}</strong></div>
+      </div>
+
+      {expenses.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          {expenses.map((expense) => (
+            <div className="glass-card" key={expense.id} style={{ marginBottom: 8 }}>
+              <div className="glass-header">
+                <div>
+                  <h3>{expense.category}</h3>
+                  <p>{expense.property_name || 'General'} · {formatDate(expense.expense_date)}</p>
+                </div>
+                <strong className="amount-tag">{money(expense.amount)}</strong>
+              </div>
+              {expense.note && <p style={{ margin: '8px 0 0' }}>{expense.note}</p>}
+              <button
+                type="button"
+                className="text-btn"
+                onClick={() => deleteExpense(expense)}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="small-empty" style={{ marginTop: 18 }}>
         <strong>Rent Automation</strong><br />
