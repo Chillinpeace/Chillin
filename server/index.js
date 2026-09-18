@@ -16,7 +16,7 @@ const SESSION_COOKIE = 'peacely_session';
 const SESSION_DAYS = 30;
 const QUERY_TIMEOUT_MS = 15000;
 
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '3mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // =====================================================
@@ -1605,6 +1605,10 @@ app.get(
           t.name,
           t.phone,
           t.email,
+          t.gender,
+          t.id_proof_type,
+          t.id_photo_front,
+          t.id_photo_back,
           t.property_id,
           t.room_id,
           t.bed_id,
@@ -1972,6 +1976,22 @@ app.post(
         req.body?.email,
       );
 
+      const gender = cleanString(
+        req.body?.gender,
+      );
+
+      const idProofType = cleanString(
+        req.body?.id_proof_type,
+      );
+
+      const idPhotoFront = cleanString(
+        req.body?.id_photo_front,
+      );
+
+      const idPhotoBack = cleanString(
+        req.body?.id_photo_back,
+      );
+
       const propertyId =
         Number(
           req.body?.property_id,
@@ -2025,6 +2045,24 @@ app.post(
       if (!phone) {
         throw new Error(
           'Tenant phone is required.',
+        );
+      }
+
+      if (!gender) {
+        throw new Error(
+          'Tenant gender is required.',
+        );
+      }
+
+      if (!idProofType) {
+        throw new Error(
+          'ID proof type is required.',
+        );
+      }
+
+      if (!idPhotoFront || !idPhotoBack) {
+        throw new Error(
+          'Both front and back ID photos are required.',
         );
       }
 
@@ -2168,6 +2206,10 @@ app.post(
               name,
               phone,
               email,
+              gender,
+              id_proof_type,
+              id_photo_front,
+              id_photo_back,
               property_id,
               room_id,
               bed_id,
@@ -2190,6 +2232,9 @@ app.post(
               $9,
               $10,
               $11,
+              $12,
+              $13,
+              $14,
               'Active'
             )
             RETURNING *
@@ -2198,6 +2243,10 @@ app.post(
             name,
             phone,
             email,
+            gender,
+            idProofType,
+            idPhotoFront,
+            idPhotoBack,
             propertyId,
             roomId,
             bedId,
