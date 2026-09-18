@@ -3241,6 +3241,7 @@ app.get(
           i.updated_at,
           i.payment_provider,
           i.payment_link_id,
+          i.payment_link_cf_id,
           i.payment_link_url,
           i.payment_link_status,
           i.payment_link_created_at,
