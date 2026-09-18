@@ -1908,7 +1908,7 @@ function App() {
           await apiRequest<{
             url: string;
           }>(
-            `/payment-automation/invoices/${invoice.id}/payment-page`,
+            `/payment-automation/invoices/${invoice.id}/whatsapp-link`,
           );
 
         let phone =
@@ -4560,21 +4560,16 @@ function AccountSettingsModal({
   const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
   const [savingAutomation, setSavingAutomation] = useState(false);
   const [message, setMessage] = useState('');
-  const [testWhatsappPhone, setTestWhatsappPhone] = useState('');
-  const [whatsappConfigured, setWhatsappConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [paymentResult, automationResult, statusResult] = await Promise.all([
+        const [paymentResult, automationResult] = await Promise.all([
           apiRequest<{ payment_details: OwnerPaymentDetails }>(
             '/payment-automation/payment-details',
           ),
           apiRequest<{ settings: typeof automationSettings }>(
             '/payment-automation/settings',
-          ),
-          apiRequest<{ whatsapp: boolean }>(
-            '/payment-automation/status',
           ),
         ]);
 
@@ -4584,7 +4579,6 @@ function AccountSettingsModal({
         if (automationResult?.settings) {
           setAutomationSettings(automationResult.settings);
         }
-        setWhatsappConfigured(Boolean(statusResult?.whatsapp));
       } catch (error) {
         setMessage(
           error instanceof Error
@@ -4649,31 +4643,6 @@ function AccountSettingsModal({
       );
     } finally {
       setSavingPaymentDetails(false);
-    }
-  };
-
-  const testWhatsApp = async () => {
-    const phone = testWhatsappPhone.trim() || paymentDetails.phone.trim();
-    if (!phone) {
-      setMessage('Enter a WhatsApp test number or save your phone number first.');
-      return;
-    }
-
-    try {
-      const result = await apiRequest<{ message: string }>(
-        '/payment-automation/test-whatsapp',
-        {
-          method: 'POST',
-          body: JSON.stringify({ phone }),
-        },
-      );
-      setMessage(result.message || 'WhatsApp test request accepted.');
-    } catch (error) {
-      setMessage(
-        error instanceof Error
-          ? error.message
-          : 'WhatsApp test failed.',
-      );
     }
   };
 
@@ -4791,7 +4760,7 @@ function AccountSettingsModal({
 
       <div className="small-empty" style={{ marginTop: 18 }}>
         <strong>Rent Automation</strong><br />
-        Monthly invoices are created automatically. WhatsApp reminders are sent when the reminder window is reached.
+        Monthly invoices are created automatically. When a reminder is due, use Send WhatsApp on the invoice or tenant to open a ready-to-send message.
       </div>
 
       <label className="detail-item">
@@ -4863,26 +4832,9 @@ function AccountSettingsModal({
       </button>
 
       <div className="small-empty" style={{ marginTop: 18 }}>
-        <strong>WhatsApp test</strong><br />
-        Status: <strong>{whatsappConfigured === null ? 'Checking...' : whatsappConfigured ? 'Configured' : 'Not configured'}</strong><br />
-        Send a real test message using the configured Peacely WhatsApp template.
+        <strong>WhatsApp</strong><br />
+        No WhatsApp API or business registration is required for Peacely at this stage. Rent automation creates invoices automatically. When a reminder is due, use Send WhatsApp on the invoice or tenant to open a ready-to-send message; you press Send.
       </div>
-
-      <input
-        className="modal-input"
-        inputMode="tel"
-        placeholder="Test WhatsApp number"
-        value={testWhatsappPhone}
-        onChange={(e) => setTestWhatsappPhone(e.target.value)}
-      />
-
-      <button
-        type="button"
-        className="btn-secondary full-btn"
-        onClick={testWhatsApp}
-      >
-        Send Test WhatsApp
-      </button>
 
       <div className="small-empty" style={{ marginTop: 18 }}>
         <strong>Finance</strong><br />
@@ -5040,6 +4992,13 @@ function InvoicesView({
                 >
                   View Payment Page
                 </a>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => sendInvoiceWhatsApp(invoice)}
+                >
+                  Send WhatsApp
+                </button>
                 {!isPaid && (
                   <button
                     className="btn-primary"
