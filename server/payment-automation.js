@@ -52,7 +52,11 @@ const cashfreeConfigured = () =>
   Boolean(process.env.CASHFREE_CLIENT_ID && process.env.CASHFREE_CLIENT_SECRET);
 
 const whatsappConfigured = () =>
-  Boolean(process.env.WHATSAPP_ACCESS_TOKEN && process.env.WHATSAPP_PHONE_NUMBER_ID);
+  Boolean(
+    process.env.WHATSAPP_ACCESS_TOKEN &&
+    process.env.WHATSAPP_PHONE_NUMBER_ID &&
+    process.env.WHATSAPP_REMINDER_TEMPLATE,
+  );
 
 const baseUrl = () =>
   String(process.env.APP_BASE_URL || 'https://chillin-production.up.railway.app').replace(/\/$/, '');
@@ -219,7 +223,7 @@ function verifyCashfreeWebhook(req) {
   const signature = clean(req.headers['x-webhook-signature']);
   const timestamp = clean(req.headers['x-webhook-timestamp']);
   const rawBody = String(req.rawBody || '');
-  const secret = process.env.CASHFREE_CLIENT_SECRET;
+  const secret = process.env.CASHFREE_WEBHOOK_SECRET || process.env.CASHFREE_CLIENT_SECRET;
 
   if (!signature || !timestamp || !rawBody || !secret) return false;
 
