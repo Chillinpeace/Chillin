@@ -2035,3 +2035,12 @@ select:focus-visible {
   line-height: 1;
   cursor: pointer;
 }
+
+
+.delete-account-menu-item {
+  color: #b42318;
+}
+
+.delete-account-menu-item:hover {
+  background: rgba(180, 35, 24, 0.08);
+}
