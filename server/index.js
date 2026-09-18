@@ -617,6 +617,115 @@ app.post(
 );
 
 // =====================================================
+// AUTH - DELETE ACCOUNT
+// =====================================================
+
+app.delete(
+  '/api/auth/account',
+  asyncHandler(async (req, res) => {
+    const cookies = parseCookies(req);
+    const token = cookies[SESSION_COOKIE];
+
+    if (!token) {
+      return sendError(res, 401, 'Authentication required.');
+    }
+
+    const tokenHash = hashValue(token);
+    const sessionResult = await safeQuery(
+      `SELECT owner_id FROM sessions WHERE token_hash = $1 AND expires_at > CURRENT_TIMESTAMP LIMIT 1`,
+      [tokenHash],
+    );
+
+    if (sessionResult.rows.length === 0) {
+      clearSessionCookie(res);
+      return sendError(res, 401, 'Authentication required.');
+    }
+
+    const ownerId = Number(sessionResult.rows[0].owner_id);
+    const client = await pool.connect();
+
+    try {
+      await client.query('BEGIN');
+
+      await client.query('DELETE FROM tenant_documents WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM notifications WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM audit_logs WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM team_sessions WHERE team_user_id IN (SELECT id FROM team_users WHERE owner_id = $1)', [ownerId]);
+      await client.query('DELETE FROM team_users WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM automation_settings WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM owner_payment_details WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM rent_settings WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM expenses WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM maintenance_tickets WHERE owner_id = $1', [ownerId]);
+
+      await client.query(
+        `DELETE FROM payments WHERE tenant_id IN (
+          SELECT t.id FROM tenants t
+          INNER JOIN properties p ON p.id = t.property_id
+          WHERE p.owner_id = $1
+        )`,
+        [ownerId],
+      );
+      await client.query(
+        `DELETE FROM invoices WHERE tenant_id IN (
+          SELECT t.id FROM tenants t
+          INNER JOIN properties p ON p.id = t.property_id
+          WHERE p.owner_id = $1
+        )`,
+        [ownerId],
+      );
+      await client.query(
+        `DELETE FROM tenants WHERE property_id IN (
+          SELECT id FROM properties WHERE owner_id = $1
+        )`,
+        [ownerId],
+      );
+      await client.query(
+        `DELETE FROM beds WHERE room_id IN (
+          SELECT r.id FROM rooms r
+          INNER JOIN properties p ON p.id = r.property_id
+          WHERE p.owner_id = $1
+        )`,
+        [ownerId],
+      );
+      await client.query(
+        `DELETE FROM rooms WHERE property_id IN (
+          SELECT id FROM properties WHERE owner_id = $1
+        )`,
+        [ownerId],
+      );
+      await client.query('DELETE FROM property_levels WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM properties WHERE owner_id = $1', [ownerId]);
+      await client.query('DELETE FROM sessions WHERE owner_id = $1', [ownerId]);
+
+      const ownerDelete = await client.query(
+        'DELETE FROM owners WHERE id = $1 RETURNING id',
+        [ownerId],
+      );
+
+      if (ownerDelete.rows.length === 0) {
+        throw new Error('Account could not be found.');
+      }
+
+      await client.query('COMMIT');
+      clearSessionCookie(res);
+
+      return res.json({
+        success: true,
+        message: 'Account and associated data have been deleted.',
+      });
+    } catch (error) {
+      try {
+        await client.query('ROLLBACK');
+      } catch {}
+      throw error;
+    } finally {
+      client.release();
+    }
+  }),
+);
+
+// =====================================================
 // AUTH - LOGOUT
 // =====================================================
 
