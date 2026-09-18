@@ -1999,7 +1999,10 @@ function App() {
         `/tenants/${tenant.id}/move-out`,
         { method: 'POST' },
       );
-      setSelectedTenant(result.tenant);
+      setSelectedTenant({
+        ...tenant,
+        ...result.tenant,
+      });
       setError('');
       await loadAllData();
     } catch (err) {
