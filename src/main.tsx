@@ -1688,8 +1688,6 @@ function App() {
     );
 
     if (balance <= 0) return;
-
-    setMarkingInvoiceId(invoice.id);
     setError('');
 
     // Confirm the payment on the server, then redirect to the
@@ -5332,13 +5330,6 @@ function InvoicesView({
             </div>
             {balance > 0 && (
               <div className="tenant-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <a
-                  className="btn-primary"
-                  href={`${API}/payment-automation/invoices/${invoice.id}/payment-page`}
-                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  View Payment Page
-                </a>
                 {!isPaid && (
                   <a
                     className="btn-secondary"
