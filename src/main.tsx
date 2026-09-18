@@ -2470,8 +2470,8 @@ function App() {
                   setRentCycle(e.target.value)
                 }
               >
-                <option value="1st of every month">1st of every month</option>
-                <option value="date of joining">From date of joining</option>
+                <option value="1st of every month">From 1st to 1st of every month</option>
+                <option value="date of joining">From the date of joining</option>
               </select>
 
               <ModalButtons
@@ -2538,9 +2538,19 @@ function App() {
               <select
                 className="modal-input"
                 value={roomPropertyId}
-                onChange={(e) =>
-                  setRoomPropertyId(e.target.value)
-                }
+                onChange={(e) => {
+                  const propertyId = e.target.value;
+                  setRoomPropertyId(propertyId);
+                  const firstFloor =
+                    propertyLevels
+                      .find((level) => level.property_id === Number(propertyId))
+                      ?.floor_name ||
+                    rooms
+                      .find((room) => room.property_id === Number(propertyId))
+                      ?.floor_name ||
+                    'Ground Floor';
+                  setRoomFloorName(firstFloor);
+                }}
               >
                 <option value="">Select property</option>
                 {properties.map((property) => (
@@ -4144,9 +4154,16 @@ function PropertiesView({
                 onClick={() => {
                   const firstFloor =
                     propertyLevelsForProperty[0]?.floor_name ||
-                    propertyRooms[0]?.floor_name ||
-                    'Ground Floor';
+                    propertyRooms[0]?.floor_name;
+
                   setRoomPropertyId(String(property.id));
+
+                  if (!firstFloor) {
+                    setFloorPropertyId(String(property.id));
+                    openModal('floor');
+                    return;
+                  }
+
                   setRoomFloorName(firstFloor);
                   openModal('room');
                 }}
