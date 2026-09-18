@@ -2703,7 +2703,7 @@ function App() {
                 className="modal-input"
                 type="number"
                 min="0"
-                placeholder="Monthly rent"
+                placeholder="Monthly rent (auto-filled from room)"
                 value={roomRent}
                 onChange={(e) =>
                   setRoomRent(e.target.value)
@@ -2797,7 +2797,7 @@ function App() {
             >
               <ModalTitle
                 title="Add Tenant"
-                subtitle="Enter tenant identity details and assign a room or bed."
+                subtitle="Add the tenant, then assign them to an available room and bed."
               />
 
               <input
@@ -2978,35 +2978,60 @@ function App() {
                 value={
                   tenantRoomId
                 }
+                disabled={!tenantPropertyId}
                 onChange={(e) => {
-                  setTenantRoomId(
-                    e.target.value,
+                  const nextRoomId = e.target.value;
+                  setTenantRoomId(nextRoomId);
+                  setTenantBedId('');
+
+                  const selectedRoom = tenantRooms.find(
+                    (room) => Number(room.id) === Number(nextRoomId),
                   );
-                  setTenantBedId(
-                    '',
-                  );
+
+                  if (
+                    selectedRoom &&
+                    (!tenantRent.trim() ||
+                      Number(tenantRent) === 0)
+                  ) {
+                    setTenantRent(
+                      String(Number(selectedRoom.rent_amount || 0)),
+                    );
+                  }
                 }}
               >
                 <option value="">
-                  Select room
+                  {tenantPropertyId
+                    ? 'Select room'
+                    : 'Select property first'}
                 </option>
 
                 {tenantRooms.map(
-                  (room) => (
-                    <option
-                      key={
-                        room.id
-                      }
-                      value={
-                        room.id
-                      }
-                    >
-                      Room{' '}
-                      {
-                        room.room_number
-                      }
-                    </option>
-                  ),
+                  (room) => {
+                    const roomBeds = beds.filter(
+                      (bed) =>
+                        Number(bed.room_id) === Number(room.id),
+                    );
+                    const availableCount = roomBeds.filter(
+                      (bed) => !bed.is_occupied,
+                    ).length;
+
+                    return (
+                      <option
+                        key={
+                          room.id
+                        }
+                        value={
+                          room.id
+                        }
+                        disabled={
+                          roomBeds.length > 0 &&
+                          availableCount === 0
+                        }
+                      >
+                        Room {room.room_number} · {availableCount} available
+                      </option>
+                    );
+                  },
                 )}
               </select>
 
@@ -3015,6 +3040,7 @@ function App() {
                 value={
                   tenantBedId
                 }
+                disabled={!tenantRoomId}
                 onChange={(e) =>
                   setTenantBedId(
                     e.target.value,
@@ -3022,7 +3048,9 @@ function App() {
                 }
               >
                 <option value="">
-                  Select available bed
+                  {tenantRoomId
+                    ? 'Select available bed'
+                    : 'Select room first'}
                 </option>
 
                 {availableBeds.map(
@@ -3035,10 +3063,7 @@ function App() {
                         bed.id
                       }
                     >
-                      Bed{' '}
-                      {
-                        bed.bed_number
-                      }
+                      Bed {bed.bed_number} · Available
                     </option>
                   ),
                 )}
