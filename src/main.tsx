@@ -115,6 +115,12 @@ interface Invoice {
   delivery_status?: string;
   created_at?: string;
   updated_at?: string;
+  payment_provider?: string;
+  payment_link_id?: string;
+  payment_link_url?: string;
+  payment_link_status?: string;
+  payment_link_created_at?: string;
+  payment_link_paid_amount?: number;
 }
 
 interface FinanceSummary {
@@ -2174,9 +2180,9 @@ function App() {
     return (
       <div className="mobile-shell">
         <Header
-          owner={owner}
-          onLogout={handleLogout}
-        />
+        owner={owner}
+        onLogout={handleLogout}
+      />
 
         <main className="content-area">
           <div className="hero-card">
@@ -2354,44 +2360,18 @@ function App() {
 
         {activeTab === 'payments' && (
           <PaymentsView
-            payments={
-              filteredPayments
-            }
-            search={
-              paymentSearch
-            }
-            setSearch={
-              setPaymentSearch
-            }
-            openModal={
-              openModal
-            }
+            payments={payments}
+            search={paymentSearch}
+            setSearch={setPaymentSearch}
           />
         )}
 
         {activeTab === 'invoices' && (
           <InvoicesView
-            invoices={
-              filteredInvoices
-            }
-            search={
-              invoiceSearch
-            }
-            setSearch={
-              setInvoiceSearch
-            }
-            openModal={
-              openModal
-            }
-            onPay={
-              openPaymentForInvoice
-            }
-            onSend={
-              sendInvoiceWhatsApp
-            }
-            getBalance={
-              getInvoiceBalance
-            }
+            invoices={filteredInvoices}
+            search={invoiceSearch}
+            setSearch={setInvoiceSearch}
+            getBalance={getInvoiceBalance}
           />
         )}
 
@@ -3535,7 +3515,6 @@ function App() {
 function Header({
   owner,
   onLogout,
-  onRecord,
 }: {
   owner: Owner | null;
   onLogout: () => void;
@@ -3561,8 +3540,7 @@ function Header({
       </div>
 
       <div className="header-actions">
-        {onRecord && (
-          <button
+        <button
             className="avatar-btn"
             onClick={onRecord}
           >
@@ -3621,12 +3599,6 @@ function Dashboard({
     id: number,
   ) => number;
   openTenantDetails: (
-    tenant: Tenant,
-  ) => void;
-  sendWhatsAppReminder: (
-    tenant: Tenant,
-  ) => void;
-  openPaymentForTenant: (
     tenant: Tenant,
   ) => void;
   openModal: (
@@ -3833,16 +3805,7 @@ function Dashboard({
                         </span>
                       </div>
 
-                      <button
-                        className="mini-action"
-                        onClick={() =>
-                          sendWhatsAppReminder(
-                            tenant,
-                          )
-                        }
-                      >
-                        WhatsApp
-                      </button>
+
                     </div>
                   ),
                 )}
@@ -4453,8 +4416,6 @@ function TenantsView({
   getTenantPaid,
   getTenantPending,
   openTenantDetails,
-  sendWhatsAppReminder,
-  openPaymentForTenant,
 }: {
   tenants: Tenant[];
   searchQuery: string;
@@ -4792,159 +4753,104 @@ function TenantsView({
   );
 }
 
+function PaymentAutomationCard() {
+  const [status, setStatus] = useState<{
+    automatic: boolean;
+    whatsapp: boolean;
+    pending_invoices: number;
+    paid_last_30_days: number;
+  } | null>(null);
+
+  useEffect(() => {
+    apiRequest<{
+      automatic: boolean;
+      whatsapp: boolean;
+      pending_invoices: number;
+      paid_last_30_days: number;
+    }>('/payment-automation/status')
+      .then(setStatus)
+      .catch(() => setStatus(null));
+  }, []);
+
+  return (
+    <div className="glass-card">
+      <div className="glass-header">
+        <div>
+          <h3>Automatic Payments</h3>
+          <p>Invoices, payment links and payment confirmation run automatically.</p>
+        </div>
+        <span className={status?.automatic && status?.whatsapp ? 'badge badge-emerald' : 'badge'}>
+          {status?.automatic && status?.whatsapp ? 'Active' : 'Setup Required'}
+        </span>
+      </div>
+      <div className="metrics-row">
+        <MiniMetric label="Pending" value={status ? status.pending_invoices : '—'} />
+        <MiniMetric label="Paid · 30 days" value={status ? status.paid_last_30_days : '—'} />
+        <MiniMetric label="Payment Link" value={status?.automatic ? 'Cashfree' : 'Not connected'} />
+        <MiniMetric label="WhatsApp" value={status?.whatsapp ? 'Automatic' : 'Not connected'} />
+      </div>
+      <div className="small-empty">
+        {status?.automatic && status?.whatsapp
+          ? 'Tenants receive payment reminders with a Pay Now link. Successful online payments update the invoice automatically.'
+          : 'Add the Cashfree and WhatsApp Cloud API credentials in Railway environment variables to enable automatic collection.'}
+      </div>
+    </div>
+  );
+}
+
 function PaymentsView({
   payments,
   search,
   setSearch,
-  openModal,
 }: {
   payments: Payment[];
   search: string;
-  setSearch: (
-    value: string,
-  ) => void;
-  openModal: (
-    modal: Modal,
-  ) => void;
+  setSearch: (value: string) => void;
 }) {
-  const total =
-    payments.reduce(
-      (sum, payment) =>
-        sum +
-        Number(
-          payment.amount || 0,
-        ),
-      0,
-    );
+  const total = payments.reduce(
+    (sum, payment) => sum + Number(payment.amount || 0),
+    0,
+  );
 
   return (
     <div className="view-container">
       <PageHeader
         title="Payments"
-        subtitle={`${money(
-          total,
-        )} shown`}
-        action={
-          <button
-            className="btn-primary"
-            onClick={() =>
-              openModal(
-                'payment',
-              )
-            }
-          >
-            + Payment
-          </button>
-        }
+        subtitle={`${money(total)} collected`}
       />
-
+      <PaymentAutomationCard />
       <input
         className="search-input"
         placeholder="Search tenant, invoice, property, month or method..."
-        value={
-          search
-        }
-        onChange={(e) =>
-          setSearch(
-            e.target.value,
-          )
-        }
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
       />
-
       <div className="summary-strip">
-        <span>
-          {
-            payments.length
-          }{' '}
-          transactions
-        </span>
-
-        <strong>
-          {money(total)}
-        </strong>
+        <span>{payments.length} transactions</span>
+        <strong>{money(total)}</strong>
       </div>
-
-      {payments.map(
-        (payment) => (
-          <div
-            className="glass-card"
-            key={
-              payment.id
-            }
-          >
-            <div className="glass-header">
-              <div className="avatar-title-wrap">
-                <div className="avatar">
-                  {getInitials(
-                    payment.tenant_name ||
-                      'Tenant',
-                  )}
-                </div>
-
-                <div>
-                  <h3>
-                    {payment.tenant_name ||
-                      'Tenant'}
-                  </h3>
-
-                  <p>
-                    {payment.property_name ||
-                      'Property'}{' '}
-                    · Room{' '}
-                    {payment.room_number ||
-                      '-'}
-                  </p>
-                </div>
+      {payments.map((payment) => (
+        <div className="glass-card" key={payment.id}>
+          <div className="glass-header">
+            <div className="avatar-title-wrap">
+              <div className="avatar">{getInitials(payment.tenant_name || 'Tenant')}</div>
+              <div>
+                <h3>{payment.tenant_name || 'Tenant'}</h3>
+                <p>{payment.property_name || 'Property'} · Room {payment.room_number || '-'}</p>
               </div>
-
-              <strong className="amount-tag">
-                {money(
-                  payment.amount,
-                )}
-              </strong>
             </div>
-
-            <div className="metrics-row">
-              <MiniMetric
-                label="Invoice"
-                value={
-                  payment.invoice_number ||
-                  'General Payment'
-                }
-              />
-
-              <MiniMetric
-                label="Month"
-                value={
-                  payment.payment_month
-                }
-              />
-
-              <MiniMetric
-                label="Method"
-                value={
-                  payment.payment_method
-                }
-              />
-
-              <MiniMetric
-                label="Date"
-                value={formatDate(
-                  payment.payment_date,
-                )}
-              />
-            </div>
+            <strong className="amount-tag">{money(payment.amount)}</strong>
           </div>
-        ),
-      )}
-
-      {payments.length ===
-        0 && (
-        <EmptyCard
-          icon="₹"
-          title="No payments found"
-          text="Recorded payments will appear here."
-        />
+          <div className="metrics-row">
+            <MiniMetric label="Invoice" value={payment.invoice_number || 'General Payment'} />
+            <MiniMetric label="Month" value={payment.payment_month} />
+            <MiniMetric label="Method" value={payment.payment_method} />
+            <MiniMetric label="Date" value={formatDate(payment.payment_date)} />
+          </div>
+        </div>
+      ))}
+      {payments.length === 0 && (
+        <EmptyCard icon="₹" title="No payments found" text="Successful online payments will appear here automatically." />
       )}
     </div>
   );
@@ -4954,253 +4860,78 @@ function InvoicesView({
   invoices,
   search,
   setSearch,
-  openModal,
-  onPay,
-  onSend,
   getBalance,
 }: {
   invoices: Invoice[];
   search: string;
-  setSearch: (
-    value: string,
-  ) => void;
-  openModal: (
-    modal: Modal,
-  ) => void;
-  onPay: (
-    invoice: Invoice,
-  ) => void;
-  onSend: (
-    invoice: Invoice,
-  ) => void;
-  getBalance: (
-    invoice: Invoice,
-  ) => number;
+  setSearch: (value: string) => void;
+  getBalance: (invoice: Invoice) => number;
 }) {
   return (
     <div className="view-container">
       <PageHeader
         title="Invoices"
-        subtitle={`${invoices.length} invoice${
-          invoices.length !==
-          1
-            ? 's'
-            : ''
-        }`}
-        action={
-          <button
-            className="btn-primary"
-            onClick={() =>
-              openModal(
-                'invoice',
-              )
-            }
-          >
-            + Invoice
-          </button>
-        }
+        subtitle={`${invoices.length} invoice${invoices.length !== 1 ? 's' : ''}`}
       />
-
       <input
         className="search-input"
         placeholder="Search invoice, tenant, month or status..."
-        value={
-          search
-        }
-        onChange={(e) =>
-          setSearch(
-            e.target.value,
-          )
-        }
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
       />
-
-      {invoices.map(
-        (invoice) => {
-          const balance =
-            getBalance(
-              invoice,
-            );
-
-          const paid =
+      {invoices.map((invoice) => {
+        const balance = getBalance(invoice);
+        const paid = Number(invoice.paid_amount || 0);
+        const percentage = Math.min(
+          Math.round(
             Number(
-              invoice.paid_amount ||
-                0,
-            );
-
-          const percentage =
-            Math.min(
-              Math.round(
-                Number(
-                  invoice.payment_percentage ??
-                    (Number(
-                      invoice.amount,
-                    ) > 0
-                      ? (paid /
-                          Number(
-                            invoice.amount,
-                          )) *
-                        100
-                      : 0),
-                ),
-              ),
-              100,
-            );
-
-          const status =
-            normalize(
-              invoice.status,
-            );
-
-          return (
-            <div
-              className="glass-card"
-              key={
-                invoice.id
-              }
-            >
-              <div className="glass-header">
-                <div>
-                  <h3>
-                    {
-                      invoice.invoice_number
-                    }
-                  </h3>
-
-                  <p>
-                    {invoice.tenant_name ||
-                      'Tenant'}
-                  </p>
-                </div>
-
-                <StatusBadge
-                  status={
-                    invoice.status ||
-                    'Pending'
-                  }
-                />
+              invoice.payment_percentage ??
+                (Number(invoice.amount) > 0
+                  ? (paid / Number(invoice.amount)) * 100
+                  : 0),
+            ),
+          ),
+          100,
+        );
+        return (
+          <div className="glass-card" key={invoice.id}>
+            <div className="glass-header">
+              <div>
+                <h3>{invoice.invoice_number}</h3>
+                <p>{invoice.tenant_name || 'Tenant'}</p>
               </div>
-
-              <div className="metrics-row">
-                <MiniMetric
-                  label="Invoice Amount"
-                  value={money(
-                    invoice.amount,
-                  )}
-                />
-
-                <MiniMetric
-                  label="Paid"
-                  value={money(
-                    paid,
-                  )}
-                />
-
-                <MiniMetric
-                  label="Balance"
-                  value={money(
-                    balance,
-                  )}
-                />
-
-                <MiniMetric
-                  label="Due"
-                  value={formatDate(
-                    invoice.due_date,
-                  )}
-                />
-              </div>
-
-              <div className="glass-footer">
-                <span>
-                  {invoice.month ||
-                    '-'}{' '}
-                  · {percentage}%
-                  paid
-                </span>
-
-                <span
-                  className={
-                    normalize(
-                      invoice.delivery_status,
-                    ) ===
-                    'sent'
-                      ? 'status paid'
-                      : 'status pending'
-                  }
-                >
-                  {invoice.delivery_status ||
-                    'Not Sent'}
-                </span>
-              </div>
-
-              <div className="progress-bar-bg">
-                <div
-                  className="progress-bar-fill"
-                  style={{
-                    width: `${percentage}%`,
-                  }}
-                />
-              </div>
-
-              <div className="tenant-actions">
-                {status !==
-                  'paid' &&
-                  status !==
-                    'cancelled' && (
-                    <button
-                      className="btn-primary"
-                      onClick={() =>
-                        onPay(
-                          invoice,
-                        )
-                      }
-                    >
-                      Pay{' '}
-                      {money(
-                        balance,
-                      )}
-                    </button>
-                  )}
-
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    onSend(
-                      invoice,
-                    )
-                  }
-                >
-                  {normalize(
-                    invoice.delivery_status,
-                  ) ===
-                  'sent'
-                    ? 'Send Again'
-                    : 'WhatsApp Invoice'}
-                </button>
-              </div>
+              <StatusBadge status={invoice.status || 'Pending'} />
             </div>
-          );
-        },
-      )}
-
-      {invoices.length ===
-        0 && (
+            <div className="metrics-row">
+              <MiniMetric label="Amount" value={money(invoice.amount)} />
+              <MiniMetric label="Paid" value={money(paid)} />
+              <MiniMetric label="Balance" value={money(balance)} />
+              <MiniMetric label="Due" value={formatDate(invoice.due_date)} />
+            </div>
+            <div className="glass-footer">
+              <span>{invoice.month || '-'} · {percentage}% paid</span>
+              <span className={invoice.payment_link_url ? 'status paid' : 'status pending'}>
+                {invoice.payment_link_url ? 'Pay Link Ready' : 'Payment Link Pending'}
+              </span>
+            </div>
+            <div className="progress-bar-bg">
+              <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
+            </div>
+            {invoice.payment_link_url && normalize(invoice.status) !== 'paid' && (
+              <div className="tenant-actions">
+                <a className="btn-secondary" href={invoice.payment_link_url} target="_blank" rel="noreferrer">
+                  Open Payment Link
+                </a>
+              </div>
+            )}
+          </div>
+        );
+      })}
+      {invoices.length === 0 && (
         <EmptyCard
           icon="🧾"
           title="No invoices found"
-          text="Create your first rent invoice."
-          action={
-            <button
-              className="btn-primary"
-              onClick={() =>
-                openModal(
-                  'invoice',
-                )
-              }
-            >
-              Create Invoice
-            </button>
-          }
+          text="Invoices are created automatically from active tenant rent and due dates."
         />
       )}
     </div>
