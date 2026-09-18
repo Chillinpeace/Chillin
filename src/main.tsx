@@ -124,6 +124,13 @@ interface Invoice {
   payment_link_paid_amount?: number;
 }
 
+interface OwnerPaymentDetails {
+  upi_id: string;
+  phone: string;
+  qr_code_data: string;
+  payment_instructions: string;
+}
+
 interface FinanceSummary {
   expected: number;
   collected: number;
@@ -153,7 +160,8 @@ type Modal =
   | 'tenant'
   | 'payment'
   | 'invoice'
-  | 'tenantDetails';
+  | 'tenantDetails'
+  | 'accountSettings';
 
 const API = '/api';
 
@@ -273,6 +281,9 @@ function App() {
     useState(true);
   const [saving, setSaving] =
     useState(false);
+
+  const [markingInvoiceId, setMarkingInvoiceId] =
+    useState<number | null>(null);
   const [error, setError] =
     useState('');
 
@@ -1540,6 +1551,41 @@ function App() {
         !bed.is_occupied,
     );
 
+  const handleMarkInvoicePaid = async (invoice: Invoice) => {
+    if (normalize(invoice.status) === 'paid') return;
+
+    const balance = Math.max(
+      Number(invoice.balance_amount ?? Number(invoice.amount || 0) - Number(invoice.paid_amount || 0)),
+      0,
+    );
+
+    if (balance <= 0) return;
+
+    const confirmed = window.confirm(
+      `Confirm that you received ${money(balance)} from ${invoice.tenant_name || 'this tenant'} for invoice ${invoice.invoice_number}?`,
+    );
+
+    if (!confirmed) return;
+
+    setMarkingInvoiceId(invoice.id);
+    setError('');
+
+    try {
+      await apiRequest(`/payment-automation/invoices/${invoice.id}/mark-paid`, {
+        method: 'POST',
+      });
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not mark the invoice as paid.',
+      );
+    } finally {
+      setMarkingInvoiceId(null);
+    }
+  };
+
   const filteredTenants =
     tenants.filter(
       (tenant) => {
@@ -1818,6 +1864,13 @@ function App() {
           );
         }
 
+        const paymentPage =
+          await apiRequest<{
+            url: string;
+          }>(
+            `/payment-automation/invoices/${invoice.id}/payment-page`,
+          );
+
         let phone =
           tenant.phone.replace(
             /[^0-9]/g,
@@ -1834,12 +1887,6 @@ function App() {
               0,
           );
 
-        /*
-         * balance_amount from the backend
-         * is already the remaining balance.
-         * Do not subtract paid amount from it
-         * again.
-         */
         const balance =
           Math.max(
             Number(
@@ -1855,19 +1902,19 @@ function App() {
 
         const message =
           encodeURIComponent(
-            `Hello ${tenant.name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${
+            `Hello ${tenant.name},\\n\\nHere is your rent invoice from Peacely.\\n\\nInvoice: ${
               invoice.invoice_number
-            }\nMonth: ${
+            }\\nMonth: ${
               invoice.month || '-'
-            }\nAmount: ${money(
+            }\\nAmount: ${money(
               invoice.amount,
-            )}\nPaid: ${money(
+            )}\\nPaid: ${money(
               paid,
-            )}\nBalance: ${money(
+            )}\\nBalance: ${money(
               balance,
-            )}\nDue date: ${formatDate(
+            )}\\nDue date: ${formatDate(
               invoice.due_date,
-            )}\n\nThank you.`,
+            )}\\n\\nPay directly to the property owner using the UPI/phone/QR details here:\\n${paymentPage.url}\\n\\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`,
           );
 
         window.open(
@@ -2181,6 +2228,7 @@ function App() {
         <Header
         owner={owner}
         onLogout={handleLogout}
+        onAccountSettings={() => openModal('accountSettings')}
       />
 
         <main className="content-area">
@@ -2208,6 +2256,7 @@ function App() {
       <Header
         owner={owner}
         onLogout={handleLogout}
+        onAccountSettings={() => openModal('accountSettings')}
       />
 
       {error && (
@@ -2350,6 +2399,8 @@ function App() {
             search={invoiceSearch}
             setSearch={setInvoiceSearch}
             getBalance={getInvoiceBalance}
+            onMarkPaid={handleMarkInvoicePaid}
+            markingInvoiceId={markingInvoiceId}
           />
         )}
 
@@ -3042,6 +3093,13 @@ function App() {
           )}
 
           {activeModal ===
+            'accountSettings' && (
+            <AccountSettingsModal
+              onClose={closeModal}
+            />
+          )}
+
+          {activeModal ===
             'tenantDetails' &&
             selectedTenant && (
               <TenantDetails
@@ -3074,9 +3132,11 @@ function App() {
 function Header({
   owner,
   onLogout,
+  onAccountSettings,
 }: {
   owner: Owner | null;
   onLogout: () => void;
+  onAccountSettings: () => void;
 }) {
   return (
     <header className="app-header">
@@ -3098,6 +3158,12 @@ function Header({
       </div>
 
       <div className="header-actions">
+        <button
+          className="logout-btn"
+          onClick={onAccountSettings}
+        >
+          Account Settings
+        </button>
         <button
           className="logout-btn"
           onClick={onLogout}
@@ -4256,275 +4322,309 @@ function TenantsView({
   );
 }
 
-function PaymentAutomationCard() {
-  const [status, setStatus] = useState<{
-    automatic: boolean;
-    whatsapp: boolean;
-    owner_vendor: boolean;
-    owner_vendor_status: string;
-    pending_invoices: number;
-    paid_last_30_days: number;
-  } | null>(null);
+function AccountSettingsModal({
+  onClose,
+}: {
+  onClose: () => void;
+}) {
+  const [paymentDetails, setPaymentDetails] =
+    useState<OwnerPaymentDetails>({
+      upi_id: '',
+      phone: '',
+      qr_code_data: '',
+      payment_instructions: '',
+    });
 
-  const [vendor, setVendor] = useState<{
-    configured: boolean;
-    vendor?: {
-      vendor_id: string;
-      status: string;
-      settlement_method: string;
-    } | null;
-  } | null>(null);
-
-  const [settings, setSettings] = useState({
+  const [automationSettings, setAutomationSettings] = useState({
     reminders_enabled: true,
     reminder_days_before: 3,
     overdue_reminders_enabled: true,
     recurring_invoices_enabled: true,
   });
 
-  const [settlement, setSettlement] = useState({
-    settlement_method: 'bank',
-    name: '',
-    email: '',
-    phone: '',
-    account_holder: '',
-    account_number: '',
-    ifsc: '',
-    upi_vpa: '',
-    pan: '',
-  });
-
-  const [savingSettings, setSavingSettings] = useState(false);
-  const [savingVendor, setSavingVendor] = useState(false);
-  const [settingsMessage, setSettingsMessage] = useState('');
-  const [vendorMessage, setVendorMessage] = useState('');
-
-  const loadPaymentAutomation = async () => {
-    const [statusResult, settingsResult, vendorResult] = await Promise.allSettled([
-      apiRequest<{
-        automatic: boolean;
-        whatsapp: boolean;
-        owner_vendor: boolean;
-        owner_vendor_status: string;
-        pending_invoices: number;
-        paid_last_30_days: number;
-      }>('/payment-automation/status'),
-      apiRequest<{ settings: typeof settings }>('/payment-automation/settings'),
-      apiRequest<{
-        configured: boolean;
-        vendor?: {
-          vendor_id: string;
-          status: string;
-          settlement_method: string;
-        } | null;
-      }>('/payment-automation/vendor'),
-    ]);
-
-    if (statusResult.status === 'fulfilled') setStatus(statusResult.value);
-    if (settingsResult.status === 'fulfilled' && settingsResult.value?.settings) {
-      setSettings(settingsResult.value.settings);
-    }
-    if (vendorResult.status === 'fulfilled') setVendor(vendorResult.value);
-  };
+  const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
+  const [savingAutomation, setSavingAutomation] = useState(false);
+  const [message, setMessage] = useState('');
 
   useEffect(() => {
-    loadPaymentAutomation().catch(() => undefined);
+    const load = async () => {
+      try {
+        const [paymentResult, automationResult] = await Promise.all([
+          apiRequest<{ payment_details: OwnerPaymentDetails }>(
+            '/payment-automation/payment-details',
+          ),
+          apiRequest<{ settings: typeof automationSettings }>(
+            '/payment-automation/settings',
+          ),
+        ]);
+
+        if (paymentResult?.payment_details) {
+          setPaymentDetails(paymentResult.payment_details);
+        }
+        if (automationResult?.settings) {
+          setAutomationSettings(automationResult.settings);
+        }
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : 'Could not load account settings.',
+        );
+      }
+    };
+
+    load().catch(() => undefined);
   }, []);
 
-  const saveSettings = async () => {
-    setSavingSettings(true);
-    setSettingsMessage('');
+  const handleQrUpload = (file?: File) => {
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      setMessage('Please choose a QR image file.');
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage('QR image must be 2 MB or smaller.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      const value = String(reader.result || '');
+      setPaymentDetails((current) => ({
+        ...current,
+        qr_code_data: value,
+      }));
+      setMessage('');
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const savePaymentDetails = async () => {
+    if (
+      !paymentDetails.upi_id.trim() &&
+      !paymentDetails.phone.trim() &&
+      !paymentDetails.qr_code_data.trim()
+    ) {
+      setMessage('Add a UPI ID, phone number, or QR code.');
+      return;
+    }
+
+    setSavingPaymentDetails(true);
+    setMessage('');
+
     try {
-      const result = await apiRequest<{ settings: typeof settings }>('/payment-automation/settings', {
+      await apiRequest('/payment-automation/payment-details', {
         method: 'PUT',
-        body: JSON.stringify(settings),
+        body: JSON.stringify(paymentDetails),
       });
-      if (result?.settings) setSettings(result.settings);
-      setSettingsMessage('Payment automation settings saved.');
-      await loadPaymentAutomation();
+      setMessage('Payment details saved. New rent reminders will use them automatically.');
     } catch (error) {
-      setSettingsMessage(error instanceof Error ? error.message : 'Could not save payment settings.');
-    } finally {
-      setSavingSettings(false);
-    }
-  };
-
-  const saveVendor = async () => {
-    setSavingVendor(true);
-    setVendorMessage('');
-    try {
-      const result = await apiRequest<{
-        vendor: {
-          vendor_id: string;
-          status: string;
-          settlement_method: string;
-        };
-      }>('/payment-automation/vendor', {
-        method: 'POST',
-        body: JSON.stringify(settlement),
-      });
-      setVendor({
-        configured: true,
-        vendor: result.vendor,
-      });
-      setVendorMessage(
-        result.vendor.status === 'ACTIVE'
-          ? 'Owner settlement account verified and ready.'
-          : 'Owner settlement details submitted to Cashfree. The account will become available after Cashfree verification.',
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not save payment details.',
       );
-      await loadPaymentAutomation();
-    } catch (error) {
-      setVendorMessage(error instanceof Error ? error.message : 'Could not save the owner settlement account.');
     } finally {
-      setSavingVendor(false);
+      setSavingPaymentDetails(false);
     }
   };
 
-  const vendorReady = vendor?.configured && vendor.vendor?.status === 'ACTIVE';
+  const saveAutomation = async () => {
+    setSavingAutomation(true);
+    setMessage('');
+
+    try {
+      await apiRequest('/payment-automation/settings', {
+        method: 'PUT',
+        body: JSON.stringify(automationSettings),
+      });
+      setMessage('Rent reminder settings saved.');
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'Could not save reminder settings.',
+      );
+    } finally {
+      setSavingAutomation(false);
+    }
+  };
 
   return (
-    <div className="glass-card">
-      <div className="glass-header">
-        <div>
-          <h3>Automatic Rent Payments</h3>
-          <p>Tenants pay through Cashfree and the rent is settled to this owner's bank account or UPI. Peacely does not take a rent commission.</p>
-        </div>
-        <span className={vendorReady && status?.automatic ? 'badge badge-emerald' : 'badge'}>
-          {vendorReady && status?.automatic ? 'Ready' : 'Setup Required'}
-        </span>
-      </div>
-
-      <div className="metrics-row">
-        <MiniMetric label="Pending" value={status ? status.pending_invoices : '—'} />
-        <MiniMetric label="Paid · 30 days" value={status ? status.paid_last_30_days : '—'} />
-        <MiniMetric label="Cashfree" value={status?.automatic ? 'Connected' : 'Not connected'} />
-        <MiniMetric label="Owner settlement" value={vendor?.vendor?.status || 'Not configured'} />
-      </div>
+    <div>
+      <ModalTitle
+        title="Account Settings"
+        subtitle="Choose how tenants pay you directly. Peacely does not collect or take a percentage of rent."
+      />
 
       <div className="small-empty">
-        <strong>Owner payment account</strong><br />
-        This is where tenant rent will be settled. Peacely's future monthly subscription is separate and is not deducted from rent.
+        <strong>Owner payment details</strong><br />
+        Add the UPI ID, phone number and/or QR code you want tenants to use. These details appear on the rent payment page linked from WhatsApp reminders.
       </div>
 
-      {vendorReady ? (
-        <div className="detail-grid">
-          <div className="detail-item">
-            <span>Settlement method</span>
-            <strong>{vendor?.vendor?.settlement_method === 'upi' ? 'UPI' : 'Bank account'}</strong>
-          </div>
-          <div className="detail-item">
-            <span>Cashfree vendor</span>
-            <strong>{vendor?.vendor?.status}</strong>
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="detail-grid">
-            <label className="detail-item">
-              <span>Owner name</span>
-              <input className="modal-input" value={settlement.name} onChange={(e) => setSettlement((v) => ({ ...v, name: e.target.value }))} placeholder="Full name" />
-            </label>
-            <label className="detail-item">
-              <span>Email</span>
-              <input className="modal-input" type="email" value={settlement.email} onChange={(e) => setSettlement((v) => ({ ...v, email: e.target.value }))} placeholder="owner@email.com" />
-            </label>
-            <label className="detail-item">
-              <span>Phone</span>
-              <input className="modal-input" inputMode="numeric" value={settlement.phone} onChange={(e) => setSettlement((v) => ({ ...v, phone: e.target.value }))} placeholder="10 digit mobile" />
-            </label>
-            <label className="detail-item">
-              <span>PAN</span>
-              <input className="modal-input" value={settlement.pan} onChange={(e) => setSettlement((v) => ({ ...v, pan: e.target.value.toUpperCase() }))} placeholder="PAN" />
-            </label>
-            <label className="detail-item">
-              <span>Receive rent by</span>
-              <select className="modal-input" value={settlement.settlement_method} onChange={(e) => setSettlement((v) => ({ ...v, settlement_method: e.target.value }))}>
-                <option value="bank">Bank account</option>
-                <option value="upi">UPI ID</option>
-              </select>
-            </label>
-            <label className="detail-item">
-              <span>Account holder</span>
-              <input className="modal-input" value={settlement.account_holder} onChange={(e) => setSettlement((v) => ({ ...v, account_holder: e.target.value }))} placeholder="Name on account" />
-            </label>
-            {settlement.settlement_method === 'bank' ? (
-              <>
-                <label className="detail-item">
-                  <span>Bank account number</span>
-                  <input className="modal-input" inputMode="numeric" value={settlement.account_number} onChange={(e) => setSettlement((v) => ({ ...v, account_number: e.target.value }))} placeholder="Account number" />
-                </label>
-                <label className="detail-item">
-                  <span>IFSC</span>
-                  <input className="modal-input" value={settlement.ifsc} onChange={(e) => setSettlement((v) => ({ ...v, ifsc: e.target.value.toUpperCase() }))} placeholder="IFSC code" />
-                </label>
-              </>
-            ) : (
-              <label className="detail-item">
-                <span>UPI ID</span>
-                <input className="modal-input" value={settlement.upi_vpa} onChange={(e) => setSettlement((v) => ({ ...v, upi_vpa: e.target.value }))} placeholder="name@upi" />
-              </label>
-            )}
-          </div>
+      <input
+        className="modal-input"
+        placeholder="UPI ID (example: owner@upi)"
+        value={paymentDetails.upi_id}
+        onChange={(e) =>
+          setPaymentDetails((current) => ({
+            ...current,
+            upi_id: e.target.value,
+          }))
+        }
+      />
 
-          <div className="modal-actions">
-            <button className="btn-primary" onClick={saveVendor} disabled={savingVendor || !status?.automatic}>
-              {savingVendor ? 'Connecting...' : 'Connect Owner Payment Account'}
-            </button>
-          </div>
-          {vendorMessage && <div className="small-empty">{vendorMessage}</div>}
-        </>
+      <input
+        className="modal-input"
+        inputMode="tel"
+        placeholder="Phone number"
+        value={paymentDetails.phone}
+        onChange={(e) =>
+          setPaymentDetails((current) => ({
+            ...current,
+            phone: e.target.value,
+          }))
+        }
+      />
+
+      <label className="detail-item">
+        <span>UPI QR code</span>
+        <input
+          className="modal-input"
+          type="file"
+          accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => handleQrUpload(e.target.files?.[0])}
+        />
+      </label>
+
+      {paymentDetails.qr_code_data && (
+        <div className="glass-card" style={{ marginTop: 12, textAlign: 'center' }}>
+          <img
+            src={paymentDetails.qr_code_data}
+            alt="Owner UPI QR"
+            style={{ maxWidth: 220, width: '100%', borderRadius: 12 }}
+          />
+          <button
+            type="button"
+            className="text-btn"
+            onClick={() =>
+              setPaymentDetails((current) => ({
+                ...current,
+                qr_code_data: '',
+              }))
+            }
+          >
+            Remove QR code
+          </button>
+        </div>
       )}
 
-      <div className="detail-grid">
-        <label className="detail-item">
-          <span>Automatic invoices</span>
-          <select className="modal-input" value={settings.recurring_invoices_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, recurring_invoices_enabled: e.target.value === 'on' }))}>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-          </select>
-        </label>
-        <label className="detail-item">
-          <span>Reminders</span>
-          <select className="modal-input" value={settings.reminders_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, reminders_enabled: e.target.value === 'on' }))}>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-          </select>
-        </label>
-        <label className="detail-item">
-          <span>Remind before due date</span>
-          <select className="modal-input" value={String(settings.reminder_days_before)} onChange={(e) => setSettings((current) => ({ ...current, reminder_days_before: Number(e.target.value) }))}>
-            <option value="0">On due date</option>
-            <option value="1">1 day before</option>
-            <option value="2">2 days before</option>
-            <option value="3">3 days before</option>
-            <option value="5">5 days before</option>
-            <option value="7">7 days before</option>
-          </select>
-        </label>
-        <label className="detail-item">
-          <span>Overdue reminders</span>
-          <select className="modal-input" value={settings.overdue_reminders_enabled ? 'on' : 'off'} onChange={(e) => setSettings((current) => ({ ...current, overdue_reminders_enabled: e.target.value === 'on' }))}>
-            <option value="on">On</option>
-            <option value="off">Off</option>
-          </select>
-        </label>
+      <textarea
+        className="modal-input"
+        rows={3}
+        placeholder="Optional payment instructions"
+        value={paymentDetails.payment_instructions}
+        onChange={(e) =>
+          setPaymentDetails((current) => ({
+            ...current,
+            payment_instructions: e.target.value,
+          }))
+        }
+      />
+
+      <button
+        type="button"
+        className="btn-primary full-btn"
+        onClick={savePaymentDetails}
+        disabled={savingPaymentDetails}
+      >
+        {savingPaymentDetails ? 'Saving...' : 'Save Payment Details'}
+      </button>
+
+      <div className="small-empty" style={{ marginTop: 18 }}>
+        <strong>Automatic rent reminders</strong>
       </div>
 
-      <div className="modal-actions">
-        <button className="btn-primary" onClick={saveSettings} disabled={savingSettings}>
-          {savingSettings ? 'Saving...' : 'Save Payment Settings'}
-        </button>
-      </div>
+      <label className="detail-item">
+        <span>Send rent reminders</span>
+        <input
+          type="checkbox"
+          checked={automationSettings.reminders_enabled}
+          onChange={(e) =>
+            setAutomationSettings((current) => ({
+              ...current,
+              reminders_enabled: e.target.checked,
+            }))
+          }
+        />
+      </label>
 
-      {settingsMessage && <div className="small-empty">{settingsMessage}</div>}
+      <label className="detail-item">
+        <span>Days before due date</span>
+        <input
+          className="modal-input"
+          type="number"
+          min="0"
+          max="30"
+          value={automationSettings.reminder_days_before}
+          onChange={(e) =>
+            setAutomationSettings((current) => ({
+              ...current,
+              reminder_days_before: Number(e.target.value),
+            }))
+          }
+        />
+      </label>
 
-      <div className="small-empty">
-        {status?.automatic && status?.whatsapp
-          ? vendorReady
-            ? 'Ready: tenant gets the WhatsApp reminder and Pay Now link. After payment, Cashfree splits the full rent to the owner and Peacely marks the invoice Paid.'
-            : 'Connect the owner settlement account above before sending live rent payment links.'
-          : 'Connect Cashfree and WhatsApp Cloud API in Railway environment variables first.'}
-      </div>
+      <label className="detail-item">
+        <span>Overdue reminders</span>
+        <input
+          type="checkbox"
+          checked={automationSettings.overdue_reminders_enabled}
+          onChange={(e) =>
+            setAutomationSettings((current) => ({
+              ...current,
+              overdue_reminders_enabled: e.target.checked,
+            }))
+          }
+        />
+      </label>
+
+      <label className="detail-item">
+        <span>Automatic monthly invoices</span>
+        <input
+          type="checkbox"
+          checked={automationSettings.recurring_invoices_enabled}
+          onChange={(e) =>
+            setAutomationSettings((current) => ({
+              ...current,
+              recurring_invoices_enabled: e.target.checked,
+            }))
+          }
+        />
+      </label>
+
+      <button
+        type="button"
+        className="btn-primary full-btn"
+        onClick={saveAutomation}
+        disabled={savingAutomation}
+      >
+        {savingAutomation ? 'Saving...' : 'Save Rent Automation'}
+      </button>
+
+      {message && <div className="small-empty">{message}</div>}
+
+      <button
+        type="button"
+        className="btn-secondary full-btn"
+        onClick={onClose}
+        style={{ marginTop: 10 }}
+      >
+        Close
+      </button>
     </div>
   );
 }
@@ -4549,7 +4649,6 @@ function PaymentsView({
         title="Payments"
         subtitle={`${money(total)} collected`}
       />
-      <PaymentAutomationCard />
       <input
         className="search-input"
         placeholder="Search tenant, invoice, property, month or method..."
@@ -4581,7 +4680,7 @@ function PaymentsView({
         </div>
       ))}
       {payments.length === 0 && (
-        <EmptyCard icon="₹" title="No payments found" text="Successful online payments will appear here automatically." />
+        <EmptyCard icon="₹" title="No payments found" text="Owner-confirmed rent payments will appear here automatically." />
       )}
     </div>
   );
@@ -4592,11 +4691,15 @@ function InvoicesView({
   search,
   setSearch,
   getBalance,
+  onMarkPaid,
+  markingInvoiceId,
 }: {
   invoices: Invoice[];
   search: string;
   setSearch: (value: string) => void;
   getBalance: (invoice: Invoice) => number;
+  onMarkPaid: (invoice: Invoice) => void;
+  markingInvoiceId: number | null;
 }) {
   return (
     <div className="view-container">
@@ -4613,6 +4716,7 @@ function InvoicesView({
       {invoices.map((invoice) => {
         const balance = getBalance(invoice);
         const paid = Number(invoice.paid_amount || 0);
+        const isPaid = normalize(invoice.status) === 'paid';
         const percentage = Math.min(
           Math.round(
             Number(
@@ -4641,18 +4745,22 @@ function InvoicesView({
             </div>
             <div className="glass-footer">
               <span>{invoice.month || '-'} · {percentage}% paid</span>
-              <span className={invoice.payment_link_url ? 'status paid' : 'status pending'}>
-                {invoice.payment_link_url ? 'Pay Link Ready' : 'Payment Link Pending'}
+              <span className={isPaid ? 'status paid' : 'status pending'}>
+                {isPaid ? 'Payment Confirmed' : 'Awaiting Owner Confirmation'}
               </span>
             </div>
             <div className="progress-bar-bg">
               <div className="progress-bar-fill" style={{ width: `${percentage}%` }} />
             </div>
-            {invoice.payment_link_url && normalize(invoice.status) !== 'paid' && (
+            {!isPaid && balance > 0 && (
               <div className="tenant-actions">
-                <a className="btn-secondary" href={invoice.payment_link_url} target="_blank" rel="noreferrer">
-                  Open Payment Link
-                </a>
+                <button
+                  className="btn-primary"
+                  onClick={() => onMarkPaid(invoice)}
+                  disabled={markingInvoiceId === invoice.id}
+                >
+                  {markingInvoiceId === invoice.id ? 'Confirming...' : 'Mark as Paid'}
+                </button>
               </div>
             )}
           </div>
