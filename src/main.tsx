@@ -4560,6 +4560,7 @@ function AccountSettingsModal({
   const [savingPaymentDetails, setSavingPaymentDetails] = useState(false);
   const [savingAutomation, setSavingAutomation] = useState(false);
   const [message, setMessage] = useState('');
+  const [testWhatsappPhone, setTestWhatsappPhone] = useState('');
 
   useEffect(() => {
     const load = async () => {
