@@ -71,7 +71,25 @@ try {
       created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(owner_id,property_id,building_name,floor_name)
     );
+    ALTER TABLE property_levels ADD COLUMN IF NOT EXISTS property_id INTEGER;
     CREATE INDEX IF NOT EXISTS idx_property_levels_owner_property ON property_levels(owner_id,property_id);
+
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'property_levels_property_id_fkey'
+      ) THEN
+        ALTER TABLE property_levels
+        ADD CONSTRAINT property_levels_property_id_fkey
+        FOREIGN KEY (property_id)
+        REFERENCES properties(id)
+        ON DELETE CASCADE;
+      END IF;
+    EXCEPTION
+      WHEN duplicate_object THEN NULL;
+    END $$;
 
     CREATE TABLE IF NOT EXISTS tenant_documents (
       id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, tenant_id INTEGER NOT NULL,
