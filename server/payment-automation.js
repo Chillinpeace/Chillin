@@ -578,7 +578,6 @@ router.post('/payment-automation/invoices/:id/mark-paid', auth, async (req, res)
       success: true,
       already_paid: result.alreadyPaid,
       invoice: result.invoice,
-      receipt_sent: whatsappConfigured(),
       message: result.alreadyPaid
         ? 'Invoice is already paid.'
         : 'Payment confirmed and invoice marked as paid.',
