@@ -103,6 +103,7 @@ async function ensurePaymentColumns() {
     ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(100) DEFAULT '',
+      ADD COLUMN IF NOT EXISTS payment_link_cf_id VARCHAR(100) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_url TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_status VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_created_at TIMESTAMPTZ,
@@ -171,7 +172,8 @@ async function createPaymentLink(invoice) {
     `UPDATE invoices
      SET payment_provider='cashfree',
          payment_link_id=$1,
-         payment_link_url=$2,
+         payment_link_cf_id=$2,
+         payment_link_url=$3,
          payment_link_status=$3,
          payment_link_created_at=CURRENT_TIMESTAMP,
          payment_link_paid_amount=$4,
@@ -179,6 +181,7 @@ async function createPaymentLink(invoice) {
      WHERE id=$5`,
     [
       clean(data?.link_id) || linkId,
+      clean(data?.cf_link_id),
       clean(data?.link_url),
       clean(data?.link_status) || 'ACTIVE',
       num(data?.link_amount_paid),
@@ -247,11 +250,21 @@ async function fetchCashfreeLink(linkId) {
 async function markInvoicePaidFromCashfree(linkId, fallbackAmount = 0) {
   if (!linkId) return null;
 
-  const link = await fetchCashfreeLink(linkId);
+  const reference = await query(
+    `SELECT id,payment_link_id
+     FROM invoices
+     WHERE payment_link_id=$1 OR payment_link_cf_id=$1
+     ORDER BY id DESC
+     LIMIT 1`,
+    [String(linkId)],
+  );
+
+  const merchantLinkId = reference.rows[0]?.payment_link_id || String(linkId);
+  const link = await fetchCashfreeLink(merchantLinkId);
   if (!link) return null;
 
   const notes = link.link_notes || {};
-  const invoiceId = Number(notes.invoice_id || 0);
+  const invoiceId = Number(notes.invoice_id || reference.rows[0]?.id || 0);
   if (!Number.isInteger(invoiceId) || invoiceId <= 0) return null;
 
   const invoice = await loadInvoice(invoiceId);
