@@ -52,17 +52,15 @@
     if (!state.selectedProperty && state.properties[0]) state.selectedProperty=String(state.properties[0].id);
     if (!state.selectedTenant && state.tenants[0]) state.selectedTenant=String(state.tenants[0].id);
     await loadSettings();
-    await loadDocuments();
   }
 
   async function loadSettings() { try { state.settings = await api('/nivaasi-upgrades/rent-settings'); } catch { state.settings=null; } }
-  async function loadDocuments() { if (!state.selectedTenant) { state.documents=[]; return; } try { state.documents=await api(`/nivaasi-upgrades/documents?tenant_id=${encodeURIComponent(state.selectedTenant)}`); } catch { state.documents=[]; } }
   async function loadFinance() { state.finance=await api(`/nivaasi-upgrades/finance?month=${month()}`); }
 
   function selectOptions(items, value, label) { return items.map(item=>`<option value="${item.id}" ${String(item.id)===String(value)?'selected':''}>${esc(label(item))}</option>`).join(''); }
 
   function render() {
-    const tabNames = [['setup','Property Setup'],['tenants','Documents'],['rent','Rent Automation'],['finance','Finance'],['receipts','Receipts']];
+    const tabNames = [['setup','Property Setup'],['rent','Rent Automation'],['finance','Finance'],['receipts','Receipts']];
     root.innerHTML = `
       <button class="pn-trigger" id="pn-open">⚙ More</button>
       <div class="pn-backdrop" id="pn-backdrop">
@@ -128,12 +126,10 @@
   function bind() {
     const q=(id)=>root.querySelector(`#${id}`);
     if(q('pn-property')) q('pn-property').onchange=async e=>{state.selectedProperty=e.target.value;state.selectedRoom='';render();root.querySelector('#pn-backdrop').classList.add('open');};
-    if(q('pn-tenant')) q('pn-tenant').onchange=async e=>{state.selectedTenant=e.target.value;await loadDocuments();render();root.querySelector('#pn-backdrop').classList.add('open');};
     if(q('pn-bed-room')) q('pn-bed-room').onchange=e=>state.selectedRoom=e.target.value;
     if(q('pn-save-level')) q('pn-save-level').onclick=async()=>{try{await api('/nivaasi-upgrades/structure',{method:'POST',body:JSON.stringify({property_id:Number(state.selectedProperty),building_name:q('pn-building').value,floor_name:q('pn-floor').value})});await loadBase();toast('Building and floor saved.');render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
     if(q('pn-add-room')) q('pn-add-room').onclick=async()=>{try{if(!state.selectedProperty||!q('pn-room').value.trim())throw new Error('Select a property and enter a room number.');await api('/rooms',{method:'POST',body:JSON.stringify({property_id:Number(state.selectedProperty),room_number:q('pn-room').value.trim(),sharing_type:q('pn-sharing').value,rent_amount:Number(q('pn-room-rent').value)||0})});await loadBase();toast('Room added. Now add its bed.');render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
     if(q('pn-add-bed')) q('pn-add-bed').onclick=async()=>{try{if(!q('pn-bed-room').value||!q('pn-bed').value.trim())throw new Error('Select a room and enter a bed number.');await api('/beds',{method:'POST',body:JSON.stringify({room_id:Number(q('pn-bed-room').value),bed_number:q('pn-bed').value.trim()})});await loadBase();toast('Bed added.');render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
-    if(q('pn-save-doc')) q('pn-save-doc').onclick=async()=>{try{let url=q('pn-doc-url').value.trim();const file=q('pn-doc-file').files[0];if(file){if(file.size>700*1024)throw new Error('File is larger than 700 KB.');url=await new Promise((resolve,reject)=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.onerror=reject;r.readAsDataURL(file);});}if(!q('pn-doc-title').value.trim())throw new Error('Document title is required.');await api('/nivaasi-upgrades/documents',{method:'POST',body:JSON.stringify({tenant_id:Number(state.selectedTenant),document_type:q('pn-doc-type').value,title:q('pn-doc-title').value.trim(),document_url:url,notes:q('pn-doc-notes').value.trim()})});await loadDocuments();toast('Document saved.');render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
     if(q('pn-save-settings')) q('pn-save-settings').onclick=async()=>{try{state.settings=await api('/nivaasi-upgrades/rent-settings',{method:'PUT',body:JSON.stringify({recurring_invoices_enabled:q('pn-recurring').checked,late_fee_enabled:q('pn-late-enabled').checked,late_fee_type:q('pn-late-type').value,late_fee_amount:Number(q('pn-late-amount').value)||0,grace_days:Number(q('pn-grace').value)||0,reminder_days_before:Number(q('pn-before').value)||0,whatsapp_enabled:q('pn-wa').checked,sms_enabled:q('pn-sms').checked,email_enabled:q('pn-email').checked,overdue_reminders_enabled:q('pn-overdue').checked})});toast('Automation settings saved.');render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
     if(q('pn-apply-fees')) q('pn-apply-fees').onclick=async()=>{try{const r=await api('/nivaasi-upgrades/apply-late-fees',{method:'POST',body:'{}'});toast(`${r.applied||0} late fee(s) applied.`);await loadBase();render();root.querySelector('#pn-backdrop').classList.add('open');}catch(e){toast(e.message)}};
     root.querySelectorAll('[data-receipt]').forEach(b=>b.onclick=()=>{const p=state.payments.find(x=>String(x.id)===String(b.dataset.receipt));if(p)printReceipt(p);});
