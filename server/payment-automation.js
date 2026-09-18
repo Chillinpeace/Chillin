@@ -62,12 +62,12 @@ const whatsappVersion = () => process.env.WHATSAPP_GRAPH_VERSION || 'v23.0';
 
 const normalizePhone = (value) => {
   let phone = String(value || '').replace(/[^0-9]/g, '');
-  if (phone.length === 10) phone = \`91\${phone}\`;
+  if (phone.length === 10) phone = `91${phone}`;
   return phone;
 };
 
 async function ensurePaymentColumns() {
-  await query(\`
+  await query(`
     ALTER TABLE invoices
       ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(100) DEFAULT '',
@@ -101,7 +101,7 @@ async function ensurePaymentColumns() {
       payment_instructions TEXT DEFAULT '',
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
-  \`);
+  `);
 }
 
 async function getOwnerPaymentDetails(ownerId) {
@@ -114,7 +114,7 @@ async function getOwnerPaymentDetails(ownerId) {
 
 async function loadInvoice(invoiceId) {
   const result = await query(
-    \`SELECT
+    `SELECT
        i.id,i.invoice_number,i.tenant_id,i.amount,i.month,i.due_date,i.status,
        i.paid_amount,i.payment_link_url,i.payment_link_status,i.payment_token,
        t.name AS tenant_name,t.phone,t.email,p.name AS property_name,p.address
@@ -122,7 +122,7 @@ async function loadInvoice(invoiceId) {
      INNER JOIN tenants t ON t.id=i.tenant_id
      INNER JOIN properties p ON p.id=t.property_id
      WHERE i.id=$1
-     LIMIT 1\`,
+     LIMIT 1`,
     [invoiceId],
   );
   return result.rows[0] || null;
@@ -130,10 +130,10 @@ async function loadInvoice(invoiceId) {
 
 async function ownerOwnsInvoice(ownerId, invoiceId) {
   const result = await query(
-    \`SELECT i.id FROM invoices i
+    `SELECT i.id FROM invoices i
      INNER JOIN tenants t ON t.id=i.tenant_id
      INNER JOIN properties p ON p.id=t.property_id
-     WHERE i.id=$1 AND p.owner_id=$2 LIMIT 1\`,
+     WHERE i.id=$1 AND p.owner_id=$2 LIMIT 1`,
     [invoiceId, ownerId],
   );
   return Boolean(result.rows.length);
@@ -158,11 +158,11 @@ async function sendWhatsAppTemplate(to, templateName, bodyTexts = []) {
   if (!whatsappConfigured() || !templateName) return null;
 
   const response = await fetch(
-    \`https://graph.facebook.com/\${whatsappVersion()}/\${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages\`,
+    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
     {
       method: 'POST',
       headers: {
-        Authorization: \`Bearer \${process.env.WHATSAPP_ACCESS_TOKEN}\`,
+        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -190,7 +190,7 @@ async function sendWhatsAppTemplate(to, templateName, bodyTexts = []) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error?.message || \`WhatsApp request failed: \${response.status}\`);
+    throw new Error(data?.error?.message || `WhatsApp request failed: ${response.status}`);
   }
   return data;
 }
@@ -206,14 +206,14 @@ async function buildInvoicePdf(invoice) {
   doc.moveDown();
   doc.fontSize(18).text('Paid Rent Invoice', { align: 'center' });
   doc.moveDown(1.5);
-  doc.fontSize(11).text(\`Invoice: \${invoice.invoice_number}\`);
-  doc.text(\`Tenant: \${invoice.tenant_name}\`);
-  doc.text(\`Property: \${invoice.property_name}\`);
-  doc.text(\`Month: \${invoice.month || '-'}\`);
-  doc.text(\`Due date: \${invoice.due_date}\`);
+  doc.fontSize(11).text(`Invoice: ${invoice.invoice_number}`);
+  doc.text(`Tenant: ${invoice.tenant_name}`);
+  doc.text(`Property: ${invoice.property_name}`);
+  doc.text(`Month: ${invoice.month || '-'}`);
+  doc.text(`Due date: ${invoice.due_date}`);
   doc.text('Payment status: PAID');
   doc.moveDown();
-  doc.fontSize(14).text(\`Amount paid: ₹\${num(invoice.paid_amount).toLocaleString('en-IN')}\`);
+  doc.fontSize(14).text(`Amount paid: ₹${num(invoice.paid_amount).toLocaleString('en-IN')}`);
   doc.moveDown(2);
   doc.fontSize(10).text('Payment was confirmed by the property owner in Peacely.');
   doc.moveDown();
@@ -237,14 +237,14 @@ async function sendPaidInvoice(invoiceId) {
     [token, invoiceId],
   );
 
-  const publicUrl = \`\${baseUrl()}/api/payment-automation/receipt/\${token}.pdf\`;
+  const publicUrl = `${baseUrl()}/api/payment-automation/receipt/${token}.pdf`;
 
   const response = await fetch(
-    \`https://graph.facebook.com/\${whatsappVersion()}/\${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages\`,
+    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
     {
       method: 'POST',
       headers: {
-        Authorization: \`Bearer \${process.env.WHATSAPP_ACCESS_TOKEN}\`,
+        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -254,8 +254,8 @@ async function sendPaidInvoice(invoiceId) {
         type: 'document',
         document: {
           link: publicUrl,
-          filename: \`\${invoice.invoice_number}.pdf\`,
-          caption: \`Paid rent invoice \${invoice.invoice_number}\`,
+          filename: `${invoice.invoice_number}.pdf`,
+          caption: `Paid rent invoice ${invoice.invoice_number}`,
         },
       }),
     },
@@ -263,7 +263,7 @@ async function sendPaidInvoice(invoiceId) {
 
   const data = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(data?.error?.message || \`WhatsApp receipt failed: \${response.status}\`);
+    throw new Error(data?.error?.message || `WhatsApp receipt failed: ${response.status}`);
   }
 
   return true;
@@ -287,13 +287,13 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
   }
 
   await query(
-    \`UPDATE invoices
+    `UPDATE invoices
      SET paid_amount=amount,
          status='Paid',
          paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP),
          payment_link_status='manual_owner_confirmed',
          updated_at=CURRENT_TIMESTAMP
-     WHERE id=$1 AND paid_amount < amount\`,
+     WHERE id=$1 AND paid_amount < amount`,
     [invoiceId],
   );
 
@@ -304,8 +304,8 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
 
   if (!existing.rows.length) {
     await query(
-      \`INSERT INTO payments(tenant_id,invoice_id,amount,payment_date,payment_method,payment_month,notes)
-       VALUES($1,$2,$3,CURRENT_DATE,$4,$5,$6)\`,
+      `INSERT INTO payments(tenant_id,invoice_id,amount,payment_date,payment_method,payment_month,notes)
+       VALUES($1,$2,$3,CURRENT_DATE,$4,$5,$6)`,
       [
         invoice.tenant_id,
         invoiceId,
@@ -320,21 +320,21 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
   const updatedInvoice = await loadInvoice(invoiceId);
 
   await query(
-    \`INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,sent_at)
-     VALUES($1,$2,$3,'system','payment_confirmed',$4,$5,'sent',CURRENT_TIMESTAMP)\`,
+    `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,sent_at)
+     VALUES($1,$2,$3,'system','payment_confirmed',$4,$5,'sent',CURRENT_TIMESTAMP)`,
     [
       ownerId,
       updatedInvoice.tenant_id,
       invoiceId,
       normalizePhone(updatedInvoice.phone),
-      \`Payment confirmed for \${updatedInvoice.invoice_number}: ₹\${num(updatedInvoice.amount).toLocaleString('en-IN')}\`,
+      `Payment confirmed for ${updatedInvoice.invoice_number}: ₹${num(updatedInvoice.amount).toLocaleString('en-IN')}`,
     ],
   );
 
   try {
     await sendPaidInvoice(invoiceId);
   } catch (error) {
-    console.error(\`Paid invoice WhatsApp failed for invoice \${invoiceId}:\`, error.message);
+    console.error(`Paid invoice WhatsApp failed for invoice ${invoiceId}:`, error.message);
   }
 
   return { invoice: await loadInvoice(invoiceId), alreadyPaid: false };
@@ -356,13 +356,13 @@ function dueDateForMonth(year, monthIndex, dueDay) {
 }
 
 async function createDueInvoices() {
-  const owners = await query(\`
+  const owners = await query(`
     SELECT DISTINCT p.owner_id
     FROM properties p
     INNER JOIN tenants t ON t.property_id=p.id
     WHERE LOWER(COALESCE(t.status,''))='active'
       AND COALESCE(t.monthly_rent,0)>0
-  \`);
+  `);
 
   let created = 0;
 
@@ -386,10 +386,10 @@ async function createDueInvoices() {
     const reminderDays = Math.max(0, Math.min(30, Number(settings.reminder_days_before || 3)));
 
     const tenants = await query(
-      \`SELECT t.id,t.name,t.phone,t.email,t.monthly_rent,t.due_date,p.name AS property_name
+      `SELECT t.id,t.name,t.phone,t.email,t.monthly_rent,t.due_date,p.name AS property_name
        FROM tenants t
        INNER JOIN properties p ON p.id=t.property_id
-       WHERE p.owner_id=$1 AND LOWER(COALESCE(t.status,''))='active' AND COALESCE(t.monthly_rent,0)>0\`,
+       WHERE p.owner_id=$1 AND LOWER(COALESCE(t.status,''))='active' AND COALESCE(t.monthly_rent,0)>0`,
       [owner.owner_id],
     );
 
@@ -403,23 +403,23 @@ async function createDueInvoices() {
       if (todayIso < isoDate(threshold)) continue;
 
       const existing = await query(
-        \`SELECT id,status FROM invoices
+        `SELECT id,status FROM invoices
          WHERE tenant_id=$1 AND due_date >= date_trunc('month',$2::date)
            AND due_date < date_trunc('month',$2::date)+INTERVAL '1 month'
-         ORDER BY id DESC LIMIT 1\`,
+         ORDER BY id DESC LIMIT 1`,
         [tenant.id, dueIso],
       );
 
       let invoiceId = existing.rows[0]?.id || null;
 
       if (!invoiceId) {
-        const invoiceNumber = \`INV-\${Date.now()}-\${crypto.randomBytes(3).toString('hex').toUpperCase()}\`;
+        const invoiceNumber = `INV-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
         const result = await query(
-          \`INSERT INTO invoices(invoice_number,tenant_id,amount,month,due_date,status,paid_amount,delivery_status,payment_token)
+          `INSERT INTO invoices(invoice_number,tenant_id,amount,month,due_date,status,paid_amount,delivery_status,payment_token)
            VALUES($1,$2,$3,$4,$5::date,
              CASE WHEN $5::date < CURRENT_DATE THEN 'Overdue' ELSE 'Pending' END,
              0,'Not Sent',$6)
-           RETURNING id\`,
+           RETURNING id`,
           [
             invoiceNumber,
             tenant.id,
@@ -452,41 +452,41 @@ async function sendDueReminderIfNeeded(invoice, settings) {
 
   const paymentDetails = await getOwnerPaymentDetails(
     (await query(
-      \`SELECT p.owner_id
+      `SELECT p.owner_id
        FROM invoices i
        INNER JOIN tenants t ON t.id=i.tenant_id
        INNER JOIN properties p ON p.id=t.property_id
-       WHERE i.id=$1 LIMIT 1\`,
+       WHERE i.id=$1 LIMIT 1`,
       [invoice.id],
     )).rows[0]?.owner_id,
   );
 
   if (!paymentDetails || (!clean(paymentDetails.upi_id) && !clean(paymentDetails.phone) && !clean(paymentDetails.qr_code_data))) {
-    console.warn(\`No owner payment details configured for invoice \${invoice.id}; reminder skipped.\`);
+    console.warn(`No owner payment details configured for invoice ${invoice.id}; reminder skipped.`);
     return false;
   }
 
   const today = new Date();
-  const due = new Date(\`\${invoice.due_date}T00:00:00Z\`);
+  const due = new Date(`${invoice.due_date}T00:00:00Z`);
   const daysUntilDue = Math.round((due.getTime() - new Date(isoDate(today)).getTime()) / 86400000);
   const reminderType = daysUntilDue < 0 ? 'payment_overdue' : 'payment_due';
   if (daysUntilDue < 0 && !settings.overdue_reminders_enabled) return false;
 
   const exists = await query(
-    \`SELECT id FROM notifications
+    `SELECT id FROM notifications
      WHERE invoice_id=$1 AND type=$2 AND created_at::date=CURRENT_DATE
-     LIMIT 1\`,
+     LIMIT 1`,
     [invoice.id, reminderType],
   );
   if (exists.rows.length) return false;
 
   const paymentToken = await createPaymentToken(invoice.id);
-  const paymentPageUrl = \`\${baseUrl()}/api/payment-automation/pay/\${paymentToken}\`;
+  const paymentPageUrl = `${baseUrl()}/api/payment-automation/pay/${paymentToken}`;
   const template = process.env.WHATSAPP_REMINDER_TEMPLATE || 'peacely_rent_due';
 
   const paymentSummary = [
-    clean(paymentDetails.upi_id) ? \`UPI: \${paymentDetails.upi_id}\` : '',
-    clean(paymentDetails.phone) ? \`Phone: \${paymentDetails.phone}\` : '',
+    clean(paymentDetails.upi_id) ? `UPI: ${paymentDetails.upi_id}` : '',
+    clean(paymentDetails.phone) ? `Phone: ${paymentDetails.phone}` : '',
     paymentPageUrl,
   ].filter(Boolean).join(' | ');
 
@@ -496,31 +496,31 @@ async function sendDueReminderIfNeeded(invoice, settings) {
       template,
       [
         invoice.tenant_name,
-        \`₹\${num(invoice.amount).toLocaleString('en-IN')}\`,
+        `₹${num(invoice.amount).toLocaleString('en-IN')}`,
         invoice.due_date,
         paymentPageUrl,
       ],
     );
 
     await query(
-      \`INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,provider_message_id,sent_at)
+      `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,provider_message_id,sent_at)
        SELECT p.owner_id,$1,$2,'whatsapp',$3,$4,$5,'sent',$6,CURRENT_TIMESTAMP
        FROM properties p
        INNER JOIN tenants t ON t.property_id=p.id
        WHERE t.id=$1
-       LIMIT 1\`,
+       LIMIT 1`,
       [
         invoice.tenant_id,
         invoice.id,
         reminderType,
         normalizePhone(invoice.phone),
-        \`Automatic rent reminder. Pay directly to owner. \${paymentSummary}\`,
+        `Automatic rent reminder. Pay directly to owner. ${paymentSummary}`,
         result?.messages?.[0]?.id || '',
       ],
     );
     return true;
   } catch (error) {
-    console.error(\`WhatsApp reminder failed for invoice \${invoice.id}:\`, error.message);
+    console.error(`WhatsApp reminder failed for invoice ${invoice.id}:`, error.message);
     return false;
   }
 }
@@ -539,23 +539,23 @@ router.get('/payment-automation/status', auth, async (req, res) => {
 
   const [pending, recent] = await Promise.all([
     query(
-      \`SELECT COUNT(*)::integer AS count
+      `SELECT COUNT(*)::integer AS count
        FROM invoices i
        INNER JOIN tenants t ON t.id=i.tenant_id
        INNER JOIN properties p ON p.id=t.property_id
        WHERE p.owner_id=$1
          AND LOWER(COALESCE(i.status,'')) NOT IN ('paid','cancelled')
-         AND GREATEST(i.amount-COALESCE(i.paid_amount,0),0)>0\`,
+         AND GREATEST(i.amount-COALESCE(i.paid_amount,0),0)>0`,
       [req.paymentOwner.id],
     ),
     query(
-      \`SELECT COUNT(*)::integer AS count
+      `SELECT COUNT(*)::integer AS count
        FROM invoices i
        INNER JOIN tenants t ON t.id=i.tenant_id
        INNER JOIN properties p ON p.id=t.property_id
        WHERE p.owner_id=$1
          AND LOWER(COALESCE(i.status,''))='paid'
-         AND i.paid_at::date >= CURRENT_DATE-INTERVAL '30 days'\`,
+         AND i.paid_at::date >= CURRENT_DATE-INTERVAL '30 days'`,
       [req.paymentOwner.id],
     ),
   ]);
@@ -620,14 +620,14 @@ router.put('/payment-automation/payment-details', auth, async (req, res) => {
   }
 
   await query(
-    \`INSERT INTO owner_payment_details(owner_id,upi_id,phone,qr_code_data,payment_instructions,updated_at)
+    `INSERT INTO owner_payment_details(owner_id,upi_id,phone,qr_code_data,payment_instructions,updated_at)
      VALUES($1,$2,$3,$4,$5,CURRENT_TIMESTAMP)
      ON CONFLICT(owner_id) DO UPDATE SET
        upi_id=EXCLUDED.upi_id,
        phone=EXCLUDED.phone,
        qr_code_data=EXCLUDED.qr_code_data,
        payment_instructions=EXCLUDED.payment_instructions,
-       updated_at=CURRENT_TIMESTAMP\`,
+       updated_at=CURRENT_TIMESTAMP`,
     [req.paymentOwner.id, upiId, phone, qrCodeData, paymentInstructions],
   );
 
@@ -673,7 +673,7 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
 
   await ensurePaymentColumns();
   const result = await query(
-    \`SELECT
+    `SELECT
        i.id,i.invoice_number,i.amount,i.month,i.due_date,i.status,i.paid_amount,
        t.name AS tenant_name,p.name AS property_name,
        p.owner_id,o.name AS owner_name,
@@ -684,7 +684,7 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
      INNER JOIN owners o ON o.id=p.owner_id
      LEFT JOIN owner_payment_details opd ON opd.owner_id=p.owner_id
      WHERE i.payment_token=$1
-     LIMIT 1\`,
+     LIMIT 1`,
     [token],
   );
 
@@ -700,11 +700,11 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
     .replace(/'/g, '&#039;');
 
   const upiLink = clean(invoice.upi_id)
-    ? \`upi://pay?pa=\${encodeURIComponent(invoice.upi_id)}&pn=\${encodeURIComponent(invoice.owner_name || 'Owner')}&am=\${encodeURIComponent(num(invoice.amount))}&cu=INR\`
+    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&pn=${encodeURIComponent(invoice.owner_name || 'Owner')}&am=${encodeURIComponent(num(invoice.amount))}&cu=INR`
     : '';
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  res.send(\`<!doctype html>
+  res.send(`<!doctype html>
 <html lang="en">
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -718,19 +718,19 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
 <body>
 <div class="card">
   <div class="muted">Peacely rent payment</div>
-  <h1>\${escapeHtml(invoice.property_name || 'Property')}</h1>
-  <div class="muted">Tenant: \${escapeHtml(invoice.tenant_name)}</div>
-  <div class="amount">₹\${num(invoice.amount).toLocaleString('en-IN')}</div>
-  <div class="muted">Invoice \${escapeHtml(invoice.invoice_number)} · Due \${escapeHtml(invoice.due_date)}</div>
-  \${upiLink ? \`<a class="pay" href="\${upiLink}">Pay with UPI</a>\` : ''}
-  \${clean(invoice.upi_id) ? \`<div class="detail"><strong>UPI ID</strong><br>\${escapeHtml(invoice.upi_id)}</div>\` : ''}
-  \${clean(invoice.phone) ? \`<div class="detail"><strong>Phone</strong><br>\${escapeHtml(invoice.phone)}</div>\` : ''}
-  \${qr ? \`<img class="qr" src="\${qr}" alt="Owner UPI QR code">\` : ''}
-  \${clean(invoice.payment_instructions) ? \`<div class="detail note">\${escapeHtml(invoice.payment_instructions)}</div>\` : ''}
+  <h1>${escapeHtml(invoice.property_name || 'Property')}</h1>
+  <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
+  <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
+  <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
+  ${upiLink ? `<a class="pay" href="${upiLink}">Pay with UPI</a>` : ''}
+  ${clean(invoice.upi_id) ? `<div class="detail"><strong>UPI ID</strong><br>${escapeHtml(invoice.upi_id)}</div>` : ''}
+  ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
+  ${qr ? `<img class="qr" src="${qr}" alt="Owner UPI QR code">` : ''}
+  ${clean(invoice.payment_instructions) ? `<div class="detail note">${escapeHtml(invoice.payment_instructions)}</div>` : ''}
   <div class="detail"><strong>After paying</strong><br>Inform the property owner. The owner will confirm the payment in Peacely and your paid invoice will be sent automatically.</div>
 </div>
 </body>
-</html>\`);
+</html>`);
 });
 
 router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
@@ -739,12 +739,12 @@ router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
 
   await ensurePaymentColumns();
   const result = await query(
-    \`SELECT i.*,t.name AS tenant_name,t.phone,p.name AS property_name
+    `SELECT i.*,t.name AS tenant_name,t.phone,p.name AS property_name
      FROM invoices i
      INNER JOIN tenants t ON t.id=i.tenant_id
      INNER JOIN properties p ON p.id=t.property_id
      WHERE i.receipt_token=$1 AND LOWER(COALESCE(i.status,''))='paid'
-     LIMIT 1\`,
+     LIMIT 1`,
     [token],
   );
 
@@ -752,7 +752,7 @@ router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
 
   const pdf = await buildInvoicePdf(result.rows[0]);
   res.setHeader('Content-Type', 'application/pdf');
-  res.setHeader('Content-Disposition', \`inline; filename="\${result.rows[0].invoice_number}.pdf"\`);
+  res.setHeader('Content-Disposition', `inline; filename="${result.rows[0].invoice_number}.pdf"`);
   res.end(pdf);
 });
 
@@ -763,7 +763,7 @@ router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, re
     return res.status(404).json({ success: false, error: 'Invoice not found.' });
   }
   const token = await createPaymentToken(id);
-  return res.json({ success: true, url: \`\${baseUrl()}/api/payment-automation/pay/\${token}\` });
+  return res.json({ success: true, url: `${baseUrl()}/api/payment-automation/pay/${token}` });
 });
 
 router.get('/payment-automation/settings', auth, async (req, res) => {
