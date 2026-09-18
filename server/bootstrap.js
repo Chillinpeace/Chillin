@@ -5,6 +5,7 @@ import phase59Router from './phase5-9.js';
 import phase7OperationsRouter from './phase7-operations.js';
 import financialPdfRouter from './financial-pdf.js';
 import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
+import paymentAutomationRouter, { runPaymentAutomation } from './payment-automation.js';
 import { query } from './database.js';
 
 const { Client } = pg;
@@ -98,6 +99,15 @@ try {
     );
     CREATE INDEX IF NOT EXISTS idx_tenant_documents_owner_tenant ON tenant_documents(owner_id,tenant_id);
 
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(40) DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(100) DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_url TEXT DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_status VARCHAR(40) DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_created_at TIMESTAMPTZ;
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_paid_amount NUMERIC(12,2) DEFAULT 0;
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT '';
+    CREATE INDEX IF NOT EXISTS idx_invoices_payment_link_id ON invoices(payment_link_id);
+
     CREATE TABLE IF NOT EXISTS rent_settings (
       owner_id INTEGER PRIMARY KEY, recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       late_fee_enabled BOOLEAN NOT NULL DEFAULT TRUE, late_fee_type VARCHAR(20) NOT NULL DEFAULT 'flat',
@@ -122,9 +132,17 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', phase7OperationsRouter);
     originalUse.call(this, '/api', phase59Router);
     originalUse.call(this, '/api', nivaasiUpgradesRouter);
+    originalUse.call(this, '/api', paymentAutomationRouter);
     phaseRoutersMounted = true;
   }
   return result;
 };
 
 await import('./index.js');
+
+setTimeout(() => {
+  runPaymentAutomation().catch((error) => console.error('Initial payment automation failed:', error));
+}, 5000);
+setInterval(() => {
+  runPaymentAutomation().catch((error) => console.error('Scheduled payment automation failed:', error));
+}, 5 * 60 * 1000);
