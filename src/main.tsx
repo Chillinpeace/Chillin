@@ -4214,6 +4214,7 @@ function TenantsView({
   getTenantPaid,
   getTenantPending,
   openTenantDetails,
+  onMoveOut,
 }: {
   tenants: Tenant[];
   searchQuery: string;
@@ -4255,6 +4256,7 @@ function TenantsView({
   openTenantDetails: (
     tenant: Tenant,
   ) => void;
+  onMoveOut: (tenant: Tenant) => void;
 }) {
   return (
     <div className="view-container">
@@ -4494,6 +4496,14 @@ function TenantsView({
                   Details
                 </button>
 
+                {!tenant.move_out_date && normalize(tenant.status) !== 'inactive' && normalize(tenant.status) !== 'moved out' && (
+                  <button
+                    className="btn-secondary move-out-inline-btn"
+                    onClick={() => onMoveOut(tenant)}
+                  >
+                    Move Out
+                  </button>
+                )}
               </div>
             </div>
           );
