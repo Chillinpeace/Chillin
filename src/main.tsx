@@ -150,6 +150,8 @@ interface FinanceSummary {
   paid_invoice_count: number;
   overdue_invoice_count: number;
   collection_rate: number;
+  expenses: number;
+  net: number;
 }
 
 type Tab =
@@ -288,6 +290,8 @@ function App() {
     useState<Payment[]>([]);
   const [invoices, setInvoices] =
     useState<Invoice[]>([]);
+  const [dashboardFinance, setDashboardFinance] =
+    useState<{ expenses: number; net: number }>({ expenses: 0, net: 0 });
 
   const [loading, setLoading] =
     useState(true);
@@ -431,6 +435,7 @@ function App() {
         apiRequest<Payment[]>('/payments'),
         apiRequest<Invoice[]>('/invoices'),
         apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
+        apiRequest<{ expenses?: number; net?: number }>('/nivaasi-upgrades/finance'),
       ]);
 
     const [
@@ -441,6 +446,7 @@ function App() {
       paymentResult,
       invoiceResult,
       structureResult,
+      financeResult,
     ] = results;
 
     const errors: string[] = [];
@@ -548,6 +554,21 @@ function App() {
       errors.push(
         `Property floors: ${structureResult.reason instanceof Error
           ? structureResult.reason.message
+          : 'Failed'}`,
+      );
+    }
+
+    if (financeResult.status === 'fulfilled') {
+      const expenses = Number(financeResult.value?.expenses || 0);
+      setDashboardFinance({
+        expenses,
+        net: Number(financeResult.value?.net ?? 0),
+      });
+    } else {
+      setDashboardFinance({ expenses: 0, net: 0 });
+      errors.push(
+        `Finance: ${financeResult.reason instanceof Error
+          ? financeResult.reason.message
           : 'Failed'}`,
       );
     }
@@ -1906,6 +1927,8 @@ function App() {
           paidInvoiceCount,
         overdue_invoice_count:
           overdueInvoiceCount,
+        expenses: dashboardFinance.expenses,
+        net: dashboardFinance.net,
         collection_rate:
           expected > 0
             ? Math.min(
@@ -1918,7 +1941,7 @@ function App() {
               )
             : 0,
       };
-    }, [invoices]);
+    }, [invoices, dashboardFinance]);
 
   const sendWhatsAppReminder = (
     tenant: Tenant,
@@ -3480,6 +3503,7 @@ function Dashboard({
   overdueTenants,
   upcomingMoveOuts,
   recentPayments,
+  dashboardFinance,
   getTenantPending,
   getTenantPaid,
   openTenantDetails,
@@ -3499,6 +3523,7 @@ function Dashboard({
   overdueTenants: Tenant[];
   upcomingMoveOuts: Tenant[];
   recentPayments: Payment[];
+  dashboardFinance: { expenses: number; net: number };
   getTenantPending: (
     tenant: Tenant,
   ) => number;
@@ -3600,6 +3625,18 @@ function Dashboard({
             properties.length,
           )}
           label="Properties"
+        />
+
+        <Metric
+          icon="💸"
+          value={money(dashboardFinance.expenses)}
+          label="Expenses"
+        />
+
+        <Metric
+          icon="📊"
+          value={money(dashboardFinance.net)}
+          label="Net Cash"
         />
       </div>
 
