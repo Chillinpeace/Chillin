@@ -161,6 +161,7 @@ type Modal =
   | 'payment'
   | 'invoice'
   | 'tenantDetails'
+  | 'reassign'
   | 'accountSettings';
 
 const API = '/api';
@@ -375,6 +376,11 @@ function App() {
     useState('');
   const [tenantMoveInDate, setTenantMoveInDate] =
     useState(today());
+
+  const [reassignTenantId, setReassignTenantId] = useState<number | null>(null);
+  const [reassignPropertyId, setReassignPropertyId] = useState('');
+  const [reassignRoomId, setReassignRoomId] = useState('');
+  const [reassignBedId, setReassignBedId] = useState('');
 
   const [paymentTenantId, setPaymentTenantId] =
     useState('');
@@ -771,6 +777,11 @@ function App() {
     setTenantDeposit('');
     setTenantMoveInDate(today());
 
+    setReassignTenantId(null);
+    setReassignPropertyId('');
+    setReassignRoomId('');
+    setReassignBedId('');
+
     setPaymentTenantId('');
     setPaymentInvoiceId('');
     setPaymentAmount('');
@@ -1038,6 +1049,30 @@ function App() {
     window.location.assign(
       `${API}/payment-automation/invoices/${invoice.id}/payment-page`,
     );
+  };
+
+  const openReassignTenant = (tenant: Tenant) => {
+    setReassignTenantId(tenant.id);
+    setReassignPropertyId(String(tenant.property_id || ''));
+    setReassignRoomId(String(tenant.room_id || ''));
+    setReassignBedId(String(tenant.bed_id || ''));
+    setError('');
+    setActiveModal('reassign');
+  };
+
+  const handleReassignTenant = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!reassignTenantId || !reassignPropertyId) { setError('Please select a property.'); return; }
+    if (!reassignRoomId || !reassignBedId) { setError('Please select a room and an available bed.'); return; }
+    setSaving(true); setError('');
+    try {
+      await apiRequest('/tenants/' + reassignTenantId + '/reassign', {
+        method: 'PATCH',
+        body: JSON.stringify({ property_id: Number(reassignPropertyId), room_id: Number(reassignRoomId), bed_id: Number(reassignBedId) }),
+      });
+      resetForms(); closeModal(); await loadAllData();
+    } catch (err) { setError(err instanceof Error ? err.message : 'Unable to change room or bed.'); }
+    finally { setSaving(false); }
   };
 
   const handleCreateTenant = async (
@@ -1560,6 +1595,10 @@ function App() {
           .slice(0, 6),
       [payments],
     );
+
+  const reassignRooms = rooms.filter((room) => !reassignPropertyId || Number(room.property_id) === Number(reassignPropertyId));
+  const reassignBeds = beds.filter((bed) => !reassignRoomId || Number(bed.room_id) === Number(reassignRoomId));
+  const reassignAvailableBeds = reassignBeds.filter((bed) => !bed.is_occupied || Number(bed.id) === Number(reassignBedId));
 
   const tenantRooms =
     rooms.filter(
@@ -3135,6 +3174,25 @@ function App() {
             </form>
           )}
 
+          {activeModal === 'reassign' && reassignTenantId && (
+            <form onSubmit={handleReassignTenant}>
+              <ModalTitle title="Change Room & Bed" subtitle="Move this tenant to another available bed." />
+              <select className="modal-input" value={reassignPropertyId} onChange={(e) => { setReassignPropertyId(e.target.value); setReassignRoomId(''); setReassignBedId(''); }}>
+                <option value="">Select property</option>
+                {properties.map((property) => <option key={property.id} value={property.id}>{property.name}</option>)}
+              </select>
+              <select className="modal-input" value={reassignRoomId} disabled={!reassignPropertyId} onChange={(e) => { setReassignRoomId(e.target.value); setReassignBedId(''); }}>
+                <option value="">{reassignPropertyId ? 'Select room' : 'Select property first'}</option>
+                {reassignRooms.map((room) => <option key={room.id} value={room.id}>Room {room.room_number}</option>)}
+              </select>
+              <select className="modal-input" value={reassignBedId} disabled={!reassignRoomId} onChange={(e) => setReassignBedId(e.target.value)}>
+                <option value="">{reassignRoomId ? 'Select available bed' : 'Select room first'}</option>
+                {reassignAvailableBeds.map((bed) => <option key={bed.id} value={bed.id}>Bed {bed.bed_number} · Available</option>)}
+              </select>
+              <ModalButtons saving={saving} onCancel={closeModal} />
+            </form>
+          )}
+
           {activeModal ===
             'accountSettings' && (
             <AccountSettingsModal
@@ -3165,6 +3223,8 @@ function App() {
                 onClose={
                   closeModal
                 }
+                onMoveOut={handleTenantMoveOut}
+                onReassign={openReassignTenant}
               />
             )}
         </ModalOverlay>
@@ -4236,6 +4296,7 @@ function TenantsView({
     tenant: Tenant,
   ) => void;
   onMoveOut: (tenant: Tenant) => void;
+  onReassign: (tenant: Tenant) => void;
 }) {
   return (
     <div className="view-container">
@@ -5351,6 +5412,10 @@ function TenantDetails({
           <span>Expected move-out date: {formatDate(tenant.move_out_date)}</span>
         </div>
       ) : null}
+
+      <button type="button" className="btn-secondary full-btn" onClick={() => onReassign(tenant)}>
+        Change Room / Bed
+      </button>
 
       <div className="finance-panel">
         <div>
