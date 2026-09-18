@@ -2910,6 +2910,81 @@ app.patch(
 );
 
 // =====================================================
+// TENANT MOVE-OUT NOTICE
+// =====================================================
+
+app.post(
+  '/api/tenants/:id/move-out',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const tenantId = Number(req.params.id);
+    if (!Number.isInteger(tenantId) || tenantId <= 0) {
+      return sendError(res, 400, 'Invalid tenant.');
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+
+      const tenantResult = await client.query(
+        `SELECT t.id,t.name,t.status,t.move_out_date,t.bed_id,p.owner_id
+         FROM tenants t
+         INNER JOIN properties p ON p.id=t.property_id
+         WHERE t.id=$1 AND p.owner_id=$2
+         FOR UPDATE`,
+        [tenantId, req.owner.id],
+      );
+
+      if (!tenantResult.rows.length) {
+        await client.query('ROLLBACK');
+        return sendError(res, 404, 'Tenant not found.');
+      }
+
+      const tenant = tenantResult.rows[0];
+      const currentStatus = cleanString(tenant.status || 'Active').toLowerCase();
+
+      if (currentStatus === 'inactive' || currentStatus === 'moved out') {
+        await client.query('ROLLBACK');
+        return sendError(res, 400, 'This tenant has already moved out.');
+      }
+
+      if (tenant.move_out_date) {
+        await client.query('ROLLBACK');
+        return res.json({
+          success: true,
+          already_requested: true,
+          move_out_date: tenant.move_out_date,
+          message: 'Move-out notice is already active.',
+        });
+      }
+
+      const result = await client.query(
+        `UPDATE tenants
+         SET move_out_date=(CURRENT_DATE + INTERVAL '1 month')::date,
+             status='Move Out Notice'
+         WHERE id=$1
+         RETURNING id,name,move_out_date,status,bed_id`,
+        [tenantId],
+      );
+
+      await client.query('COMMIT');
+
+      return res.json({
+        success: true,
+        already_requested: false,
+        tenant: result.rows[0],
+        message: 'One-month move-out notice started.',
+      });
+    } catch (error) {
+      try { await client.query('ROLLBACK'); } catch {}
+      return sendError(res, 400, error?.message || 'Unable to start move-out notice.');
+    } finally {
+      client.release();
+    }
+  }),
+);
+
+// =====================================================
 // TENANT REASSIGN
 // =====================================================
 
