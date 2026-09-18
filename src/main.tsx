@@ -5110,6 +5110,8 @@ function TenantDetails({
     | 'overdue';
   onClose: () => void;
 }) {
+  const [fullScreenImage, setFullScreenImage] = useState<{ src: string; label: string } | null>(null);
+
   return (
     <div className="tenant-detail">
       <div className="detail-profile">
@@ -5194,6 +5196,39 @@ function TenantDetails({
         />
       </div>
 
+      {(tenant.id_photo_front || tenant.id_photo_back) && (
+        <div className="detail-section">
+          <div className="section-heading">
+            <div>
+              <h3>ID Documents</h3>
+              <p>Tap a document to view it full screen.</p>
+            </div>
+          </div>
+          <div className="tenant-document-grid">
+            {tenant.id_photo_front && (
+              <button
+                type="button"
+                className="tenant-document-card"
+                onClick={() => setFullScreenImage({ src: tenant.id_photo_front!, label: 'ID proof — Front side' })}
+              >
+                <img src={tenant.id_photo_front} alt="ID proof front side" />
+                <span>Front side</span>
+              </button>
+            )}
+            {tenant.id_photo_back && (
+              <button
+                type="button"
+                className="tenant-document-card"
+                onClick={() => setFullScreenImage({ src: tenant.id_photo_back!, label: 'ID proof — Back side' })}
+              >
+                <img src={tenant.id_photo_back} alt="ID proof back side" />
+                <span>Back side</span>
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       <div className="finance-panel">
         <div>
           <span>
@@ -5221,6 +5256,29 @@ function TenantDetails({
           </strong>
         </div>
       </div>
+
+      {fullScreenImage && (
+        <div
+          className="document-fullscreen-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={fullScreenImage.label}
+          onClick={() => setFullScreenImage(null)}
+        >
+          <button
+            type="button"
+            className="document-fullscreen-close"
+            aria-label="Close full screen document"
+            onClick={() => setFullScreenImage(null)}
+          >
+            ×
+          </button>
+          <div className="document-fullscreen-content" onClick={(e) => e.stopPropagation()}>
+            <img src={fullScreenImage.src} alt={fullScreenImage.label} />
+            <span>{fullScreenImage.label}</span>
+          </div>
+        </div>
+      )}
 
       <div className="detail-section">
         <div className="section-heading">
