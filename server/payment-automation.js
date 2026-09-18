@@ -731,11 +731,12 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  // Do not force a UPI deep-link here. Some UPI apps, including Slice,
-  // can reject transactions launched from another app even when the same
-  // UPI ID works when entered manually. Use the owner's QR/UPI ID instead.
   const hasUpi = clean(invoice.upi_id);
+  const upiLink = hasUpi
+NaN
+NaN
 
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!doctype html>
 <html lang="en">
@@ -755,7 +756,7 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
   <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
-  <button class="pay" type="button" onclick="document.getElementById('paymentOptions').scrollIntoView({behavior:'smooth',block:'center'})">Pay Now</button>
+   ${hasUpi ? `<a class="pay" href="${upiLink}" style="text-decoration:none">Pay Now with UPI</a>` : `<button class="pay" type="button" onclick="document.getElementById('paymentOptions').scrollIntoView({behavior:'smooth',block:'center'})">Pay Now</button>`}
   <div id="paymentOptions">
   ${qr ? `
     <div class="detail" style="text-align:center">
@@ -769,7 +770,7 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
       <strong>UPI ID</strong><br>
       <span id="upiId">${escapeHtml(invoice.upi_id)}</span><br>
       <button type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(invoice.upi_id)}).then(()=>{this.textContent='Copied';this.style.background='#d9f7df'}).catch(()=>{this.textContent='Copy failed — select the UPI ID above'})" style="margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#e9edf3;cursor:pointer;font-weight:700">Copy UPI ID</button>
-      <div class="muted" style="margin-top:8px">In Slice, choose UPI payment, paste this UPI ID, and enter ₹${num(invoice.amount).toLocaleString('en-IN')}.</div>
+       <div class="muted" style="margin-top:8px">If your UPI app declines Pay Now, copy this UPI ID and enter it manually in your UPI app. Some bank/UPI apps apply their own transaction checks.</div>
     </div>
   ` : ''}
   ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
