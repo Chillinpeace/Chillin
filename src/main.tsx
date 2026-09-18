@@ -2427,6 +2427,7 @@ function App() {
             recentPayments={
               recentPayments
             }
+            dashboardFinance={dashboardFinance}
             getTenantPending={
               getTenantPending
             }
