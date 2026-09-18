@@ -298,7 +298,7 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
   );
 
   const existing = await query(
-    'SELECT id FROM payments WHERE invoice_id=$1 AND LOWER(COALESCE(payment_method,\\'\\'))=LOWER($2) ORDER BY id DESC LIMIT 1',
+    'SELECT id FROM payments WHERE invoice_id=$1 AND LOWER(COALESCE(payment_method,\'\'))=LOWER($2) ORDER BY id DESC LIMIT 1',
     [invoiceId, 'UPI - Owner Confirmed'],
   );
 
