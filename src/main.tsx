@@ -1596,6 +1596,24 @@ function App() {
       [payments],
     );
 
+  const upcomingMoveOuts =
+    useMemo(
+      () =>
+        activeTenants
+          .filter((tenant) => {
+            if (!tenant.move_out_date) return false;
+            const date = new Date(tenant.move_out_date);
+            return !Number.isNaN(date.getTime()) && date >= new Date();
+          })
+          .sort(
+            (a, b) =>
+              new Date(a.move_out_date || '').getTime() -
+              new Date(b.move_out_date || '').getTime(),
+          )
+          .slice(0, 5),
+      [activeTenants],
+    );
+
   const reassignRooms = rooms.filter((room) => !reassignPropertyId || Number(room.property_id) === Number(reassignPropertyId));
   const reassignBeds = beds.filter((bed) => !reassignRoomId || Number(bed.room_id) === Number(reassignRoomId));
   const reassignAvailableBeds = reassignBeds.filter((bed) => !bed.is_occupied || Number(bed.id) === Number(reassignBedId));
@@ -2353,6 +2371,9 @@ function App() {
             }
             overdueTenants={
               overdueTenants
+            }
+            upcomingMoveOuts={
+              upcomingMoveOuts
             }
             recentPayments={
               recentPayments
@@ -3422,6 +3443,7 @@ function Dashboard({
   properties,
   upcomingDues,
   overdueTenants,
+  upcomingMoveOuts,
   recentPayments,
   getTenantPending,
   getTenantPaid,
@@ -3440,6 +3462,7 @@ function Dashboard({
   properties: Property[];
   upcomingDues: Tenant[];
   overdueTenants: Tenant[];
+  upcomingMoveOuts: Tenant[];
   recentPayments: Payment[];
   getTenantPending: (
     tenant: Tenant,
@@ -3725,6 +3748,53 @@ function Dashboard({
               </div>
             ),
           )}
+        </div>
+      )}
+
+      <SectionHeading
+        title="Upcoming Move-outs"
+        subtitle="Tenants with an active move-out notice"
+        action={
+          <button
+            className="text-btn"
+            onClick={() => setActiveTab('tenants')}
+          >
+            View all
+          </button>
+        }
+      />
+
+      {upcomingMoveOuts.length === 0 ? (
+        <EmptyCard
+          icon="📅"
+          title="No move-outs scheduled"
+          text="Tenants with an active one-month move-out notice will appear here."
+        />
+      ) : (
+        <div className="list-card">
+          {upcomingMoveOuts.map((tenant) => (
+            <div
+              className="list-row"
+              key={tenant.id}
+              onClick={() => openTenantDetails(tenant)}
+            >
+              <div className="avatar">
+                {getInitials(tenant.name)}
+              </div>
+
+              <div className="list-main">
+                <strong>{tenant.name}</strong>
+                <span>
+                  {tenant.property_name || 'Property'} · Room {tenant.room_number || '-'}
+                </span>
+              </div>
+
+              <div className="list-side">
+                <strong>{formatDate(tenant.move_out_date)}</strong>
+                <span className="status pending">Move Out</span>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
