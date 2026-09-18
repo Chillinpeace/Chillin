@@ -997,12 +997,10 @@ function App() {
       !tenantPhone.trim() ||
       !tenantGender ||
       !tenantIdProofType ||
-      !tenantIdPhotoFront ||
-      !tenantIdPhotoBack ||
       !tenantPropertyId
     ) {
       setError(
-        'Name, phone, gender, ID proof, both ID photos and property are required.',
+        'Name, phone, gender, ID proof and property are required.',
       );
       return;
     }
