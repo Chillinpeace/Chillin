@@ -2457,6 +2457,7 @@ function App() {
             openTenantDetails={
               openTenantDetails
             }
+            onMoveOut={handleTenantMoveOut}
           />
         )}
 
