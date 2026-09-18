@@ -26,6 +26,14 @@ interface Property {
   monthly_revenue: number;
 }
 
+interface PropertyLevel {
+  id: number;
+  property_id: number;
+  building_name: string;
+  floor_name: string;
+  created_at?: string;
+}
+
 interface Room {
   id: number;
   property_id: number;
@@ -127,6 +135,7 @@ type Tab =
 type Modal =
   | 'none'
   | 'property'
+  | 'floor'
   | 'room'
   | 'bed'
   | 'tenant'
@@ -239,6 +248,8 @@ function App() {
     useState<Room[]>([]);
   const [beds, setBeds] =
     useState<Bed[]>([]);
+  const [propertyLevels, setPropertyLevels] =
+    useState<PropertyLevel[]>([]);
   const [tenants, setTenants] =
     useState<Tenant[]>([]);
   const [payments, setPayments] =
@@ -280,6 +291,15 @@ function App() {
     useState('');
   const [propAddress, setPropAddress] =
     useState('');
+  const [propType, setPropType] =
+    useState('Gents');
+  const [rentCycle, setRentCycle] =
+    useState('1st of every month');
+
+  const [floorPropertyId, setFloorPropertyId] =
+    useState('');
+  const [floorName, setFloorName] =
+    useState('');
 
   const [roomPropertyId, setRoomPropertyId] =
     useState('');
@@ -289,6 +309,12 @@ function App() {
     useState('Single');
   const [roomRent, setRoomRent] =
     useState('');
+  const [roomType, setRoomType] =
+    useState('Non AC');
+  const [roomPerDayRent, setRoomPerDayRent] =
+    useState('');
+  const [roomFloorName, setRoomFloorName] =
+    useState('Ground Floor');
 
   const [bedRoomId, setBedRoomId] =
     useState('');
@@ -358,6 +384,7 @@ function App() {
         apiRequest<Tenant[]>('/tenants'),
         apiRequest<Payment[]>('/payments'),
         apiRequest<Invoice[]>('/invoices'),
+        apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
       ]);
 
     const [
@@ -367,6 +394,7 @@ function App() {
       tenantResult,
       paymentResult,
       invoiceResult,
+      structureResult,
     ] = results;
 
     const errors: string[] = [];
@@ -464,6 +492,17 @@ function App() {
             ? invoiceResult.reason.message
             : 'Failed'
         }`,
+      );
+    }
+
+    if (structureResult.status === 'fulfilled') {
+      setPropertyLevels(structureResult.value || []);
+    } else {
+      setPropertyLevels([]);
+      errors.push(
+        `Property floors: ${structureResult.reason instanceof Error
+          ? structureResult.reason.message
+          : 'Failed'}`,
       );
     }
 
@@ -630,6 +669,7 @@ function App() {
     setProperties([]);
     setRooms([]);
     setBeds([]);
+    setPropertyLevels([]);
     setTenants([]);
     setPayments([]);
     setInvoices([]);
@@ -640,11 +680,18 @@ function App() {
   const resetForms = () => {
     setPropName('');
     setPropAddress('');
+    setPropType('Gents');
+    setRentCycle('1st of every month');
+    setFloorPropertyId('');
+    setFloorName('');
 
     setRoomPropertyId('');
     setRoomNumber('');
     setSharingType('Single');
     setRoomRent('');
+    setRoomType('Non AC');
+    setRoomPerDayRent('');
+    setRoomFloorName('Ground Floor');
 
     setBedRoomId('');
     setBedNumber('');
@@ -725,6 +772,8 @@ function App() {
         body: JSON.stringify({
           name: propName.trim(),
           address: propAddress.trim(),
+          property_type: propType,
+          rent_cycle: rentCycle,
         }),
       });
 
@@ -737,6 +786,68 @@ function App() {
         err instanceof Error
           ? err.message
           : 'Failed to add property.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleCreateFloor = async (
+    event: React.FormEvent,
+  ) => {
+    event.preventDefault();
+
+    if (!floorPropertyId || !floorName.trim()) {
+      setError('Select a property and enter a floor name.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest('/nivaasi-upgrades/structure', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(floorPropertyId),
+          building_name: 'Main Building',
+          floor_name: floorName.trim(),
+        }),
+      });
+
+      resetForms();
+      setActiveModal('none');
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to add floor.',
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleRemoveBed = async (bed: Bed) => {
+    if (bed.is_occupied) {
+      setError('Occupied beds cannot be removed.');
+      return;
+    }
+
+    setSaving(true);
+    setError('');
+
+    try {
+      await apiRequest(`/beds/${bed.id}`, {
+        method: 'DELETE',
+      });
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Failed to remove bed.',
       );
     } finally {
       setSaving(false);
@@ -770,6 +881,9 @@ function App() {
           room_number:
             roomNumber.trim(),
           sharing_type: sharingType,
+          room_type: roomType,
+          floor_name: roomFloorName || 'Ground Floor',
+          per_day_rent: Number(roomPerDayRent) || 0,
           rent_amount:
             Number(roomRent) || 0,
         }),
@@ -2141,19 +2255,14 @@ function App() {
             }
             rooms={rooms}
             beds={beds}
+            propertyLevels={propertyLevels}
             openModal={
               openModal
             }
-          />
-        )}
-
-        {activeTab === 'rooms' && (
-          <RoomsView
-            rooms={rooms}
-            beds={beds}
-            openModal={
-              openModal
-            }
+            setRoomPropertyId={setRoomPropertyId}
+            setRoomFloorName={setRoomFloorName}
+            setFloorPropertyId={setFloorPropertyId}
+            removeBed={handleRemoveBed}
           />
         )}
 
@@ -2316,7 +2425,7 @@ function App() {
             >
               <ModalTitle
                 title="Add Property"
-                subtitle="Create a property to manage rooms and tenants."
+                subtitle="Set up your property, rental cycle and property type."
               />
 
               <input
@@ -2324,30 +2433,89 @@ function App() {
                 placeholder="Property name"
                 value={propName}
                 onChange={(e) =>
-                  setPropName(
-                    e.target.value,
-                  )
+                  setPropName(e.target.value)
                 }
               />
 
               <input
                 className="modal-input"
                 placeholder="Address"
-                value={
-                  propAddress
-                }
+                value={propAddress}
                 onChange={(e) =>
-                  setPropAddress(
-                    e.target.value,
-                  )
+                  setPropAddress(e.target.value)
+                }
+              />
+
+              <select
+                className="modal-input"
+                value={propType}
+                onChange={(e) =>
+                  setPropType(e.target.value)
+                }
+              >
+                <option value="Gents">Gents</option>
+                <option value="Ladies">Ladies</option>
+                <option value="Coliving">Coliving</option>
+              </select>
+
+              <select
+                className="modal-input"
+                value={rentCycle}
+                onChange={(e) =>
+                  setRentCycle(e.target.value)
+                }
+              >
+                <option value="1st of every month">1st of every month</option>
+                <option value="date of joining">From date of joining</option>
+              </select>
+
+              <ModalButtons
+                saving={saving}
+                onCancel={closeModal}
+              />
+            </form>
+          )}
+
+          {activeModal ===
+            'floor' && (
+            <form
+              onSubmit={handleCreateFloor}
+            >
+              <ModalTitle
+                title="Add Floor"
+                subtitle="Add a floor before adding rooms."
+              />
+
+              <select
+                className="modal-input"
+                value={floorPropertyId}
+                onChange={(e) =>
+                  setFloorPropertyId(e.target.value)
+                }
+              >
+                <option value="">Select property</option>
+                {properties.map((property) => (
+                  <option
+                    key={property.id}
+                    value={property.id}
+                  >
+                    {property.name}
+                  </option>
+                ))}
+              </select>
+
+              <input
+                className="modal-input"
+                placeholder="Floor name"
+                value={floorName}
+                onChange={(e) =>
+                  setFloorName(e.target.value)
                 }
               />
 
               <ModalButtons
                 saving={saving}
-                onCancel={
-                  closeModal
-                }
+                onCancel={closeModal}
               />
             </form>
           )}
@@ -2355,110 +2523,123 @@ function App() {
           {activeModal ===
             'room' && (
             <form
-              onSubmit={
-                handleCreateRoom
-              }
+              onSubmit={handleCreateRoom}
             >
               <ModalTitle
                 title="Add Room"
-                subtitle="Add a room inside one of your properties."
+                subtitle="Add a room inside the selected property."
               />
 
               <select
                 className="modal-input"
-                value={
-                  roomPropertyId
-                }
+                value={roomPropertyId}
                 onChange={(e) =>
-                  setRoomPropertyId(
-                    e.target.value,
-                  )
+                  setRoomPropertyId(e.target.value)
                 }
               >
-                <option value="">
-                  Select property
-                </option>
+                <option value="">Select property</option>
+                {properties.map((property) => (
+                  <option
+                    key={property.id}
+                    value={property.id}
+                  >
+                    {property.name}
+                  </option>
+                ))}
+              </select>
 
-                {properties.map(
-                  (
-                    property,
-                  ) => (
-                    <option
-                      key={
-                        property.id
-                      }
-                      value={
-                        property.id
-                      }
-                    >
-                      {
-                        property.name
-                      }
-                    </option>
-                  ),
-                )}
+              <select
+                className="modal-input"
+                value={roomFloorName}
+                onChange={(e) =>
+                  setRoomFloorName(e.target.value)
+                }
+              >
+                {Array.from(
+                  new Set([
+                    'Ground Floor',
+                    ...propertyLevels
+                      .filter(
+                        (level) =>
+                          !roomPropertyId ||
+                          level.property_id === Number(roomPropertyId),
+                      )
+                      .map((level) => level.floor_name),
+                    ...rooms
+                      .filter(
+                        (room) =>
+                          !roomPropertyId ||
+                          room.property_id === Number(roomPropertyId),
+                      )
+                      .map((room) => room.floor_name || 'Ground Floor'),
+                  ]),
+                ).map((floor) => (
+                  <option key={floor} value={floor}>
+                    {floor}
+                  </option>
+                ))}
               </select>
 
               <input
                 className="modal-input"
                 placeholder="Room number"
-                value={
-                  roomNumber
-                }
+                value={roomNumber}
                 onChange={(e) =>
-                  setRoomNumber(
-                    e.target.value,
-                  )
+                  setRoomNumber(e.target.value)
                 }
               />
 
               <select
                 className="modal-input"
-                value={
-                  sharingType
-                }
+                value={sharingType}
                 onChange={(e) =>
-                  setSharingType(
-                    e.target.value,
-                  )
+                  setSharingType(e.target.value)
                 }
               >
-                <option>
-                  Single
-                </option>
-                <option>
-                  Double
-                </option>
-                <option>
-                  Triple
-                </option>
-                <option>
-                  Four Sharing
-                </option>
-                <option>
-                  Other
-                </option>
+                <option value="Single">Single (1 bed)</option>
+                <option value="Double">Double (2 beds)</option>
+                <option value="Triple">Triple (3 beds)</option>
+                <option value="Four Sharing">Four Sharing (4 beds)</option>
+                <option value="Five Sharing">Five Sharing (5 beds)</option>
+                <option value="Six Sharing">Six Sharing (6 beds)</option>
+              </select>
+
+              <select
+                className="modal-input"
+                value={roomType}
+                onChange={(e) =>
+                  setRoomType(e.target.value)
+                }
+              >
+                <option value="AC">AC</option>
+                <option value="Non AC">Non AC</option>
               </select>
 
               <input
                 className="modal-input"
                 type="number"
-                placeholder="Monthly rent"
-                value={
-                  roomRent
-                }
+                min="0"
+                placeholder="Per day rent"
+                value={roomPerDayRent}
                 onChange={(e) =>
-                  setRoomRent(
-                    e.target.value,
-                  )
+                  setRoomPerDayRent(e.target.value)
+                }
+              />
+
+              <input
+                className="modal-input"
+                type="number"
+                min="0"
+                placeholder="Monthly rent"
+                value={roomRent}
+                onChange={(e) =>
+                  setRoomRent(e.target.value)
                 }
               />
 
               <ModalButtons
                 saving={saving}
-                onCancel={
-                  closeModal
-                }
+                onCancel={closeModal}
               />
             </form>
           )}
@@ -3880,125 +4061,175 @@ function PropertiesView({
   properties,
   rooms,
   beds,
+  propertyLevels,
   openModal,
+  setRoomPropertyId,
+  setRoomFloorName,
+  setFloorPropertyId,
+  removeBed,
 }: {
   properties: Property[];
   rooms: Room[];
   beds: Bed[];
-  openModal: (
-    modal: Modal,
-  ) => void;
+  propertyLevels: PropertyLevel[];
+  openModal: (modal: Modal) => void;
+  setRoomPropertyId: (value: string) => void;
+  setRoomFloorName: (value: string) => void;
+  setFloorPropertyId: (value: string) => void;
+  removeBed: (bed: Bed) => void;
 }) {
   return (
     <div className="view-container">
       <PageHeader
         title="Properties"
-        subtitle="Manage your rental portfolio"
+        subtitle="Property setup, floors, rooms and beds"
         action={
           <button
             className="btn-primary"
-            onClick={() =>
-              openModal(
-                'property',
-              )
-            }
+            onClick={() => openModal('property')}
           >
             + Property
           </button>
         }
       />
 
-      {properties.map(
-        (property) => {
-          const propertyRooms =
-            rooms.filter(
-              (room) =>
-                room.property_id ===
-                property.id,
-            );
+      {properties.map((property) => {
+        const propertyRooms = rooms.filter(
+          (room) => room.property_id === property.id,
+        );
+        const propertyLevelsForProperty = propertyLevels.filter(
+          (level) => level.property_id === property.id,
+        );
 
-          const propertyBeds =
-            beds.filter(
-              (bed) =>
-                bed.property_id ===
-                property.id,
-            );
-
-          const occupied =
-            propertyBeds.filter(
-              (bed) =>
-                bed.is_occupied,
-            ).length;
-
-          return (
-            <div
-              className="glass-card"
-              key={
-                property.id
-              }
-            >
-              <div className="glass-header">
-                <div>
-                  <h3>
-                    {
-                      property.name
-                    }
-                  </h3>
-
-                  <p>
-                    {property.address ||
-                      'No address'}
-                  </p>
-                </div>
-
-                <span className="badge badge-emerald">
-                  {property.occupancy_rate ||
-                    0}
-                  %
-                </span>
+        return (
+          <div className="glass-card" key={property.id}>
+            <div className="glass-header">
+              <div>
+                <h3>{property.name}</h3>
+                <p>{property.address || 'No address'}</p>
+                <small>
+                  {property.property_type || 'Gents'} · {property.rent_cycle || '1st of every month'}
+                </small>
               </div>
 
-              <div className="metrics-row">
-                <MiniMetric
-                  label="Rooms"
-                  value={
-                    propertyRooms.length
-                  }
-                />
-
-                <MiniMetric
-                  label="Beds"
-                  value={
-                    propertyBeds.length
-                  }
-                />
-
-                <MiniMetric
-                  label="Occupied"
-                  value={
-                    occupied
-                  }
-                />
-              </div>
-
-              <div className="glass-footer">
-                <span>
-                  Monthly Revenue
-                </span>
-
-                <strong>
-                  {money(
-                    property.monthly_revenue,
-                  )}
-                </strong>
-              </div>
+              <span className="badge badge-emerald">
+                {property.occupancy_rate || 0}%
+              </span>
             </div>
-          );
-        },
-      )}
 
-      {properties.length ===
-        0 && (
+            <div className="metrics-row">
+              <MiniMetric label="Rooms" value={propertyRooms.length} />
+              <MiniMetric label="Beds" value={property.bed_count || 0} />
+              <MiniMetric label="Occupied" value={property.occupied_bed_count || 0} />
+            </div>
+
+            <div className="tenant-actions">
+              <button
+                className="btn-secondary"
+                onClick={() => {
+                  setFloorPropertyId(String(property.id));
+                  openModal('floor');
+                }}
+              >
+                + Floor
+              </button>
+
+              <button
+                className="btn-primary"
+                onClick={() => {
+                  const firstFloor =
+                    propertyLevelsForProperty[0]?.floor_name ||
+                    propertyRooms[0]?.floor_name ||
+                    'Ground Floor';
+                  setRoomPropertyId(String(property.id));
+                  setRoomFloorName(firstFloor);
+                  openModal('room');
+                }}
+              >
+                + Room
+              </button>
+            </div>
+
+            {propertyLevelsForProperty.length > 0 && (
+              <div className="bed-list" style={{ marginTop: '12px' }}>
+                {propertyLevelsForProperty.map((level) => (
+                  <span className="badge" key={level.id}>
+                    Floor: {level.floor_name}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {propertyRooms.length === 0 ? (
+              <div className="small-empty" style={{ marginTop: '12px' }}>
+                No rooms added yet. Add a floor first, then add rooms.
+              </div>
+            ) : (
+              propertyRooms.map((room) => {
+                const roomBeds = beds.filter(
+                  (bed) => bed.room_id === room.id,
+                );
+
+                return (
+                  <div
+                    className="glass-card"
+                    key={room.id}
+                    style={{ marginTop: '12px' }}
+                  >
+                    <div className="glass-header">
+                      <div>
+                        <h3>Room {room.room_number}</h3>
+                        <p>
+                          {room.floor_name || 'Ground Floor'} · {room.room_type || 'Non AC'} · {room.sharing_type}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="metrics-row">
+                      <MiniMetric label="Per Day" value={money(room.per_day_rent || 0)} />
+                      <MiniMetric label="Monthly" value={money(room.rent_amount || 0)} />
+                      <MiniMetric label="Beds" value={roomBeds.length} />
+                    </div>
+
+                    <div className="bed-list">
+                      {roomBeds.length === 0 ? (
+                        <span className="muted">No beds</span>
+                      ) : (
+                        roomBeds.map((bed) => (
+                          <span
+                            className={
+                              bed.is_occupied
+                                ? 'bed-chip occupied'
+                                : 'bed-chip available'
+                            }
+                            key={bed.id}
+                          >
+                            Bed {bed.bed_number}
+                            <small>
+                              {bed.is_occupied ? 'Occupied' : 'Available'}
+                            </small>
+                            {!bed.is_occupied && (
+                              <button
+                                type="button"
+                                className="mini-action"
+                                onClick={() => removeBed(bed)}
+                              >
+                                Remove
+                              </button>
+                            )}
+                          </span>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        );
+      })}
+
+      {properties.length === 0 && (
         <EmptyCard
           icon="🏠"
           title="No properties yet"
@@ -4006,11 +4237,7 @@ function PropertiesView({
           action={
             <button
               className="btn-primary"
-              onClick={() =>
-                openModal(
-                  'property',
-                )
-              }
+              onClick={() => openModal('property')}
             >
               Add Property
             </button>
@@ -5419,11 +5646,6 @@ function BottomNav({
       'properties',
       '🏠',
       'Properties',
-    ],
-    [
-      'rooms',
-      '🚪',
-      'Rooms',
     ],
     [
       'tenants',
