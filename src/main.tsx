@@ -3494,16 +3494,6 @@ function App() {
                 onClose={
                   closeModal
                 }
-                onPayment={() =>
-                  openPaymentForTenant(
-                    selectedTenant,
-                  )
-                }
-                onWhatsApp={() =>
-                  sendWhatsAppReminder(
-                    selectedTenant,
-                  )
-                }
               />
             )}
         </ModalOverlay>
@@ -3518,7 +3508,6 @@ function Header({
 }: {
   owner: Owner | null;
   onLogout: () => void;
-  onRecord?: () => void;
 }) {
   return (
     <header className="app-header">
@@ -3540,14 +3529,6 @@ function Header({
       </div>
 
       <div className="header-actions">
-        <button
-            className="avatar-btn"
-            onClick={onRecord}
-          >
-            + Payment
-          </button>
-        )}
-
         <button
           className="logout-btn"
           onClick={onLogout}
@@ -3575,8 +3556,6 @@ function Dashboard({
   getTenantPending,
   getTenantPaid,
   openTenantDetails,
-  sendWhatsAppReminder,
-  openPaymentForTenant,
   openModal,
   setActiveTab,
 }: {
@@ -4457,12 +4436,6 @@ function TenantsView({
   openTenantDetails: (
     tenant: Tenant,
   ) => void;
-  sendWhatsAppReminder: (
-    tenant: Tenant,
-  ) => void;
-  openPaymentForTenant: (
-    tenant: Tenant,
-  ) => void;
 }) {
   return (
     <div className="view-container">
@@ -5131,8 +5104,6 @@ function TenantDetails({
   pending,
   status,
   onClose,
-  onPayment,
-  onWhatsApp,
 }: {
   tenant: Tenant;
   payments: Payment[];
@@ -5143,8 +5114,6 @@ function TenantDetails({
     | 'pending'
     | 'overdue';
   onClose: () => void;
-  onPayment: () => void;
-  onWhatsApp: () => void;
 }) {
   return (
     <div className="tenant-detail">
@@ -5256,26 +5225,6 @@ function TenantDetails({
             {money(pending)}
           </strong>
         </div>
-      </div>
-
-      <div className="detail-actions">
-        <button
-          className="btn-secondary"
-          onClick={
-            onWhatsApp
-          }
-        >
-          WhatsApp
-        </button>
-
-        <button
-          className="btn-primary"
-          onClick={
-            onPayment
-          }
-        >
-          Record Payment
-        </button>
       </div>
 
       <div className="detail-section">
