@@ -101,6 +101,7 @@ try {
 
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_provider VARCHAR(40) DEFAULT '';
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_id VARCHAR(100) DEFAULT '';
+    ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_cf_id VARCHAR(100) DEFAULT '';
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_url TEXT DEFAULT '';
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_status VARCHAR(40) DEFAULT '';
     ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_link_created_at TIMESTAMPTZ;
