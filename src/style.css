@@ -1951,3 +1951,87 @@ select:focus-visible {
 .menu-contact-box{padding:8px 0;border-top:1px solid #e6e9ef;display:flex;flex-direction:column;gap:2px}
 .profile-menu-divider{height:1px;background:#e8ebef;margin:6px 8px}
 .logout-menu-item{color:#b42318}
+
+
+.tenant-document-grid {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.tenant-document-card {
+  width: 92px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tenant-document-card img {
+  display: block;
+  width: 92px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #f4f5f7;
+}
+
+.tenant-document-card span {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.document-fullscreen-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  background: rgba(0, 0, 0, 0.94);
+}
+
+.document-fullscreen-content {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.document-fullscreen-content img {
+  max-width: 100%;
+  max-height: calc(100vh - 70px);
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.document-fullscreen-content span {
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.document-fullscreen-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+}
