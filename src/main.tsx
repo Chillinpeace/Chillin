@@ -3358,6 +3358,12 @@ function Header({
               </div>
             )}
 
+            <button className="profile-menu-item" type="button" onClick={() => window.open('/privacy.html', '_blank', 'noopener,noreferrer')}>
+              <span>🔒</span><span>Privacy Policy</span><span className="menu-chevron">›</span>
+            </button>
+            <button className="profile-menu-item" type="button" onClick={() => window.open('/beta-guide.html', '_blank', 'noopener,noreferrer')}>
+              <span>🧭</span><span>Beta Owner Guide</span><span className="menu-chevron">›</span>
+            </button>
             <button className="profile-menu-item" type="button" onClick={() => toggleSection('terms')}>
               <span>📄</span><span>Terms and Conditions</span><span className="menu-chevron">{menuSection === 'terms' ? '⌃' : '›'}</span>
             </button>
