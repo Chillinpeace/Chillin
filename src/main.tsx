@@ -1679,7 +1679,7 @@ function App() {
         !bed.is_occupied,
     );
 
-  const handleMarkInvoicePaid = (invoice: Invoice) => {
+  const handleMarkInvoicePaid = async (invoice: Invoice) => {
     if (normalize(invoice.status) === 'paid') return;
 
     const balance = Math.max(
@@ -1692,15 +1692,26 @@ function App() {
     setMarkingInvoiceId(invoice.id);
     setError('');
 
-    // Use a real browser form submission instead of fetch(). This keeps
-    // the action as one native navigation on mobile: POST -> mark paid ->
-    // server redirect -> WhatsApp. It avoids popup/navigation blocking.
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = `${API}/payment-automation/invoices/${invoice.id}/mark-paid?redirect=whatsapp`;
-    form.style.display = 'none';
-    document.body.appendChild(form);
-    form.submit();
+    try {
+      // Paid is an owner confirmation action only.
+      // Do not open WhatsApp or send a success message here.
+      await apiRequest(
+        `/payment-automation/invoices/${invoice.id}/mark-paid`,
+        { method: 'POST' },
+      );
+
+      // Refresh the app so the invoice immediately changes to Paid
+      // and the payment appears in the Payments view.
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Could not mark the invoice as paid.',
+      );
+    } finally {
+      setMarkingInvoiceId(null);
+    }
   };
 
   const filteredTenants =
@@ -5338,13 +5349,15 @@ function InvoicesView({
                 >
                   View Payment Page
                 </a>
-                <a
-                  className="btn-secondary"
-                                    href={API + '/payment-automation/invoices/' + invoice.id + '/whatsapp-link'}
-                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                >
-                  Send WhatsApp
-                </a>
+                {!isPaid && (
+                  <a
+                    className="btn-secondary"
+                    href={API + '/payment-automation/invoices/' + invoice.id + '/whatsapp-link'}
+                    style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                  >
+                    Send WhatsApp
+                  </a>
+                )}
                 {!isPaid && (
                   <button
                     className="btn-primary"
@@ -5352,7 +5365,7 @@ function InvoicesView({
                     onClick={() => onMarkPaid(invoice)}
                     disabled={markingInvoiceId === invoice.id}
                   >
-                    {markingInvoiceId === invoice.id ? 'Sending...' : 'Paid'}
+                    {markingInvoiceId === invoice.id ? 'Saving...' : 'Paid'}
                   </button>
                 )}
               </div>
