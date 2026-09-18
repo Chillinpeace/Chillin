@@ -5078,7 +5078,7 @@ function InvoicesView({
         onChange={(e) => setSearch(e.target.value)}
       />
 
-      <div className="filter-tabs">
+      <div className="filter-row">
         {([
           ['all', 'All'],
           ['pending', 'Pending'],
@@ -5089,7 +5089,7 @@ function InvoicesView({
           <button
             key={value}
             type="button"
-            className={statusFilter === value ? 'filter-tab active' : 'filter-tab'}
+            className={statusFilter === value ? 'filter-pill active' : 'filter-pill'}
             onClick={() => setStatusFilter(value)}
           >
             {label}
