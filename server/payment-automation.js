@@ -174,11 +174,11 @@ async function createPaymentLink(invoice) {
          payment_link_id=$1,
          payment_link_cf_id=$2,
          payment_link_url=$3,
-         payment_link_status=$3,
+         payment_link_status=$4,
          payment_link_created_at=CURRENT_TIMESTAMP,
-         payment_link_paid_amount=$4,
+         payment_link_paid_amount=$5,
          updated_at=CURRENT_TIMESTAMP
-     WHERE id=$5`,
+     WHERE id=$6`,
     [
       clean(data?.link_id) || linkId,
       clean(data?.cf_link_id),
@@ -196,7 +196,7 @@ async function loadInvoice(invoiceId) {
   const result = await query(
     `SELECT
        i.id,i.invoice_number,i.tenant_id,i.amount,i.month,i.due_date,i.status,
-       i.paid_amount,i.payment_link_id,i.payment_link_url,i.payment_link_status,
+       i.paid_amount,i.payment_link_id,i.payment_link_cf_id,i.payment_link_url,i.payment_link_status,
        t.name AS tenant_name,t.phone,t.email,p.name AS property_name,p.address
      FROM invoices i
      INNER JOIN tenants t ON t.id=i.tenant_id
