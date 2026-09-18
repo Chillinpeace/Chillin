@@ -123,7 +123,128 @@ async function ensurePaymentColumns() {
       recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE, last_run_at TIMESTAMPTZ,
       updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
     );
+    CREATE TABLE IF NOT EXISTS cashfree_vendors (
+      owner_id INTEGER PRIMARY KEY,
+      vendor_id VARCHAR(120) NOT NULL UNIQUE,
+      status VARCHAR(50) NOT NULL DEFAULT 'PENDING',
+      settlement_method VARCHAR(20) NOT NULL DEFAULT '',
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
   `);
+}
+
+async function getOwnerCashfreeVendor(ownerId) {
+  const result = await query(
+    'SELECT owner_id,vendor_id,status,settlement_method FROM cashfree_vendors WHERE owner_id=$1 LIMIT 1',
+    [ownerId],
+  );
+  return result.rows[0] || null;
+}
+
+async function createCashfreeVendor(owner, body) {
+  if (!cashfreeConfigured()) throw new Error('Cashfree is not configured.');
+
+  const vendorId = `PEACELY_OWNER_${owner.id}`;
+  const settlementMethod = clean(body?.settlement_method).toLowerCase();
+  const name = clean(body?.name || owner.name).replace(/[^a-zA-Z0-9 .\/-&]/g, '').slice(0, 100);
+  const email = clean(body?.email || owner.email);
+  const phone = normalizePhone(body?.phone || body?.mobile || '');
+
+  if (!name || !email || !phone) throw new Error('Owner name, email and phone are required.');
+
+  const payload = {
+    vendor_id: vendorId,
+    status: 'ACTIVE',
+    name,
+    email,
+    phone,
+    verify_account: true,
+    dashboard_access: false,
+    schedule_option: Number(body?.schedule_option || 1),
+    kyc_details: {
+      account_type: clean(body?.account_type || 'BUSINESS').toUpperCase(),
+      ...(clean(body?.business_type) ? { business_type: clean(body.business_type).toUpperCase() } : {}),
+      ...(clean(body?.pan) ? { pan: clean(body.pan).toUpperCase() } : {}),
+      ...(clean(body?.gst) ? { gst: clean(body.gst).toUpperCase() } : {}),
+      ...(body?.uidai ? { uidai: Number(body.uidai) } : {}),
+    },
+  };
+
+  if (settlementMethod === 'upi') {
+    const vpa = clean(body?.upi_vpa);
+    const accountHolder = clean(body?.account_holder || name);
+    if (!vpa) throw new Error('UPI ID is required.');
+    payload.upi = { vpa, account_holder: accountHolder };
+  } else {
+    const accountNumber = clean(body?.account_number);
+    const ifsc = clean(body?.ifsc).toUpperCase();
+    const accountHolder = clean(body?.account_holder || name);
+    if (!accountNumber || !ifsc) throw new Error('Bank account number and IFSC are required.');
+    payload.bank = { account_number: accountNumber, account_holder: accountHolder, ifsc };
+  }
+
+  const data = await cashfreeRequest('/easy-split/vendors', {
+    method: 'POST',
+    headers: {
+      'x-api-version': process.env.CASHFREE_EASY_SPLIT_API_VERSION || '2025-01-01',
+      'x-idempotency-key': `peacely-vendor-${owner.id}`,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const status = clean(data?.status || 'IN_BENE_CREATION').toUpperCase();
+
+  await query(
+    `INSERT INTO cashfree_vendors(owner_id,vendor_id,status,settlement_method,updated_at)
+     VALUES($1,$2,$3,$4,CURRENT_TIMESTAMP)
+     ON CONFLICT(owner_id) DO UPDATE SET vendor_id=EXCLUDED.vendor_id,status=EXCLUDED.status,
+       settlement_method=EXCLUDED.settlement_method,updated_at=CURRENT_TIMESTAMP`,
+    [owner.id, vendorId, status, settlementMethod],
+  );
+
+  return { ...data, vendor_id: vendorId, status };
+}
+
+async function splitPaidOrderToOwner(orderId, invoiceId, amount) {
+  if (!orderId || !invoiceId || amount <= 0 || !cashfreeConfigured()) return null;
+
+  const ownerResult = await query(
+    `SELECT p.owner_id
+     FROM invoices i
+     INNER JOIN tenants t ON t.id=i.tenant_id
+     INNER JOIN properties p ON p.id=t.property_id
+     WHERE i.id=$1 LIMIT 1`,
+    [invoiceId],
+  );
+  const ownerId = ownerResult.rows[0]?.owner_id;
+  if (!ownerId) return null;
+
+  const vendor = await getOwnerCashfreeVendor(ownerId);
+  if (!vendor || clean(vendor.status).toUpperCase() !== 'ACTIVE') {
+    console.warn(`Cashfree vendor is not ACTIVE for owner ${ownerId}; payment remains in merchant ledger.`);
+    return null;
+  }
+
+  const result = await cashfreeRequest(`/easy-split/orders/${encodeURIComponent(orderId)}/split`, {
+    method: 'POST',
+    headers: {
+      'x-api-version': process.env.CASHFREE_EASY_SPLIT_API_VERSION || '2025-01-01',
+      'x-idempotency-key': `peacely-split-${invoiceId}`,
+    },
+    body: JSON.stringify({
+      split: [{
+        vendor_id: vendor.vendor_id,
+        amount: Number(amount),
+        tags: {
+          invoice_id: String(invoiceId),
+          peacely_owner_id: String(ownerId),
+        },
+      }],
+      disable_split: true,
+    }),
+  });
+
+  return result;
 }
 
 async function createPaymentLink(invoice) {
@@ -134,6 +255,11 @@ async function createPaymentLink(invoice) {
   dueDate.setDate(dueDate.getDate() + 7);
 
   const linkId = `PEACELY-${invoice.id}`;
+  const ownerResult = await query(
+    `SELECT p.owner_id FROM tenants t INNER JOIN properties p ON p.id=t.property_id WHERE t.id=$1 LIMIT 1`,
+    [invoice.tenant_id],
+  );
+  const ownerVendor = ownerResult.rows[0]?.owner_id ? await getOwnerCashfreeVendor(ownerResult.rows[0].owner_id) : null;
   const notifyUrl = `${baseUrl()}/api/payment-automation/webhook/cashfree`;
 
   const payload = {
@@ -151,6 +277,7 @@ async function createPaymentLink(invoice) {
     link_notes: {
       invoice_id: String(invoice.id),
       tenant_id: String(invoice.tenant_id),
+      ...(ownerVendor?.vendor_id ? { vendor_id: ownerVendor.vendor_id } : {}),
     },
     link_meta: {
       notify_url: notifyUrl,
@@ -623,15 +750,51 @@ router.get('/payment-automation/status', auth, async (req, res) => {
     ),
   ]);
 
+  const vendor = await getOwnerCashfreeVendor(req.paymentOwner.id);
+
   res.json({
     success: true,
     provider: 'Cashfree',
     automatic: cashfreeConfigured(),
     whatsapp: whatsappConfigured(),
+    owner_vendor: Boolean(vendor),
+    owner_vendor_status: vendor?.status || 'NOT_CONFIGURED',
     recurring_invoices: true,
     pending_invoices: Number(pending.rows[0]?.count || 0),
     paid_last_30_days: Number(recent.rows[0]?.count || 0),
   });
+});
+
+router.get('/payment-automation/vendor', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const vendor = await getOwnerCashfreeVendor(req.paymentOwner.id);
+  return res.json({
+    success: true,
+    configured: Boolean(vendor),
+    vendor: vendor ? {
+      vendor_id: vendor.vendor_id,
+      status: vendor.status,
+      settlement_method: vendor.settlement_method,
+    } : null,
+  });
+});
+
+router.post('/payment-automation/vendor', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  try {
+    const vendor = await createCashfreeVendor(req.paymentOwner, req.body || {});
+    return res.json({
+      success: true,
+      vendor: {
+        vendor_id: vendor.vendor_id,
+        status: vendor.status,
+        settlement_method: clean(req.body?.settlement_method).toLowerCase(),
+      },
+    });
+  } catch (error) {
+    console.error('Cashfree vendor onboarding failed:', error);
+    return res.status(400).json({ success: false, error: error.message || 'Could not onboard owner for payments.' });
+  }
 });
 
 router.get('/payment-automation/settings', auth, async (req, res) => {
@@ -749,10 +912,19 @@ router.post('/payment-automation/webhook/cashfree', async (req, res) => {
 
     if (!cfLinkId) return res.json({ success: true, ignored: true });
 
+    const orderId = clean(order?.order_id || order?.orderId || payload?.data?.order_id);
     const invoice = await markInvoicePaidFromCashfree(
       cfLinkId,
       num(payment?.payment_amount),
     );
+
+    if (invoice?.status === 'Paid' && orderId) {
+      try {
+        await splitPaidOrderToOwner(orderId, invoice.id, num(invoice.amount));
+      } catch (error) {
+        console.error(`Cashfree Easy Split failed for invoice ${invoice.id}:`, error.message);
+      }
+    }
 
     if (invoice?.status === 'Paid') {
       try {
