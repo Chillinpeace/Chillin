@@ -260,6 +260,9 @@ async function createPaymentLink(invoice) {
     [invoice.tenant_id],
   );
   const ownerVendor = ownerResult.rows[0]?.owner_id ? await getOwnerCashfreeVendor(ownerResult.rows[0].owner_id) : null;
+  if (!ownerVendor || clean(ownerVendor.status).toUpperCase() !== 'ACTIVE') {
+    throw new Error('Owner Cashfree settlement account is not active. Connect and verify the owner payment account before creating a rent payment link.');
+  }
   const notifyUrl = `${baseUrl()}/api/payment-automation/webhook/cashfree`;
 
   const payload = {
