@@ -308,6 +308,9 @@ function App() {
   const [invoiceSearch, setInvoiceSearch] =
     useState('');
 
+  const [invoiceStatusFilter, setInvoiceStatusFilter] =
+    useState<'all' | 'pending' | 'overdue' | 'paid' | 'cancelled'>('all');
+
   const [propertyFilter, setPropertyFilter] =
     useState('');
 
@@ -1770,7 +1773,7 @@ function App() {
         const query =
           normalize(invoiceSearch);
 
-        return (
+        const matchesSearch =
           !query ||
           normalize(
             invoice.invoice_number,
@@ -1786,8 +1789,13 @@ function App() {
           ).includes(query) ||
           normalize(
             invoice.delivery_status,
-          ).includes(query)
-        );
+          ).includes(query);
+
+        const matchesStatus =
+          invoiceStatusFilter === 'all' ||
+          normalize(invoice.status) === invoiceStatusFilter;
+
+        return matchesSearch && matchesStatus;
       },
     );
 
@@ -2480,6 +2488,8 @@ function App() {
             invoices={filteredInvoices}
             search={invoiceSearch}
             setSearch={setInvoiceSearch}
+            statusFilter={invoiceStatusFilter}
+            setStatusFilter={setInvoiceStatusFilter}
             getBalance={getInvoiceBalance}
             onMarkPaid={handleMarkInvoicePaid}
             markingInvoiceId={markingInvoiceId}
@@ -5040,6 +5050,8 @@ function InvoicesView({
   invoices,
   search,
   setSearch,
+  statusFilter,
+  setStatusFilter,
   getBalance,
   onMarkPaid,
   markingInvoiceId,
@@ -5047,6 +5059,8 @@ function InvoicesView({
   invoices: Invoice[];
   search: string;
   setSearch: (value: string) => void;
+  statusFilter: 'all' | 'pending' | 'overdue' | 'paid' | 'cancelled';
+  setStatusFilter: (value: 'all' | 'pending' | 'overdue' | 'paid' | 'cancelled') => void;
   getBalance: (invoice: Invoice) => number;
   onMarkPaid: (invoice: Invoice) => void;
   markingInvoiceId: number | null;
@@ -5063,6 +5077,39 @@ function InvoicesView({
         value={search}
         onChange={(e) => setSearch(e.target.value)}
       />
+
+      <div className="filter-tabs">
+        {([
+          ['all', 'All'],
+          ['pending', 'Pending'],
+          ['overdue', 'Overdue'],
+          ['paid', 'Paid'],
+          ['cancelled', 'Cancelled'],
+        ] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            className={statusFilter === value ? 'filter-tab active' : 'filter-tab'}
+            onClick={() => setStatusFilter(value)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="summary-strip">
+        <span>{invoices.length} shown</span>
+        <strong>
+          {money(
+            invoices.reduce(
+              (sum, invoice) =>
+                sum + Number(invoice.amount || 0),
+              0,
+            ),
+          )}
+        </strong>
+      </div>
+
       {invoices.map((invoice) => {
         const balance = getBalance(invoice);
         const paid = Number(invoice.paid_amount || 0);
