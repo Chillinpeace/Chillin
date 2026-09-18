@@ -4933,13 +4933,13 @@ function InvoicesView({
                 >
                   View Payment Page
                 </a>
-                <button
+                <a
                   className="btn-secondary"
-                  type="button"
-                  onClick={() => sendInvoiceWhatsApp(invoice)}
+                                    href={API + '/payment-automation/invoices/' + invoice.id + '/whatsapp-link'}
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   Send WhatsApp
-                </button>
+                </a>
                 {!isPaid && (
                   <button
                     className="btn-primary"
