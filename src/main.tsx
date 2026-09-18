@@ -1891,75 +1891,15 @@ function App() {
           },
         );
 
-        const tenant =
-          tenants.find(
-            (item) =>
-              item.id ===
-              invoice.tenant_id,
-          );
-
-        if (!tenant) {
-          throw new Error(
-            'Tenant information not found.',
-          );
-        }
-
-        const paymentPage =
+        const result =
           await apiRequest<{
             url: string;
-            payment_page_url: string;
           }>(
             `/payment-automation/invoices/${invoice.id}/whatsapp-link`,
           );
 
-        let phone =
-          tenant.phone.replace(
-            /[^0-9]/g,
-            '',
-          );
-
-        if (phone.length === 10) {
-          phone = `91${phone}`;
-        }
-
-        const paid =
-          Number(
-            invoice.paid_amount ||
-              0,
-          );
-
-        const balance =
-          Math.max(
-            Number(
-              invoice.balance_amount ??
-                Number(
-                  invoice.amount ||
-                    0,
-                ) -
-                  paid,
-            ),
-            0,
-          );
-
-        const message =
-          encodeURIComponent(
-            `Hello ${tenant.name},\\n\\nHere is your rent invoice from Peacely.\\n\\nInvoice: ${
-              invoice.invoice_number
-            }\\nMonth: ${
-              invoice.month || '-'
-            }\\nAmount: ${money(
-              invoice.amount,
-            )}\\nPaid: ${money(
-              paid,
-            )}\\nBalance: ${money(
-              balance,
-            )}\\nDue date: ${formatDate(
-              invoice.due_date,
-            )}\\n\\nPay directly to the property owner using the UPI/phone/QR details here:\\n${paymentPage.payment_page_url}\\n\\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`,
-          );
-
         window.open(
-          `https://wa.me/${phone}?text=${message}`,
+          result.url,
           '_blank',
         );
 
@@ -1968,7 +1908,7 @@ function App() {
         setError(
           err instanceof Error
             ? err.message
-            : 'Unable to send invoice.',
+            : 'Unable to open WhatsApp.',
         );
       }
     };
