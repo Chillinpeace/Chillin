@@ -485,6 +485,7 @@ async function createDueInvoices() {
     for (const tenant of tenants.rows) {
       const due = dueDateForMonth(year, monthIndex, tenant.due_date);
       const dueIso = isoDate(due);
+      const monthLabel = due.toLocaleString('en-IN', { month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata' });
       const threshold = addDays(due, -reminderDays);
       const todayIso = isoDate(today);
 
@@ -508,7 +509,7 @@ async function createDueInvoices() {
              CASE WHEN $5::date < CURRENT_DATE THEN 'Overdue' ELSE 'Pending' END,
              0,'Not Sent')
            RETURNING id`,
-          [invoiceNumber, tenant.id, num(tenant.monthly_rent), dueIso, dueIso],
+          [invoiceNumber, tenant.id, num(tenant.monthly_rent), monthLabel, dueIso],
         );
         invoiceId = result.rows[0].id;
         created += 1;
