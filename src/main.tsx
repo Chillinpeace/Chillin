@@ -4266,38 +4266,156 @@ function PaymentAutomationCard() {
     paid_last_30_days: number;
   } | null>(null);
 
+  const [settings, setSettings] = useState({
+    reminders_enabled: true,
+    reminder_days_before: 3,
+    overdue_reminders_enabled: true,
+    recurring_invoices_enabled: true,
+  });
+
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [settingsMessage, setSettingsMessage] = useState('');
+
+  const loadPaymentAutomation = async () => {
+    const [statusResult, settingsResult] = await Promise.allSettled([
+      apiRequest<{
+        automatic: boolean;
+        whatsapp: boolean;
+        pending_invoices: number;
+        paid_last_30_days: number;
+      }>('/payment-automation/status'),
+      apiRequest<{
+        settings: typeof settings;
+      }>('/payment-automation/settings'),
+    ]);
+
+    if (statusResult.status === 'fulfilled') setStatus(statusResult.value);
+    if (settingsResult.status === 'fulfilled' && settingsResult.value?.settings) {
+      setSettings(settingsResult.value.settings);
+    }
+  };
+
   useEffect(() => {
-    apiRequest<{
-      automatic: boolean;
-      whatsapp: boolean;
-      pending_invoices: number;
-      paid_last_30_days: number;
-    }>('/payment-automation/status')
-      .then(setStatus)
-      .catch(() => setStatus(null));
+    loadPaymentAutomation().catch(() => undefined);
   }, []);
+
+  const saveSettings = async () => {
+    setSavingSettings(true);
+    setSettingsMessage('');
+    try {
+      const result = await apiRequest<{
+        settings: typeof settings;
+      }>('/payment-automation/settings', {
+        method: 'PUT',
+        body: JSON.stringify(settings),
+      });
+      if (result?.settings) setSettings(result.settings);
+      setSettingsMessage('Payment automation settings saved.');
+      await loadPaymentAutomation();
+    } catch (error) {
+      setSettingsMessage(error instanceof Error ? error.message : 'Could not save payment settings.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
 
   return (
     <div className="glass-card">
       <div className="glass-header">
         <div>
-          <h3>Automatic Payments</h3>
-          <p>Invoices, payment links and payment confirmation run automatically.</p>
+          <h3>Automatic Rent Payments</h3>
+          <p>Send rent reminders with a payment link and update payments automatically.</p>
         </div>
         <span className={status?.automatic && status?.whatsapp ? 'badge badge-emerald' : 'badge'}>
           {status?.automatic && status?.whatsapp ? 'Active' : 'Setup Required'}
         </span>
       </div>
+
       <div className="metrics-row">
         <MiniMetric label="Pending" value={status ? status.pending_invoices : '—'} />
         <MiniMetric label="Paid · 30 days" value={status ? status.paid_last_30_days : '—'} />
-        <MiniMetric label="Payment Link" value={status?.automatic ? 'Cashfree' : 'Not connected'} />
-        <MiniMetric label="WhatsApp" value={status?.whatsapp ? 'Automatic' : 'Not connected'} />
+        <MiniMetric label="Payment Gateway" value={status?.automatic ? 'Connected' : 'Not connected'} />
+        <MiniMetric label="WhatsApp" value={status?.whatsapp ? 'Connected' : 'Not connected'} />
       </div>
+
+      <div className="detail-grid">
+        <label className="detail-item">
+          <span>Automatic invoices</span>
+          <select
+            className="modal-input"
+            value={settings.recurring_invoices_enabled ? 'on' : 'off'}
+            onChange={(e) => setSettings((current) => ({
+              ...current,
+              recurring_invoices_enabled: e.target.value === 'on',
+            }))}
+          >
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+
+        <label className="detail-item">
+          <span>Reminders</span>
+          <select
+            className="modal-input"
+            value={settings.reminders_enabled ? 'on' : 'off'}
+            onChange={(e) => setSettings((current) => ({
+              ...current,
+              reminders_enabled: e.target.value === 'on',
+            }))}
+          >
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+
+        <label className="detail-item">
+          <span>Remind before due date</span>
+          <select
+            className="modal-input"
+            value={String(settings.reminder_days_before)}
+            onChange={(e) => setSettings((current) => ({
+              ...current,
+              reminder_days_before: Number(e.target.value),
+            }))}
+          >
+            <option value="0">On due date</option>
+            <option value="1">1 day before</option>
+            <option value="2">2 days before</option>
+            <option value="3">3 days before</option>
+            <option value="5">5 days before</option>
+            <option value="7">7 days before</option>
+          </select>
+        </label>
+
+        <label className="detail-item">
+          <span>Overdue reminders</span>
+          <select
+            className="modal-input"
+            value={settings.overdue_reminders_enabled ? 'on' : 'off'}
+            onChange={(e) => setSettings((current) => ({
+              ...current,
+              overdue_reminders_enabled: e.target.value === 'on',
+            }))}
+          >
+            <option value="on">On</option>
+            <option value="off">Off</option>
+          </select>
+        </label>
+      </div>
+
+      <div className="modal-actions">
+        <button className="btn-primary" onClick={saveSettings} disabled={savingSettings}>
+          {savingSettings ? 'Saving...' : 'Save Payment Settings'}
+        </button>
+      </div>
+
+      {settingsMessage && <div className="small-empty">{settingsMessage}</div>}
+
       <div className="small-empty">
         {status?.automatic && status?.whatsapp
-          ? 'Tenants receive payment reminders with a Pay Now link. Successful online payments update the invoice automatically.'
-          : 'Add the Cashfree and WhatsApp Cloud API credentials in Railway environment variables to enable automatic collection.'}
+          ? 'Tenant receives the WhatsApp reminder and Pay Now link. Successful online payment updates the invoice automatically and sends the paid invoice.'
+          : 'Connect Cashfree and WhatsApp Cloud API in Railway environment variables to turn on automatic collection.'}
       </div>
     </div>
   );
