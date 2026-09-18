@@ -48,17 +48,8 @@ async function auth(req, res, next) {
   }
 }
 
-const whatsappConfigured = () =>
-  Boolean(
-    process.env.WHATSAPP_ACCESS_TOKEN &&
-    process.env.WHATSAPP_PHONE_NUMBER_ID &&
-    process.env.WHATSAPP_REMINDER_TEMPLATE,
-  );
-
 const baseUrl = () =>
   String(process.env.APP_BASE_URL || 'https://chillin-production.up.railway.app').replace(/\/$/, '');
-
-const whatsappVersion = () => process.env.WHATSAPP_GRAPH_VERSION || 'v23.0';
 
 const normalizePhone = (value) => {
   let phone = String(value || '').replace(/[^0-9]/g, '');
@@ -154,47 +145,6 @@ async function createPaymentToken(invoiceId) {
   return token;
 }
 
-async function sendWhatsAppTemplate(to, templateName, bodyTexts = []) {
-  if (!whatsappConfigured() || !templateName) return null;
-
-  const response = await fetch(
-    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: normalizePhone(to),
-        type: 'template',
-        template: {
-          name: templateName,
-          language: {
-            code: process.env.WHATSAPP_TEMPLATE_LANGUAGE || 'en_US',
-          },
-          components: bodyTexts.length
-            ? [{
-                type: 'body',
-                parameters: bodyTexts.map((text) => ({
-                  type: 'text',
-                  text: String(text),
-                })),
-              }]
-            : undefined,
-        },
-      }),
-    },
-  );
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.error?.message || `WhatsApp request failed: ${response.status}`);
-  }
-  return data;
-}
-
 async function buildInvoicePdf(invoice) {
   const doc = new PDFDocument({ size: 'A4', margin: 48 });
   const chunks = [];
@@ -223,52 +173,26 @@ async function buildInvoicePdf(invoice) {
   return finished;
 }
 
-async function sendPaidInvoice(invoiceId) {
-  if (!whatsappConfigured()) return false;
-
+async function preparePaidInvoiceReceipt(invoiceId) {
   const invoice = await loadInvoice(invoiceId);
-  if (!invoice || clean(invoice.status).toLowerCase() !== 'paid') return false;
+  if (!invoice || clean(invoice.status).toLowerCase() !== 'paid') return '';
 
-  const pdf = await buildInvoicePdf(invoice);
+  const existing = await query(
+    'SELECT receipt_token FROM invoices WHERE id=$1 LIMIT 1',
+    [invoiceId],
+  );
+  const existingToken = clean(existing.rows[0]?.receipt_token);
+  if (existingToken) {
+    return `${baseUrl()}/api/payment-automation/receipt/${existingToken}.pdf`;
+  }
+
   const token = crypto.randomBytes(24).toString('hex');
-
   await query(
     'UPDATE invoices SET receipt_token=$1,updated_at=CURRENT_TIMESTAMP WHERE id=$2',
     [token, invoiceId],
   );
-
-  const publicUrl = `${baseUrl()}/api/payment-automation/receipt/${token}.pdf`;
-
-  const response = await fetch(
-    `https://graph.facebook.com/${whatsappVersion()}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.WHATSAPP_ACCESS_TOKEN}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: normalizePhone(invoice.phone),
-        type: 'document',
-        document: {
-          link: publicUrl,
-          filename: `${invoice.invoice_number}.pdf`,
-          caption: `Paid rent invoice ${invoice.invoice_number}`,
-        },
-      }),
-    },
-  );
-
-  const data = await response.json().catch(() => null);
-  if (!response.ok) {
-    throw new Error(data?.error?.message || `WhatsApp receipt failed: ${response.status}`);
-  }
-
-  return true;
+  return `${baseUrl()}/api/payment-automation/receipt/${token}.pdf`;
 }
-
 async function markInvoicePaidManually(ownerId, invoiceId) {
   const invoice = await loadInvoice(invoiceId);
   if (!invoice || !await ownerOwnsInvoice(ownerId, invoiceId)) {
@@ -332,9 +256,9 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
   );
 
   try {
-    await sendPaidInvoice(invoiceId);
+    await preparePaidInvoiceReceipt(invoiceId);
   } catch (error) {
-    console.error(`Paid invoice WhatsApp failed for invoice ${invoiceId}:`, error.message);
+    console.error(`Paid invoice receipt preparation failed for invoice ${invoiceId}:`, error.message);
   }
 
   return { invoice: await loadInvoice(invoiceId), alreadyPaid: false };
@@ -471,10 +395,6 @@ async function createDueInvoices() {
 }
 
 async function sendDueReminderIfNeeded(invoice, settings) {
-  if (!whatsappConfigured()) {
-    console.warn('WhatsApp automation skipped: Cloud API environment variables are not configured.');
-    return false;
-  }
   if (!settings.reminders_enabled) return false;
   if (clean(invoice.status).toLowerCase() === 'paid') return false;
 
@@ -490,7 +410,7 @@ async function sendDueReminderIfNeeded(invoice, settings) {
   );
 
   if (!paymentDetails || (!clean(paymentDetails.upi_id) && !clean(paymentDetails.phone) && !clean(paymentDetails.qr_code_data))) {
-    console.warn(`No owner payment details configured for invoice ${invoice.id}; reminder skipped.`);
+    console.warn(`No owner payment details configured for invoice ${invoice.id}; manual WhatsApp reminder is not ready.`);
     return false;
   }
 
@@ -510,49 +430,20 @@ async function sendDueReminderIfNeeded(invoice, settings) {
 
   const paymentToken = await createPaymentToken(invoice.id);
   const paymentPageUrl = `${baseUrl()}/api/payment-automation/pay/${paymentToken}`;
-  const template = process.env.WHATSAPP_REMINDER_TEMPLATE || 'peacely_rent_due';
+  const manualMessage = `Hello ${invoice.tenant_name}, your rent of ₹${num(invoice.amount).toLocaleString('en-IN')} is due on ${invoice.due_date}. Pay directly to the property owner here: ${paymentPageUrl}`;
 
-  const paymentSummary = [
-    clean(paymentDetails.upi_id) ? `UPI: ${paymentDetails.upi_id}` : '',
-    clean(paymentDetails.phone) ? `Phone: ${paymentDetails.phone}` : '',
-    paymentPageUrl,
-  ].filter(Boolean).join(' | ');
+  await query(
+    `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,sent_at)
+     SELECT p.owner_id,$1,$2,'whatsapp',$3,$4,$5,'ready',NULL
+     FROM properties p
+     INNER JOIN tenants t ON t.property_id=p.id
+     WHERE t.id=$1
+     LIMIT 1`,
+    [invoice.tenant_id, invoice.id, reminderType, normalizePhone(invoice.phone), manualMessage],
+  );
 
-  try {
-    const result = await sendWhatsAppTemplate(
-      invoice.phone,
-      template,
-      [
-        invoice.tenant_name,
-        `₹${num(invoice.amount).toLocaleString('en-IN')}`,
-        invoice.due_date,
-        paymentPageUrl,
-      ],
-    );
-
-    await query(
-      `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,provider_message_id,sent_at)
-       SELECT p.owner_id,$1,$2,'whatsapp',$3,$4,$5,'sent',$6,CURRENT_TIMESTAMP
-       FROM properties p
-       INNER JOIN tenants t ON t.property_id=p.id
-       WHERE t.id=$1
-       LIMIT 1`,
-      [
-        invoice.tenant_id,
-        invoice.id,
-        reminderType,
-        normalizePhone(invoice.phone),
-        `Automatic rent reminder. Pay directly to owner. ${paymentSummary}`,
-        result?.messages?.[0]?.id || '',
-      ],
-    );
-    return true;
-  } catch (error) {
-    console.error(`WhatsApp reminder failed for invoice ${invoice.id}:`, error.message);
-    return false;
-  }
+  return true;
 }
-
 async function runPaymentAutomation() {
   try {
     await ensurePaymentColumns();
@@ -602,7 +493,6 @@ router.get('/payment-automation/status', auth, async (req, res) => {
       clean(paymentDetails.phone) ||
       clean(paymentDetails.qr_code_data)
     )),
-    whatsapp: whatsappConfigured(),
     owner_payment_details: Boolean(paymentDetails),
     pending_invoices: Number(pending.rows[0]?.count || 0),
     paid_last_30_days: Number(recent.rows[0]?.count || 0),
@@ -803,6 +693,30 @@ router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
   res.end(pdf);
 });
 
+router.get('/payment-automation/invoices/:id/whatsapp-link', auth, async (req, res) => {
+  await ensurePaymentColumns();
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || !await ownerOwnsInvoice(req.paymentOwner.id, id)) {
+    return res.status(404).json({ success: false, error: 'Invoice not found.' });
+  }
+
+  const invoice = await loadInvoice(id);
+  if (!invoice) return res.status(404).json({ success: false, error: 'Invoice not found.' });
+
+  const paymentToken = await createPaymentToken(id);
+  const paymentPageUrl = `${baseUrl()}/api/payment-automation/pay/${paymentToken}`;
+  const phone = normalizePhone(invoice.phone);
+  if (!phone) {
+    return res.status(400).json({ success: false, error: 'Tenant phone number is missing.' });
+  }
+
+  const message = `Hello ${invoice.tenant_name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${invoice.invoice_number}\nMonth: ${invoice.month || '-'}\nAmount: ₹${num(invoice.amount).toLocaleString('en-IN')}\nDue date: ${invoice.due_date}\n\nPay directly to the property owner using the UPI/phone/QR details here:\n${paymentPageUrl}\n\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`;
+  return res.json({
+    success: true,
+    url: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
+    payment_page_url: paymentPageUrl,
+  });
+});
 router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, res) => {
   await ensurePaymentColumns();
   const id = Number(req.params.id);
@@ -862,42 +776,6 @@ router.put('/payment-automation/settings', auth, async (req, res) => {
       recurring_invoices_enabled: recurringEnabled,
     },
   });
-});
-
-router.post('/payment-automation/test-whatsapp', auth, async (req, res) => {
-  await ensurePaymentColumns();
-
-  if (!whatsappConfigured()) {
-    return res.status(503).json({
-      success: false,
-      error: 'WhatsApp Cloud API is not configured. Check the WhatsApp environment variables on Railway.',
-    });
-  }
-
-  const to = clean(req.body?.phone);
-  if (!to) {
-    return res.status(400).json({ success: false, error: 'Enter a test WhatsApp number.' });
-  }
-
-  try {
-    const result = await sendWhatsAppTemplate(
-      to,
-      process.env.WHATSAPP_REMINDER_TEMPLATE,
-      ['Peacely Test', '₹1', isoDate(new Date()), `${baseUrl()}/api/payment-automation/status`],
-    );
-
-    return res.json({
-      success: true,
-      provider_message_id: result?.messages?.[0]?.id || '',
-      message: 'WhatsApp test request accepted by Meta.',
-    });
-  } catch (error) {
-    console.error('WhatsApp test failed:', error);
-    return res.status(400).json({
-      success: false,
-      error: error?.message || 'WhatsApp test failed.',
-    });
-  }
 });
 
 export { runPaymentAutomation };
