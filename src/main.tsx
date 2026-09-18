@@ -4561,16 +4561,20 @@ function AccountSettingsModal({
   const [savingAutomation, setSavingAutomation] = useState(false);
   const [message, setMessage] = useState('');
   const [testWhatsappPhone, setTestWhatsappPhone] = useState('');
+  const [whatsappConfigured, setWhatsappConfigured] = useState<boolean | null>(null);
 
   useEffect(() => {
     const load = async () => {
       try {
-        const [paymentResult, automationResult] = await Promise.all([
+        const [paymentResult, automationResult, statusResult] = await Promise.all([
           apiRequest<{ payment_details: OwnerPaymentDetails }>(
             '/payment-automation/payment-details',
           ),
           apiRequest<{ settings: typeof automationSettings }>(
             '/payment-automation/settings',
+          ),
+          apiRequest<{ whatsapp: boolean }>(
+            '/payment-automation/status',
           ),
         ]);
 
@@ -4580,6 +4584,7 @@ function AccountSettingsModal({
         if (automationResult?.settings) {
           setAutomationSettings(automationResult.settings);
         }
+        setWhatsappConfigured(Boolean(statusResult?.whatsapp));
       } catch (error) {
         setMessage(
           error instanceof Error
@@ -4859,6 +4864,7 @@ function AccountSettingsModal({
 
       <div className="small-empty" style={{ marginTop: 18 }}>
         <strong>WhatsApp test</strong><br />
+        Status: <strong>{whatsappConfigured === null ? 'Checking...' : whatsappConfigured ? 'Configured' : 'Not configured'}</strong><br />
         Send a real test message using the configured Peacely WhatsApp template.
       </div>
 
