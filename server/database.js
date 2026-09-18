@@ -114,6 +114,8 @@ export async function initializeDatabase() {
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) NOT NULL,
         address TEXT DEFAULT '',
+        property_type VARCHAR(30) DEFAULT 'Gents',
+        rent_cycle VARCHAR(40) DEFAULT '1st of every month',
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
     `);
@@ -121,6 +123,14 @@ export async function initializeDatabase() {
     await client.query(`
       ALTER TABLE properties
       ADD COLUMN IF NOT EXISTS address TEXT DEFAULT '';
+
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS property_type VARCHAR(30)
+        DEFAULT 'Gents';
+
+      ALTER TABLE properties
+      ADD COLUMN IF NOT EXISTS rent_cycle VARCHAR(40)
+        DEFAULT '1st of every month';
 
       ALTER TABLE properties
       ADD COLUMN IF NOT EXISTS created_at
@@ -157,6 +167,9 @@ export async function initializeDatabase() {
         property_id INTEGER NOT NULL,
         room_number VARCHAR(50) NOT NULL,
         sharing_type VARCHAR(50) DEFAULT 'Single',
+        room_type VARCHAR(20) DEFAULT 'Non AC',
+        floor_name VARCHAR(150) DEFAULT 'Ground Floor',
+        per_day_rent NUMERIC(10,2) DEFAULT 0,
         rent_amount NUMERIC(10,2) DEFAULT 0,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
@@ -174,6 +187,18 @@ export async function initializeDatabase() {
         DEFAULT 'Single';
 
       ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS room_type VARCHAR(20)
+        DEFAULT 'Non AC';
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS floor_name VARCHAR(150)
+        DEFAULT 'Ground Floor';
+
+      ALTER TABLE rooms
+      ADD COLUMN IF NOT EXISTS per_day_rent NUMERIC(10,2)
+        DEFAULT 0;
+
+      ALTER TABLE rooms
       ADD COLUMN IF NOT EXISTS rent_amount NUMERIC(10,2)
         DEFAULT 0;
 
@@ -186,6 +211,18 @@ export async function initializeDatabase() {
       UPDATE rooms
       SET sharing_type = 'Single'
       WHERE sharing_type IS NULL;
+
+      UPDATE rooms
+      SET room_type = 'Non AC'
+      WHERE room_type IS NULL OR room_type = '';
+
+      UPDATE rooms
+      SET floor_name = 'Ground Floor'
+      WHERE floor_name IS NULL OR floor_name = '';
+
+      UPDATE rooms
+      SET per_day_rent = 0
+      WHERE per_day_rent IS NULL;
 
       UPDATE rooms
       SET rent_amount = 0
