@@ -1927,3 +1927,27 @@ select:focus-visible {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* ---------- Profile hamburger menu ---------- */
+.hamburger-btn{width:44px;height:44px;border:0;border-radius:12px;background:rgba(255,255,255,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;box-shadow:0 4px 14px rgba(0,0,0,.08)}
+.hamburger-btn span{display:block;width:21px;height:2px;border-radius:2px;background:#172033}
+.profile-menu-backdrop{position:fixed;inset:0;z-index:1000;background:rgba(17,24,39,.28);backdrop-filter:blur(3px)}
+.profile-menu{position:absolute;top:12px;right:12px;width:min(390px,calc(100vw - 24px));max-height:calc(100vh - 24px);overflow:auto;background:#fff;border-radius:20px;box-shadow:0 18px 50px rgba(0,0,0,.2);padding:12px}
+.profile-menu-header{display:flex;align-items:center;gap:12px;padding:14px 12px 16px;border-bottom:1px solid #edf0f4;margin-bottom:6px}
+.profile-menu-header .avatar{flex:0 0 auto}
+.profile-menu-header strong{display:block;font-size:16px}
+.profile-menu-header span{display:block;color:#687386;font-size:12px;margin-top:3px;word-break:break-all}
+.profile-menu-item{width:100%;display:flex;align-items:center;gap:12px;padding:14px 12px;border:0;background:transparent;border-radius:12px;color:#172033;text-align:left;font-size:14px;font-weight:600;cursor:pointer}
+.profile-menu-item:hover{background:#f5f7fa}
+.profile-menu-item>span:nth-child(2){flex:1}
+.menu-chevron{font-size:20px;color:#7b8493;font-weight:400}
+.profile-menu-detail{margin:0 8px 8px;padding:13px 14px;background:#f6f7fb;border-radius:12px;color:#4b5565;font-size:13px;line-height:1.5}
+.profile-menu-detail strong{color:#172033}
+.profile-menu-detail p{margin:6px 0 9px}
+.profile-menu-detail ul{margin:7px 0 2px;padding-left:19px}
+.profile-menu-detail li{margin:5px 0}
+.menu-detail-row{display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-top:1px solid #e6e9ef}
+.menu-contact-box{padding:8px 0;border-top:1px solid #e6e9ef;display:flex;flex-direction:column;gap:2px}
+.profile-menu-divider{height:1px;background:#e8ebef;margin:6px 8px}
+.logout-menu-item{color:#b42318}
