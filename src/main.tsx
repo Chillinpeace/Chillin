@@ -3308,25 +3308,7 @@ function Dashboard({
           }
         />
 
-        <QuickAction
-          icon="₹"
-          label="Payment"
-          onClick={() =>
-            openModal(
-              'payment',
-            )
-          }
-        />
 
-        <QuickAction
-          icon="🧾"
-          label="Invoice"
-          onClick={() =>
-            openModal(
-              'invoice',
-            )
-          }
-        />
       </div>
 
       {overdueTenants.length >
