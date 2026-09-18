@@ -4227,27 +4227,6 @@ function TenantsView({
                   Details
                 </button>
 
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    sendWhatsAppReminder(
-                      tenant,
-                    )
-                  }
-                >
-                  WhatsApp
-                </button>
-
-                <button
-                  className="btn-primary"
-                  onClick={() =>
-                    openPaymentForTenant(
-                      tenant,
-                    )
-                  }
-                >
-                  Pay
-                </button>
               </div>
             </div>
           );
