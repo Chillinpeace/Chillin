@@ -699,12 +699,10 @@ router.get('/payment-automation/pay/:token', async (req, res) => {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 
-  // Use a minimal P2P UPI intent. The tenant enters the amount in the
-  // UPI app itself, which avoids app-specific rejection of prefilled
-  // merchant/reference fields while keeping the owner's UPI destination.
-  const upiLink = clean(invoice.upi_id)
-    ? `upi://pay?pa=${encodeURIComponent(invoice.upi_id)}&pn=${encodeURIComponent(invoice.owner_name || 'Owner')}`
-    : '';
+  // Do not force a UPI deep-link here. Some UPI apps, including Slice,
+  // can reject transactions launched from another app even when the same
+  // UPI ID works when entered manually. Use the owner's QR/UPI ID instead.
+  const hasUpi = clean(invoice.upi_id);
 
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.send(`<!doctype html>
@@ -725,10 +723,22 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
   <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
-  ${upiLink ? `<a class="pay" href="${upiLink}">Open UPI app</a>` : ''}
-  ${clean(invoice.upi_id) ? `<div class="detail"><strong>UPI ID</strong><br><span id="upiId">${escapeHtml(invoice.upi_id)}</span><br><button type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(invoice.upi_id)}).then(()=>{this.textContent='Copied'})" style="margin-top:8px;padding:9px 12px;border:0;border-radius:8px;background:#e9edf3;cursor:pointer">Copy UPI ID</button></div>` : ''}
+  ${qr ? `
+    <div class="detail" style="text-align:center">
+      <strong>Scan the owner's UPI QR code</strong>
+      <div class="muted" style="margin-top:6px">Open Slice or any UPI app, scan this QR, and pay ₹${num(invoice.amount).toLocaleString('en-IN')}.</div>
+      <img class="qr" src="${qr}" alt="Owner UPI QR code">
+    </div>
+  ` : ''}
+  ${hasUpi ? `
+    <div class="detail">
+      <strong>UPI ID</strong><br>
+      <span id="upiId">${escapeHtml(invoice.upi_id)}</span><br>
+      <button type="button" onclick="navigator.clipboard&&navigator.clipboard.writeText(${JSON.stringify(invoice.upi_id)}).then(()=>{this.textContent='Copied';this.style.background='#d9f7df'}).catch(()=>{this.textContent='Copy failed — select the UPI ID above'})" style="margin-top:8px;padding:10px 14px;border:0;border-radius:8px;background:#e9edf3;cursor:pointer;font-weight:700">Copy UPI ID</button>
+      <div class="muted" style="margin-top:8px">In Slice, choose UPI payment, paste this UPI ID, and enter ₹${num(invoice.amount).toLocaleString('en-IN')}.</div>
+    </div>
+  ` : ''}
   ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
-  ${qr ? `<img class="qr" src="${qr}" alt="Owner UPI QR code">` : ''}
   ${clean(invoice.payment_instructions) ? `<div class="detail note">${escapeHtml(invoice.payment_instructions)}</div>` : ''}
   <div class="detail"><strong>After paying</strong><br>Inform the property owner. The owner will confirm the payment in Peacely and your paid invoice will be sent automatically.</div>
 </div>
