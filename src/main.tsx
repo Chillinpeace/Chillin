@@ -2354,6 +2354,7 @@ function App() {
         onLogout={handleLogout}
         onDeleteAccount={handleDeleteAccount}
         onAccountSettings={() => openModal('accountSettings')}
+        onExpenses={() => openModal('expenses')}
       />
 
       {error && (
@@ -3343,6 +3344,10 @@ function Header({
 
             <button className="profile-menu-item" type="button" onClick={() => { onAccountSettings(); setMenuOpen(false); }}>
               <span>⚙️</span><span>Account Settings</span>
+            </button>
+
+            <button className="profile-menu-item" type="button" onClick={() => { onExpenses(); setMenuOpen(false); }}>
+              <span>💰</span><span>Expenses</span><span className="menu-chevron">›</span>
             </button>
 
             <button className="profile-menu-item" type="button" onClick={() => toggleSection('plan')}>
