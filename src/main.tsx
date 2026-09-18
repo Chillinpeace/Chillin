@@ -18,6 +18,8 @@ interface Property {
   id: number;
   name: string;
   address: string;
+  property_type?: string;
+  rent_cycle?: string;
   room_count: number;
   bed_count?: number;
   occupied_bed_count?: number;
@@ -39,6 +41,9 @@ interface Room {
   property_id: number;
   room_number: string;
   sharing_type: string;
+  room_type?: string;
+  floor_name?: string;
+  per_day_rent?: number;
   rent_amount: number;
   property_name?: string;
   bed_count?: number;
