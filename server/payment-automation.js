@@ -146,7 +146,7 @@ async function createCashfreeVendor(owner, body) {
 
   const vendorId = `PEACELY_OWNER_${owner.id}`;
   const settlementMethod = clean(body?.settlement_method).toLowerCase();
-  const name = clean(body?.name || owner.name).replace(/[^a-zA-Z0-9 .\/-&]/g, '').slice(0, 100);
+  const name = clean(body?.name || owner.name).replace(/[^a-zA-Z0-9 .\/&-]/g, '').slice(0, 100);
   const email = clean(body?.email || owner.email);
   const phone = normalizePhone(body?.phone || body?.mobile || '');
 
