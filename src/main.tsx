@@ -1981,6 +1981,36 @@ function App() {
     );
   };
 
+  const handleTenantMoveOut = async (tenant: Tenant) => {
+    const noticeDate = new Date();
+    noticeDate.setMonth(noticeDate.getMonth() + 1);
+    const noticeDateText = noticeDate.toLocaleDateString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+    });
+
+    if (!window.confirm(
+      `Start a 1-month move-out notice for ${tenant.name}?\\n\\nExpected move-out date: ${noticeDateText}.\\nThe tenant remains active during the notice period.\\n\\nContinue?`,
+    )) return;
+
+    try {
+      const result = await apiRequest<{ tenant: Tenant }>(
+        `/tenants/${tenant.id}/move-out`,
+        { method: 'POST' },
+      );
+      setSelectedTenant(result.tenant);
+      setError('');
+      await loadAllData();
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : 'Unable to start move-out notice.',
+      );
+    }
+  };
+
   const openPaymentForTenant = (
     tenant: Tenant,
   ) => {
@@ -3138,6 +3168,7 @@ function App() {
             'accountSettings' && (
             <AccountSettingsModal
               onClose={closeModal}
+              financeSummary={financeSummary}
             />
           )}
 
@@ -3503,7 +3534,8 @@ function Dashboard({
 
         <QuickAction
           icon="🛏️"
-          label="Bed"
+          label=""
+          iconOnly
           onClick={() =>
             openModal('bed')
           }
@@ -4491,8 +4523,10 @@ function TenantsView({
 
 function AccountSettingsModal({
   onClose,
+  financeSummary,
 }: {
   onClose: () => void;
+  financeSummary: FinanceSummary;
 }) {
   const [paymentDetails, setPaymentDetails] =
     useState<OwnerPaymentDetails>({
@@ -4598,6 +4632,31 @@ function AccountSettingsModal({
     }
   };
 
+  const testWhatsApp = async () => {
+    const phone = testWhatsappPhone.trim() || paymentDetails.phone.trim();
+    if (!phone) {
+      setMessage('Enter a WhatsApp test number or save your phone number first.');
+      return;
+    }
+
+    try {
+      const result = await apiRequest<{ message: string }>(
+        '/payment-automation/test-whatsapp',
+        {
+          method: 'POST',
+          body: JSON.stringify({ phone }),
+        },
+      );
+      setMessage(result.message || 'WhatsApp test request accepted.');
+    } catch (error) {
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : 'WhatsApp test failed.',
+      );
+    }
+  };
+
   const saveAutomation = async () => {
     setSavingAutomation(true);
     setMessage('');
@@ -4627,8 +4686,8 @@ function AccountSettingsModal({
       />
 
       <div className="small-empty">
-        <strong>Owner payment details</strong><br />
-        Add the UPI ID, phone number and/or QR code you want tenants to use. These details appear on the rent payment page linked from WhatsApp reminders.
+        <strong>Payment</strong><br />
+        Add the UPI ID, phone number and/or QR code you want tenants to use. Tenants pay you directly; Peacely does not collect rent.
       </div>
 
       <input
@@ -4711,7 +4770,8 @@ function AccountSettingsModal({
       </button>
 
       <div className="small-empty" style={{ marginTop: 18 }}>
-        <strong>Automatic rent reminders</strong>
+        <strong>Rent Automation</strong><br />
+        Monthly invoices are created automatically. WhatsApp reminders are sent when the reminder window is reached.
       </div>
 
       <label className="detail-item">
@@ -4781,6 +4841,37 @@ function AccountSettingsModal({
       >
         {savingAutomation ? 'Saving...' : 'Save Rent Automation'}
       </button>
+
+      <div className="small-empty" style={{ marginTop: 18 }}>
+        <strong>WhatsApp test</strong><br />
+        Send a real test message using the configured Peacely WhatsApp template.
+      </div>
+
+      <input
+        className="modal-input"
+        inputMode="tel"
+        placeholder="Test WhatsApp number"
+        value={testWhatsappPhone}
+        onChange={(e) => setTestWhatsappPhone(e.target.value)}
+      />
+
+      <button
+        type="button"
+        className="btn-secondary full-btn"
+        onClick={testWhatsApp}
+      >
+        Send Test WhatsApp
+      </button>
+
+      <div className="small-empty" style={{ marginTop: 18 }}>
+        <strong>Finance</strong><br />
+        Current rent collection overview.
+        <div className="menu-detail-row"><span>Expected</span><strong>{money(financeSummary.expected)}</strong></div>
+        <div className="menu-detail-row"><span>Collected</span><strong>{money(financeSummary.collected)}</strong></div>
+        <div className="menu-detail-row"><span>Pending</span><strong>{money(financeSummary.pending)}</strong></div>
+        <div className="menu-detail-row"><span>Overdue</span><strong>{money(financeSummary.overdue)}</strong></div>
+        <div className="menu-detail-row"><span>Collection rate</span><strong>{financeSummary.collection_rate}%</strong></div>
+      </div>
 
       {message && <div className="small-empty">{message}</div>}
 
@@ -5147,6 +5238,7 @@ function TenantDetails({
   pending,
   status,
   onClose,
+  onMoveOut,
 }: {
   tenant: Tenant;
   payments: Payment[];
@@ -5157,6 +5249,7 @@ function TenantDetails({
     | 'pending'
     | 'overdue';
   onClose: () => void;
+  onMoveOut: (tenant: Tenant) => void;
 }) {
   const [fullScreenImage, setFullScreenImage] = useState<{ src: string; label: string } | null>(null);
 
@@ -5242,6 +5335,15 @@ function TenantDetails({
             tenant.email || '-'
           }
         />
+
+        <DetailItem
+          label="Move Out"
+          value={
+            tenant.move_out_date
+              ? formatDate(tenant.move_out_date)
+              : 'No notice'
+          }
+        />
       </div>
 
       {(tenant.id_photo_front || tenant.id_photo_back) && (
@@ -5276,6 +5378,21 @@ function TenantDetails({
           </div>
         </div>
       )}
+
+      {!tenant.move_out_date && normalize(tenant.status) !== 'inactive' && normalize(tenant.status) !== 'moved out' ? (
+        <button
+          type="button"
+          className="btn-secondary full-btn move-out-btn"
+          onClick={() => onMoveOut(tenant)}
+        >
+          Move Out · 1 Month Notice
+        </button>
+      ) : tenant.move_out_date ? (
+        <div className="small-empty move-out-notice">
+          <strong>Move-out notice active</strong>
+          <span>Expected move-out date: {formatDate(tenant.move_out_date)}</span>
+        </div>
+      ) : null}
 
       <div className="finance-panel">
         <div>
@@ -5665,10 +5782,12 @@ function Metric({
 function QuickAction({
   icon,
   label,
+  iconOnly,
   onClick,
 }: {
   icon: string;
   label: string;
+  iconOnly?: boolean;
   onClick: () => void;
 }) {
   return (
@@ -5682,9 +5801,11 @@ function QuickAction({
         {icon}
       </span>
 
-      <small>
-        {label}
-      </small>
+      {!iconOnly && (
+        <small>
+          {label}
+        </small>
+      )}
     </button>
   );
 }
