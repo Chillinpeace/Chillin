@@ -3,6 +3,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { pool, query, initializeDatabase } from './database.js';
+import { runPaymentAutomation } from './payment-automation.js';
 
 const app = express();
 
@@ -2151,18 +2152,6 @@ app.post(
         );
       }
 
-      if (!gender) {
-        throw new Error(
-          'Tenant gender is required.',
-        );
-      }
-
-      if (!idProofType) {
-        throw new Error(
-          'ID proof type is required.',
-        );
-      }
-
       if (
         !Number.isInteger(
           propertyId,
@@ -2370,6 +2359,19 @@ app.post(
       await client.query(
         'COMMIT',
       );
+
+      // Create the tenant's current rent invoice and attempt the
+      // configured WhatsApp reminder immediately after signup.
+      // The tenant is already committed, so automation failure
+      // never rolls back the tenant creation.
+      setTimeout(() => {
+        runPaymentAutomation().catch((automationError) => {
+          console.error(
+            'Tenant created but payment automation failed:',
+            automationError,
+          );
+        });
+      }, 0);
 
       return res.status(201).json({
         success: true,
