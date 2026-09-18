@@ -102,8 +102,22 @@ async function ensurePaymentColumns() {
       ADD COLUMN IF NOT EXISTS payment_link_url TEXT DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_status VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS payment_link_created_at TIMESTAMPTZ,
-      ADD COLUMN IF NOT EXISTS payment_link_paid_amount NUMERIC(12,2) DEFAULT 0;
+      ADD COLUMN IF NOT EXISTS payment_link_paid_amount NUMERIC(12,2) DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS receipt_token VARCHAR(80) DEFAULT '';
     CREATE INDEX IF NOT EXISTS idx_invoices_payment_link_id ON invoices(payment_link_id);
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY, owner_id INTEGER NOT NULL, tenant_id INTEGER, invoice_id INTEGER,
+      channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp', type VARCHAR(50) NOT NULL DEFAULT 'manual',
+      recipient VARCHAR(255) DEFAULT '', message TEXT NOT NULL, status VARCHAR(30) NOT NULL DEFAULT 'queued',
+      provider_message_id VARCHAR(255), sent_at TIMESTAMPTZ, created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_notifications_owner_created ON notifications(owner_id, created_at DESC);
+    CREATE TABLE IF NOT EXISTS automation_settings (
+      owner_id INTEGER PRIMARY KEY, reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      reminder_days_before INTEGER NOT NULL DEFAULT 3, overdue_reminders_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      recurring_invoices_enabled BOOLEAN NOT NULL DEFAULT TRUE, last_run_at TIMESTAMPTZ,
+      updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
   `);
 }
 
@@ -431,24 +445,12 @@ async function createDueInvoices() {
   let created = 0;
 
   for (const owner of owners.rows) {
-    const settings = (await query(
-      `SELECT
-         COALESCE(a.reminders_enabled,TRUE) AS reminders_enabled,
-         COALESCE(a.reminder_days_before,3) AS reminder_days_before,
-         COALESCE(a.overdue_reminders_enabled,TRUE) AS overdue_reminders_enabled,
-         COALESCE(a.recurring_invoices_enabled,TRUE) AS recurring_invoices_enabled
-       FROM (SELECT 1) seed
-       LEFT JOIN automation_settings a ON a.owner_id=$1
-       LIMIT 1`,
-      [owner.owner_id],
-    )).rows[0] || {
+    const settings = {
       reminders_enabled: true,
       reminder_days_before: 3,
       overdue_reminders_enabled: true,
       recurring_invoices_enabled: true,
     };
-
-    if (!settings.recurring_invoices_enabled) continue;
 
     const today = new Date();
     const year = today.getUTCFullYear();
