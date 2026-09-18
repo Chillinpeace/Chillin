@@ -715,12 +715,7 @@ router.get('/payment-automation/invoices/:id/whatsapp-link', auth, async (req, r
   const message = clean(invoice.status).toLowerCase() === 'paid'
     ? `Hello ${invoice.tenant_name},\n\nYour rent payment for invoice ${invoice.invoice_number} has been confirmed in Peacely.\n\nAmount paid: ₹${num(invoice.paid_amount || invoice.amount).toLocaleString('en-IN')}\nPaid receipt: ${receiptUrl}`
     : `Hello ${invoice.tenant_name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${invoice.invoice_number}\nMonth: ${invoice.month || '-'}\nAmount: ₹${num(invoice.amount).toLocaleString('en-IN')}\nDue date: ${invoice.due_date}\n\nPay directly to the property owner using the UPI/phone/QR details here:\n${paymentPageUrl}\n\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`;
-  return res.json({
-    success: true,
-    url: `https://wa.me/${phone}?text=${encodeURIComponent(message)}`,
-    payment_page_url: paymentPageUrl,
-    receipt_url: receiptUrl,
-  });
+  return res.redirect(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
 });
 router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, res) => {
   await ensurePaymentColumns();
