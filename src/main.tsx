@@ -1679,7 +1679,7 @@ function App() {
         !bed.is_occupied,
     );
 
-  const handleMarkInvoicePaid = async (invoice: Invoice) => {
+  const handleMarkInvoicePaid = (invoice: Invoice) => {
     if (normalize(invoice.status) === 'paid') return;
 
     const balance = Math.max(
@@ -1692,25 +1692,15 @@ function App() {
     setMarkingInvoiceId(invoice.id);
     setError('');
 
-    try {
-      await apiRequest(`/payment-automation/invoices/${invoice.id}/mark-paid`, {
-        method: 'POST',
-      });
-
-      // Keep the owner flow to one tap: once the payment is confirmed,
-      // open WhatsApp with the paid invoice receipt message.
-      window.location.assign(
-        `${API}/payment-automation/invoices/${invoice.id}/whatsapp-link`,
-      );
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Could not mark the invoice as paid.',
-      );
-    } finally {
-      setMarkingInvoiceId(null);
-    }
+    // Use a real browser form submission instead of fetch(). This keeps
+    // the action as one native navigation on mobile: POST -> mark paid ->
+    // server redirect -> WhatsApp. It avoids popup/navigation blocking.
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = `${API}/payment-automation/invoices/${invoice.id}/mark-paid?redirect=whatsapp`;
+    form.style.display = 'none';
+    document.body.appendChild(form);
+    form.submit();
   };
 
   const filteredTenants =
