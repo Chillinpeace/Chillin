@@ -852,7 +852,9 @@ function App() {
     setError('');
 
     try {
-      await apiRequest('/properties', {
+      const created = await apiRequest<{
+        property: Property;
+      }>('/properties', {
         method: 'POST',
         body: JSON.stringify({
           name: propName.trim(),
@@ -862,8 +864,19 @@ function App() {
         }),
       });
 
+      const createdPropertyId = Number(created.property?.id || 0);
+
       resetForms();
-      closeModal();
+
+      if (createdPropertyId) {
+        // Continue directly into room setup. The backend automatically
+        // creates the required beds from the selected sharing type.
+        setRoomPropertyId(String(createdPropertyId));
+        setRoomFloorName('Ground Floor');
+        setActiveModal('room');
+      } else {
+        closeModal();
+      }
 
       await loadAllData();
     } catch (err) {
@@ -2574,8 +2587,8 @@ function App() {
               }
             >
               <ModalTitle
-                title="Add Property"
-                subtitle="Set up your property, rental cycle and property type."
+                title="Step 1 · Add Property"
+                subtitle="Create the property. Next, Peacely will take you directly to room setup."
               />
 
               <input
@@ -2633,7 +2646,7 @@ function App() {
             >
               <ModalTitle
                 title="Add Floor"
-                subtitle="Add a floor before adding rooms."
+                subtitle="Optional: add a floor name for better room organization."
               />
 
               <select
@@ -2676,8 +2689,8 @@ function App() {
               onSubmit={handleCreateRoom}
             >
               <ModalTitle
-                title="Add Room"
-                subtitle="Add a room inside the selected property."
+                title="Step 2 · Add Room"
+                subtitle="Choose sharing. Peacely will automatically create the required beds."
               />
 
               <select
@@ -2813,7 +2826,7 @@ function App() {
             >
               <ModalTitle
                 title="Add Bed"
-                subtitle="Add an individual bed to a room."
+                subtitle="Use this only when you need an additional bed beyond the sharing setup."
               />
 
               <select
@@ -4075,13 +4088,8 @@ function PropertiesView({
             subtitle="All rooms and automatically created beds for this property"
             action={
               <button className="btn-primary" onClick={() => {
-                const firstFloor = propertyLevelsForProperty[0]?.floor_name || propertyRooms[0]?.floor_name;
+                const firstFloor = propertyLevelsForProperty[0]?.floor_name || propertyRooms[0]?.floor_name || 'Ground Floor';
                 setRoomPropertyId(String(managedProperty.id));
-                if (!firstFloor) {
-                  setFloorPropertyId(String(managedProperty.id));
-                  openModal('floor');
-                  return;
-                }
                 setRoomFloorName(firstFloor);
                 openModal('room');
               }}>
@@ -4090,7 +4098,7 @@ function PropertiesView({
             }
           />
           {propertyRooms.length === 0 ? (
-            <div className="small-empty">No rooms added yet. Add a floor first, then add rooms.</div>
+            <div className="small-empty">No rooms added yet. Add a room to start. Beds are created automatically from the sharing type.</div>
           ) : (
             propertyRooms.map((room) => {
               const roomBeds = beds.filter((bed) => bed.room_id === room.id);
