@@ -2062,3 +2062,8 @@ select:focus-visible {
   color: var(--muted, #687386);
   font-size: 13px;
 }
+
+
+.move-out-inline-btn {
+  border-color: rgba(180, 35, 24, 0.28);
+}
