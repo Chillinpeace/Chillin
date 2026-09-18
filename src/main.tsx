@@ -4760,13 +4760,13 @@ function InvoicesView({
             </div>
             {balance > 0 && (
               <div className="tenant-actions" style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
+                <a
                   className="btn-primary"
-                  type="button"
-                  onClick={() => handleViewPaymentPage(invoice)}
+                  href={`${API}/payment-automation/invoices/${invoice.id}/payment-page`}
+                  style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
                 >
                   View Payment Page
-                </button>
+                </a>
                 {!isPaid && (
                   <button
                     className="btn-primary"
