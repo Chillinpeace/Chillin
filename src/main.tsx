@@ -4135,9 +4135,6 @@ function PropertiesView({
               <h3>Property Details</h3>
               <p>{managedProperty.address || 'No address'}</p>
             </div>
-            <button className="btn-secondary" onClick={() => deleteProperty(managedProperty)}>
-              Delete Property
-            </button>
           </div>
           <div className="metrics-row">
             <MiniMetric label="Property Type" value={managedProperty.property_type || 'Gents'} />
@@ -4227,9 +4224,6 @@ function PropertiesView({
           )}
         </div>
 
-        <button className="btn-secondary full-btn" onClick={() => deleteProperty(managedProperty)}>
-          Delete Property
-        </button>
       </div>
     );
   }
