@@ -574,6 +574,14 @@ router.post('/payment-automation/invoices/:id/mark-paid', auth, async (req, res)
 
   try {
     const result = await markInvoicePaidManually(req.paymentOwner.id, id);
+
+    // When the request comes from the Payments screen, use a native
+    // browser POST -> redirect flow so mobile browsers do not block the
+    // WhatsApp navigation after an awaited fetch request.
+    if (String(req.query?.redirect || '').toLowerCase() === 'whatsapp') {
+      return res.redirect(303, `/api/payment-automation/invoices/${id}/whatsapp-link`);
+    }
+
     return res.json({
       success: true,
       already_paid: result.alreadyPaid,
