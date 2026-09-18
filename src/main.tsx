@@ -2209,15 +2209,6 @@ function App() {
       <Header
         owner={owner}
         onLogout={handleLogout}
-        onRecord={() => {
-          if (activeTenants.length) {
-            openModal('payment');
-          } else {
-            setActiveTab(
-              'tenants',
-            );
-          }
-        }}
       />
 
       {error && (
