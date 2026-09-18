@@ -2163,12 +2163,6 @@ app.post(
         );
       }
 
-      if (!idPhotoFront || !idPhotoBack) {
-        throw new Error(
-          'Both front and back ID photos are required.',
-        );
-      }
-
       if (
         !Number.isInteger(
           propertyId,
