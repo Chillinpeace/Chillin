@@ -141,6 +141,22 @@ interface Expense {
   note?: string;
 }
 
+interface MaintenanceTicket {
+  id: number;
+  property_id?: number | null;
+  room_id?: number | null;
+  bed_id?: number | null;
+  property_name?: string;
+  room_number?: string;
+  bed_number?: string;
+  category?: string;
+  description?: string;
+  actual_cost?: number;
+  due_date?: string;
+  status?: string;
+  priority?: string;
+}
+
 interface FinanceSummary {
   expected: number;
   collected: number;
@@ -293,6 +309,8 @@ function App() {
     useState<Invoice[]>([]);
   const [dashboardFinance, setDashboardFinance] =
     useState<{ expenses: number; net: number }>({ expenses: 0, net: 0 });
+  const [maintenanceTickets, setMaintenanceTickets] =
+    useState<MaintenanceTicket[]>([]);
 
   const [loading, setLoading] =
     useState(true);
@@ -437,6 +455,7 @@ function App() {
         apiRequest<Invoice[]>('/invoices'),
         apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
         apiRequest<{ expenses?: number; net?: number }>('/nivaasi-upgrades/finance'),
+        apiRequest<MaintenanceTicket[]>('/maintenance'),
       ]);
 
     const [
@@ -448,6 +467,7 @@ function App() {
       invoiceResult,
       structureResult,
       financeResult,
+      maintenanceResult,
     ] = results;
 
     const errors: string[] = [];
@@ -570,6 +590,17 @@ function App() {
       errors.push(
         `Finance: ${financeResult.reason instanceof Error
           ? financeResult.reason.message
+          : 'Failed'}`,
+      );
+    }
+
+    if (maintenanceResult.status === 'fulfilled') {
+      setMaintenanceTickets(maintenanceResult.value || []);
+    } else {
+      setMaintenanceTickets([]);
+      errors.push(
+        `Maintenance: ${maintenanceResult.reason instanceof Error
+          ? maintenanceResult.reason.message
           : 'Failed'}`,
       );
     }
@@ -741,6 +772,7 @@ function App() {
     setTenants([]);
     setPayments([]);
     setInvoices([]);
+    setMaintenanceTickets([]);
 
     setActiveTab('dashboard');
   };
@@ -1701,6 +1733,19 @@ function App() {
         !bed.is_occupied,
     );
 
+  const vacancyBeds = useMemo(
+    () => beds.filter((bed) => !bed.is_occupied),
+    [beds],
+  );
+
+  const openMaintenanceTickets = useMemo(
+    () => maintenanceTickets.filter((ticket) => {
+      const status = normalize(ticket.status);
+      return status !== 'resolved' && status !== 'closed' && status !== 'cancelled';
+    }).slice(0, 5),
+    [maintenanceTickets],
+  );
+
   const handleMarkInvoicePaid = (invoice: Invoice) => {
     if (normalize(invoice.status) === 'paid') return;
 
@@ -2429,6 +2474,8 @@ function App() {
               recentPayments
             }
             dashboardFinance={dashboardFinance}
+            vacancyBeds={vacancyBeds}
+            openMaintenanceTickets={openMaintenanceTickets}
             getTenantPending={
               getTenantPending
             }
@@ -3516,6 +3563,8 @@ function Dashboard({
   upcomingMoveOuts,
   recentPayments,
   dashboardFinance,
+  vacancyBeds,
+  openMaintenanceTickets,
   getTenantPending,
   getTenantPaid,
   openTenantDetails,
@@ -3536,6 +3585,8 @@ function Dashboard({
   upcomingMoveOuts: Tenant[];
   recentPayments: Payment[];
   dashboardFinance: { expenses: number; net: number };
+  vacancyBeds: Bed[];
+  openMaintenanceTickets: MaintenanceTicket[];
   getTenantPending: (
     tenant: Tenant,
   ) => number;
@@ -3703,6 +3754,87 @@ function Dashboard({
           }
         />
       </div>
+
+      {(overdueTenants.length > 0 ||
+        vacancyBeds.length > 0 ||
+        openMaintenanceTickets.length > 0 ||
+        upcomingMoveOuts.length > 0) && (
+        <div className="glass-card">
+          <SectionHeading
+            title="Needs Attention"
+            subtitle="Issues that may need action today"
+          />
+          <div className="metrics-row">
+            <MiniMetric label="Overdue Rent" value={overdueTenants.length} />
+            <MiniMetric label="Vacant Beds" value={vacancyBeds.length} />
+            <MiniMetric label="Move-outs" value={upcomingMoveOuts.length} />
+            <MiniMetric label="Maintenance" value={openMaintenanceTickets.length} />
+          </div>
+        </div>
+      )}
+
+      {vacancyBeds.length > 0 && (
+        <>
+          <SectionHeading
+            title="Vacancy"
+            subtitle="Available beds that can be filled"
+            action={
+              <button className="text-btn" onClick={() => setActiveTab('properties')}>
+                View properties
+              </button>
+            }
+          />
+          <div className="list-card">
+            {vacancyBeds.slice(0, 5).map((bed) => (
+              <div className="list-row" key={bed.id}>
+                <div className="avatar">🛏️</div>
+                <div className="list-main">
+                  <strong>{bed.property_name || 'Property'}</strong>
+                  <span>
+                    Room {bed.room_number || '-'} · Bed {bed.bed_number || '-'}
+                  </span>
+                </div>
+                <div className="list-side">
+                  <strong>Available</strong>
+                  <span className="status pending">Vacant</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+
+      {openMaintenanceTickets.length > 0 && (
+        <>
+          <SectionHeading
+            title="Open Maintenance"
+            subtitle="Maintenance issues still requiring attention"
+            action={
+              <button className="text-btn" onClick={() => openModal('maintenance')}>
+                Add
+              </button>
+            }
+          />
+          <div className="list-card">
+            {openMaintenanceTickets.map((ticket) => (
+              <div className="list-row" key={ticket.id}>
+                <div className="avatar">🔧</div>
+                <div className="list-main">
+                  <strong>{ticket.category || 'Maintenance'}</strong>
+                  <span>
+                    {ticket.property_name || 'Property'} · Room {ticket.room_number || '-'}
+                    {ticket.bed_number ? ' · Bed ' + ticket.bed_number : ''}
+                  </span>
+                </div>
+                <div className="list-side">
+                  <strong>{ticket.priority || 'Medium'}</strong>
+                  <span className="status pending">{ticket.status || 'Open'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       {overdueTenants.length >
         0 && (
