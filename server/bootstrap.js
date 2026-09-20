@@ -7,6 +7,7 @@ import financialPdfRouter from './financial-pdf.js';
 import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
 import paymentAutomationRouter, { runPaymentAutomation } from './payment-automation.js';
 import { query } from './database.js';
+import adminRouter from './admin.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -129,6 +130,8 @@ let phaseRoutersMounted = false;
 express.application.use = function patchedUse(...args) {
   const result = originalUse.apply(this, args);
   if (!phaseRoutersMounted) {
+    // Admin routes must be first so protected owner routers cannot intercept them.
+    originalUse.call(this, '/api', adminRouter);
     originalUse.call(this, '/api', expenseRouter);
     originalUse.call(this, '/api', financialPdfRouter);
     originalUse.call(this, '/api', phase7OperationsRouter);
