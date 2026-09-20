@@ -3817,29 +3817,26 @@ function Dashboard({
         </div>
       )}
 
-      {vacancyBeds.length > 0 && (
-        <>
-          <SectionHeading
-            title="Vacancy"
-            subtitle="Available beds and the monthly rent they represent"
-            action={
-              <button className="text-btn" onClick={() => setActiveTab('properties')}>
-                View properties
-              </button>
-            }
-          />
-          <div className="glass-card">
-            <div className="metrics-row">
-              <MiniMetric
-                label="Vacant Beds"
-                value={vacancyBeds.length}
-              />
-              <MiniMetric
-                label="Potential Monthly Revenue"
-                value={money(vacancyPotentialRevenue)}
-              />
-            </div>
+      <>
+        <SectionHeading
+          title="Vacancy"
+          subtitle="Available beds and the monthly rent they represent"
+          action={
+            <button className="text-btn" onClick={() => setActiveTab('properties')}>
+              View properties
+            </button>
+          }
+        />
+        <div className="glass-card">
+          <div className="metrics-row">
+            <MiniMetric label="Vacant Beds" value={vacancyBeds.length} />
+            <MiniMetric
+              label="Potential Monthly Revenue"
+              value={money(vacancyPotentialRevenue)}
+            />
           </div>
+        </div>
+        {vacancyBeds.length > 0 ? (
           <div className="list-card">
             {vacancyBedDetails.slice(0, 5).map((bed) => (
               <div className="list-row" key={bed.id}>
@@ -3857,14 +3854,18 @@ function Dashboard({
               </div>
             ))}
           </div>
-          {vacancyBeds.length > 5 && (
-            <div className="small-empty">
-              Showing 5 of {vacancyBeds.length} vacant beds. Total potential monthly revenue:
-              {' '}{money(vacancyPotentialRevenue)}.
-            </div>
-          )}
-        </>
-      )}
+        ) : (
+          <div className="small-empty">
+            No vacant beds right now. Your current beds are occupied.
+          </div>
+        )}
+        {vacancyBeds.length > 5 && (
+          <div className="small-empty">
+            Showing 5 of {vacancyBeds.length} vacant beds. Total potential monthly revenue:{' '}
+            {money(vacancyPotentialRevenue)}.
+          </div>
+        )}
+      </>
 
       {openMaintenanceTickets.length > 0 && (
         <>
