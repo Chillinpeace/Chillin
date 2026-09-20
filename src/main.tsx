@@ -1854,10 +1854,25 @@ function App() {
               sum + Number(expense.amount || 0),
             0,
           );
-        const propertyBeds = beds.filter(
-          (bed) =>
-            Number(bed.property_id) === Number(property.id),
+        // Beds may not always include property_id in the API response.
+        // Resolve the property through the room relationship so analytics
+        // still works with the normal Property -> Room -> Bed structure.
+        const propertyRoomIds = new Set(
+          rooms
+            .filter(
+              (room) =>
+                Number(room.property_id) === Number(property.id),
+            )
+            .map((room) => Number(room.id)),
         );
+        const propertyBeds = beds.filter((bed) => {
+          const directPropertyMatch =
+            Number(bed.property_id) === Number(property.id);
+          const roomPropertyMatch = propertyRoomIds.has(
+            Number(bed.room_id),
+          );
+          return directPropertyMatch || roomPropertyMatch;
+        });
         const occupied = propertyBeds.filter(
           (bed) => Boolean(bed.is_occupied),
         ).length;
@@ -1877,7 +1892,7 @@ function App() {
           occupancy: occupancyRate,
         };
       }),
-    [beds, expenses, payments, properties, tenants],
+    [beds, expenses, payments, properties, rooms, tenants],
   );
 
   const openMaintenanceTickets = useMemo(
@@ -3471,6 +3486,14 @@ function App() {
               rooms={rooms}
               beds={beds}
               onSaved={loadAllData}
+            />
+          )}
+
+          {activeModal === 'expenses' && (
+            <ExpensesModal
+              onClose={closeModal}
+              financeSummary={financeSummary}
+              properties={properties}
             />
           )}
 
