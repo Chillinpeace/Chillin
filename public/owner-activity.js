@@ -34,6 +34,16 @@
     });
   };
 
+  // Record activity immediately when the page is opened, focused, or restored.
   heartbeat();
-  window.setInterval(heartbeat, 5 * 60 * 1000);
+  window.addEventListener('focus', heartbeat);
+  window.addEventListener('pageshow', heartbeat);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+      heartbeat();
+    }
+  });
+
+  // Keep the owner marked active while they are using Peacely.
+  window.setInterval(heartbeat, 60 * 1000);
 })();
