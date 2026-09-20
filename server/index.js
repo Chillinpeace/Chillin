@@ -5050,6 +5050,11 @@ app.get(
   }),
 );
 
+// Always serve the private admin page directly, even if the production build did not copy public/admin.html.
+app.get('/admin.html', (req, res) => {
+  return res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
+});
+
 // =====================================================
 // FRONTEND
 // =====================================================
