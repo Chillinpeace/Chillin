@@ -313,6 +313,7 @@ function App() {
     useState<Invoice[]>([]);
   const [dashboardFinance, setDashboardFinance] =
     useState<{ expenses: number; net: number }>({ expenses: 0, net: 0 });
+  const [expenses, setExpenses] = useState<Expense[]>([]);
   const [maintenanceTickets, setMaintenanceTickets] =
     useState<MaintenanceTicket[]>([]);
 
@@ -459,6 +460,7 @@ function App() {
         apiRequest<Invoice[]>('/invoices'),
         apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
         apiRequest<{ expenses?: number; net?: number }>('/nivaasi-upgrades/finance'),
+        apiRequest<{ expenses: Expense[] }>('/expenses'),
         apiRequest<MaintenanceTicket[]>('/maintenance'),
       ]);
 
@@ -471,6 +473,7 @@ function App() {
       invoiceResult,
       structureResult,
       financeResult,
+      expensesResult,
       maintenanceResult,
     ] = results;
 
@@ -594,6 +597,17 @@ function App() {
       errors.push(
         `Finance: ${financeResult.reason instanceof Error
           ? financeResult.reason.message
+          : 'Failed'}`,
+      );
+    }
+
+    if (expensesResult.status === 'fulfilled') {
+      setExpenses(expensesResult.value?.expenses || []);
+    } else {
+      setExpenses([]);
+      errors.push(
+        `Expenses: ${expensesResult.reason instanceof Error
+          ? expensesResult.reason.message
           : 'Failed'}`,
       );
     }
@@ -776,6 +790,7 @@ function App() {
     setTenants([]);
     setPayments([]);
     setInvoices([]);
+    setExpenses([]);
     setMaintenanceTickets([]);
 
     setActiveTab('dashboard');
