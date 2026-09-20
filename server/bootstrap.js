@@ -6,7 +6,6 @@ import phase7OperationsRouter from './phase7-operations.js';
 import financialPdfRouter from './financial-pdf.js';
 import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
 import paymentAutomationRouter, { runPaymentAutomation } from './payment-automation.js';
-import adminRouter from './admin.js';
 import { query } from './database.js';
 
 const { Client } = pg;
@@ -136,7 +135,6 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', phase59Router);
     originalUse.call(this, '/api', nivaasiUpgradesRouter);
     originalUse.call(this, '/api', paymentAutomationRouter);
-    originalUse.call(this, '/api', adminRouter);
     phaseRoutersMounted = true;
   }
   return result;
