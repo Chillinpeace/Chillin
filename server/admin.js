@@ -93,8 +93,21 @@ export async function initializeAdminTracking() {
   `);
 }
 
+let trackingReady;
+
+async function ensureAdminTracking() {
+  if (!trackingReady) {
+    trackingReady = initializeAdminTracking().catch((error) => {
+      trackingReady = null;
+      throw error;
+    });
+  }
+  return trackingReady;
+}
+
 router.post('/visit', async (req, res) => {
   try {
+    await ensureAdminTracking();
     const visitorId = String(req.body?.visitor_id || '').trim().slice(0, 120);
     if (!visitorId) return res.json({ success: true });
 
@@ -118,6 +131,7 @@ router.post('/visit', async (req, res) => {
 
 router.post('/owner-activity', async (req, res) => {
   try {
+    await ensureAdminTracking();
     const owner = await ownerFromRequest(req);
     if (!owner) return res.status(401).json({ success: false });
 
@@ -134,6 +148,7 @@ router.post('/owner-activity', async (req, res) => {
 });
 
 router.post('/admin/login', async (req, res) => {
+  await ensureAdminTracking();
   const email = String(req.body?.email || '').trim().toLowerCase();
   const password = String(req.body?.password || '');
 
@@ -155,16 +170,19 @@ router.post('/admin/login', async (req, res) => {
   return res.json({ success: true });
 });
 
-router.post('/admin/logout', (req, res) => {
+router.post('/admin/logout', async (req, res) => {
+  await ensureAdminTracking();
   clearAdminCookie(res);
   return res.json({ success: true });
 });
 
-router.get('/admin/me', (req, res) => {
+router.get('/admin/me', async (req, res) => {
+  await ensureAdminTracking();
   return res.json({ authenticated: isAdmin(req) });
 });
 
 router.get('/admin/dashboard', async (req, res) => {
+  await ensureAdminTracking();
   if (!isAdmin(req)) {
     return res.status(401).json({ success: false, error: 'Admin authentication required.' });
   }
