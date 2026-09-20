@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Peacely Owner Activity</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#0f172a;background:#f8fafc}
+*{box-sizing:border-box}body{margin:0;background:#f8fafc}button,input{font:inherit}
+.wrap{max-width:1200px;margin:0 auto;padding:24px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:24px}
+h1{margin:0;font-size:26px}.muted{color:#64748b}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:16px;padding:18px;box-shadow:0 2px 8px rgba(15,23,42,.04)}
+.metric{font-size:28px;font-weight:800;margin-top:8px}.label{font-size:13px;color:#64748b}
+.login{max-width:420px;margin:12vh auto}.login h1{margin-bottom:8px}.field{margin:14px 0}.field label{display:block;font-size:13px;font-weight:700;margin-bottom:6px}
+.field input{width:100%;padding:12px;border:1px solid #cbd5e1;border-radius:10px}.btn{border:0;border-radius:10px;padding:11px 16px;background:#0f172a;color:#fff;cursor:pointer;font-weight:700}.btn.secondary{background:#e2e8f0;color:#0f172a}
+.error{color:#b91c1c;margin:12px 0;font-size:14px}.hidden{display:none}
+.table-wrap{overflow:auto}.table{width:100%;border-collapse:collapse;min-width:900px}.table th,.table td{text-align:left;padding:12px 10px;border-bottom:1px solid #e2e8f0;font-size:13px;white-space:nowrap}.table th{color:#64748b;font-size:12px}
+.status{display:inline-block;padding:4px 8px;border-radius:999px;background:#e2e8f0;font-size:11px;font-weight:700}.status.active{background:#dcfce7;color:#166534}.status.idle{background:#fef3c7;color:#92400e}
+.small{font-size:12px}
+@media(max-width:600px){.wrap{padding:14px}.top{align-items:flex-start;flex-direction:column}.grid{grid-template-columns:repeat(2,1fr)}}
+</style>
+</head>
+<body>
+<div id="login" class="login card">
+  <h1>Peacely Admin</h1>
+  <div class="muted">Internal Owner Activity</div>
+  <div id="loginError" class="error"></div>
+  <form id="loginForm">
+    <div class="field"><label>Admin email</label><input id="email" type="email" autocomplete="username" required></div>
+    <div class="field"><label>Admin password</label><input id="password" type="password" autocomplete="current-password" required></div>
+    <button class="btn" type="submit">Sign in</button>
+  </form>
+</div>
+
+<div id="dashboard" class="wrap hidden">
+  <div class="top">
+    <div><h1>Owner Activity</h1><div class="muted">Private Peacely operations dashboard</div></div>
+    <button id="logout" class="btn secondary">Log out</button>
+  </div>
+
+  <div id="error" class="error"></div>
+
+  <div class="grid">
+    <div class="card"><div class="label">Link visits</div><div id="visits" class="metric">0</div></div>
+    <div class="card"><div class="label">Unique visitors</div><div id="unique" class="metric">0</div></div>
+    <div class="card"><div class="label">Visits today</div><div id="visitsToday" class="metric">0</div></div>
+    <div class="card"><div class="label">Unique today</div><div id="uniqueToday" class="metric">0</div></div>
+    <div class="card"><div class="label">Registered owners</div><div id="owners" class="metric">0</div></div>
+    <div class="card"><div class="label">Active today</div><div id="activeToday" class="metric">0</div></div>
+    <div class="card"><div class="label">Active this week</div><div id="activeWeek" class="metric">0</div></div>
+    <div class="card"><div class="label">Signups this week</div><div id="signupsWeek" class="metric">0</div></div>
+    <div class="card"><div class="label">Properties</div><div id="properties" class="metric">0</div></div>
+    <div class="card"><div class="label">Active tenants</div><div id="tenants" class="metric">0</div></div>
+    <div class="card"><div class="label">Payments recorded</div><div id="payments" class="metric">0</div></div>
+    <div class="card"><div class="label">Expenses recorded</div><div id="expenses" class="metric">0</div></div>
+  </div>
+
+  <div class="card">
+    <h2>Owners using Peacely</h2>
+    <div class="muted small">Last active is updated while a signed-in owner is using the app.</div>
+    <div class="table-wrap">
+      <table class="table">
+        <thead><tr><th>Owner</th><th>Email</th><th>Joined</th><th>Last active</th><th>Status</th><th>Properties</th><th>Beds</th><th>Tenants</th><th>Payments</th><th>Expenses</th></tr></thead>
+        <tbody id="ownerRows"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const $=id=>document.getElementById(id);
+const fmtDate=v=>v?new Date(v).toLocaleString('en-IN',{dateStyle:'medium',timeStyle:'short'}):'Never';
+const num=v=>Number(v||0).toLocaleString('en-IN');
+
+async function api(url,options={}){
+  const r=await fetch(url,{credentials:'include',headers:{'Content-Type':'application/json',...(options.headers||{})},...options});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok) throw new Error(d.error||'Request failed');
+  return d;
+}
+
+async function load(){
+  try{
+    const d=await api('/api/admin/dashboard');
+    $('visits').textContent=num(d.visits.total_visits);
+    $('unique').textContent=num(d.visits.unique_visitors);
+    $('visitsToday').textContent=num(d.visits.visits_today);
+    $('uniqueToday').textContent=num(d.visits.unique_today);
+    $('owners').textContent=num(d.owners.total_owners);
+    $('activeToday').textContent=num(d.owners.active_today);
+    $('activeWeek').textContent=num(d.owners.active_7d);
+    $('signupsWeek').textContent=num(d.owners.signups_7d);
+    $('properties').textContent=num(d.usage.properties);
+    $('tenants').textContent=num(d.usage.active_tenants);
+    $('payments').textContent=num(d.usage.payment_count);
+    $('expenses').textContent=num(d.usage.expense_count);
+
+    $('ownerRows').innerHTML=d.ownerRows.map(o=>{
+      const active=o.last_active_at && (Date.now()-new Date(o.last_active_at).getTime()<7*24*60*60*1000);
+      return `<tr>
+        <td><strong>${escapeHtml(o.name)}</strong></td>
+        <td>${escapeHtml(o.email)}</td>
+        <td>${fmtDate(o.created_at)}</td>
+        <td>${fmtDate(o.last_active_at)}</td>
+        <td><span class="status ${active?'active':'idle'}">${active?'Active':'Inactive'}</span></td>
+        <td>${num(o.properties)}</td>
+        <td>${num(o.beds)}</td>
+        <td>${num(o.active_tenants)}</td>
+        <td>${num(o.payments)}</td>
+        <td>${num(o.expenses)}</td>
+      </tr>`;
+    }).join('');
+  }catch(e){
+    if(e.message.includes('Admin authentication')) showLogin();
+    else $('error').textContent=e.message;
+  }
+}
+
+function escapeHtml(v){
+  return String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c]));
+}
+
+function showDashboard(){ $('login').classList.add('hidden'); $('dashboard').classList.remove('hidden'); load(); }
+function showLogin(){ $('dashboard').classList.add('hidden'); $('login').classList.remove('hidden'); }
+
+$('loginForm').addEventListener('submit',async e=>{
+  e.preventDefault();
+  $('loginError').textContent='';
+  try{await api('/api/admin/login',{method:'POST',body:JSON.stringify({email:$('email').value,password:$('password').value})});showDashboard();}
+  catch(err){$('loginError').textContent=err.message;}
+});
+$('logout').addEventListener('click',async()=>{await api('/api/admin/logout',{method:'POST'}).catch(()=>{});showLogin();});
+api('/api/admin/me').then(d=>d.authenticated?showDashboard():showLogin()).catch(()=>showLogin());
+setInterval(()=>{if(!$('dashboard').classList.contains('hidden'))load();},60000);
+</script>
+</body>
+</html>
