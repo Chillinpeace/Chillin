@@ -2557,6 +2557,9 @@ function App() {
             openModal={
               openModal
             }
+            openVacantBedAssignment={
+              openVacantBedAssignment
+            }
             setActiveTab={
               setActiveTab
             }
