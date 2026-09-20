@@ -5060,6 +5060,11 @@ app.get('/admin.html', (req, res) => {
   return res.sendFile(path.join(__dirname, '..', 'public', 'admin.html'));
 });
 
+// Public product-demo page for owner outreach. It contains sample/demo data only.
+app.get('/peacely-demo.html', (req, res) => {
+  return res.sendFile(path.join(__dirname, '..', 'public', 'peacely-demo.html'));
+});
+
 // =====================================================
 // FRONTEND
 // =====================================================
