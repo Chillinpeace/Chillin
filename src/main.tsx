@@ -175,7 +175,8 @@ type Modal =
   | 'tenantDetails'
   | 'reassign'
   | 'accountSettings'
-  | 'expenses';
+  | 'expenses'
+  | 'maintenance';
 
 const API = '/api';
 
@@ -3266,6 +3267,16 @@ function App() {
             </form>
           )}
 
+          {activeModal === 'maintenance' && (
+            <MaintenanceModal
+              onClose={closeModal}
+              properties={properties}
+              rooms={rooms}
+              beds={beds}
+              onSaved={loadAllData}
+            />
+          )}
+
           {activeModal ===
             'accountSettings' && (
             <AccountSettingsModal
@@ -3684,7 +3695,13 @@ function Dashboard({
           }
         />
 
-
+        <QuickAction
+          icon="🔧"
+          label="Maintenance"
+          onClick={() =>
+            openModal('maintenance')
+          }
+        />
       </div>
 
       {overdueTenants.length >
@@ -4718,6 +4735,190 @@ function TenantsView({
   );
 }
 
+
+function MaintenanceModal({
+  onClose,
+  properties,
+  rooms,
+  beds,
+  onSaved,
+}: {
+  onClose: () => void;
+  properties: Property[];
+  rooms: Room[];
+  beds: Bed[];
+  onSaved: () => Promise<void>;
+}) {
+  const [records, setRecords] = useState<Array<{
+    id: number;
+    property_name?: string;
+    room_number?: string;
+    bed_number?: string;
+    description?: string;
+    category?: string;
+    status?: string;
+    actual_cost?: number;
+    due_date?: string;
+    created_at?: string;
+  }>>([]);
+  const [propertyId, setPropertyId] = useState('');
+  const [roomId, setRoomId] = useState('');
+  const [bedId, setBedId] = useState('');
+  const [category, setCategory] = useState('General');
+  const [description, setDescription] = useState('');
+  const [cost, setCost] = useState('');
+  const [date, setDate] = useState(today());
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState('');
+
+  const selectedRooms = rooms.filter(
+    (room) => !propertyId || Number(room.property_id) === Number(propertyId),
+  );
+  const selectedBeds = beds.filter(
+    (bed) => !roomId || Number(bed.room_id) === Number(roomId),
+  );
+
+  const loadRecords = async () => {
+    const result = await apiRequest<any[]>('/maintenance');
+    setRecords(result || []);
+  };
+
+  useEffect(() => {
+    loadRecords().catch((error) => {
+      setMessage(error instanceof Error ? error.message : 'Could not load maintenance history.');
+    });
+  }, []);
+
+  const saveMaintenance = async () => {
+    if (!propertyId || !roomId || !bedId) {
+      setMessage('Select a property, room and bed.');
+      return;
+    }
+    if (!description.trim()) {
+      setMessage('Enter a maintenance description.');
+      return;
+    }
+    const amount = Number(cost);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setMessage('Enter a valid maintenance cost.');
+      return;
+    }
+    if (!date) {
+      setMessage('Select the maintenance date.');
+      return;
+    }
+
+    setSaving(true);
+    setMessage('');
+    try {
+      await apiRequest('/maintenance', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(propertyId),
+          room_id: Number(roomId),
+          bed_id: Number(bedId),
+          category,
+          description: description.trim(),
+          actual_cost: amount,
+          due_date: date,
+        }),
+      });
+      setPropertyId('');
+      setRoomId('');
+      setBedId('');
+      setCategory('General');
+      setDescription('');
+      setCost('');
+      setDate(today());
+      await loadRecords();
+      await onSaved();
+      setMessage('Maintenance recorded and added to Expenses.');
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Could not save maintenance.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div>
+      <ModalTitle
+        title="Maintenance"
+        subtitle="Record a property issue. The maintenance cost is automatically added to Expenses."
+      />
+
+      <select className="modal-input" value={propertyId} onChange={(e) => { setPropertyId(e.target.value); setRoomId(''); setBedId(''); }}>
+        <option value="">Select property</option>
+        {properties.map((property) => (
+          <option key={property.id} value={property.id}>{property.name}</option>
+        ))}
+      </select>
+
+      <select className="modal-input" value={roomId} disabled={!propertyId} onChange={(e) => { setRoomId(e.target.value); setBedId(''); }}>
+        <option value="">{propertyId ? 'Select room' : 'Select property first'}</option>
+        {selectedRooms.map((room) => (
+          <option key={room.id} value={room.id}>Room {room.room_number}</option>
+        ))}
+      </select>
+
+      <select className="modal-input" value={bedId} disabled={!roomId} onChange={(e) => setBedId(e.target.value)}>
+        <option value="">{roomId ? 'Select bed' : 'Select room first'}</option>
+        {selectedBeds.map((bed) => (
+          <option key={bed.id} value={bed.id}>Bed {bed.bed_number}{bed.is_occupied ? ' · Occupied' : ' · Available'}</option>
+        ))}
+      </select>
+
+      <select className="modal-input" value={category} onChange={(e) => setCategory(e.target.value)}>
+        <option value="General">General</option>
+        <option value="Electrical">Electrical</option>
+        <option value="Plumbing">Plumbing</option>
+        <option value="Furniture">Furniture</option>
+        <option value="Appliance">Appliance</option>
+        <option value="Cleaning">Cleaning</option>
+        <option value="Other">Other</option>
+      </select>
+
+      <input className="modal-input" placeholder="Describe the issue or work done" value={description} onChange={(e) => setDescription(e.target.value)} />
+      <input className="modal-input" type="number" min="0.01" step="0.01" placeholder="Maintenance cost" value={cost} onChange={(e) => setCost(e.target.value)} />
+      <input className="modal-input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+
+      <button type="button" className="btn-primary full-btn" onClick={saveMaintenance} disabled={saving}>
+        {saving ? 'Saving...' : 'Add Maintenance'}
+      </button>
+
+      <div className="section-heading" style={{ marginTop: 18 }}>
+        <div>
+          <h3>Maintenance History</h3>
+          <p>{records.length} record{records.length === 1 ? '' : 's'}</p>
+        </div>
+      </div>
+
+      {records.length === 0 ? (
+        <div className="small-empty">No maintenance records yet.</div>
+      ) : (
+        records.map((record) => (
+          <div className="glass-card" key={record.id} style={{ marginBottom: 8 }}>
+            <div className="glass-header">
+              <div>
+                <h3>{record.category || 'General'}</h3>
+                <p>{record.property_name || 'Property'} · Room {record.room_number || '-'} · Bed {record.bed_number || '-'}</p>
+              </div>
+              <strong className="amount-tag">{money(Number(record.actual_cost || 0))}</strong>
+            </div>
+            <p style={{ margin: '8px 0 0' }}>{record.description || 'No description'}</p>
+            <div className="menu-detail-row" style={{ marginTop: 8 }}>
+              <span>{formatDate(record.due_date || record.created_at)}</span>
+              <strong>{record.status || 'Open'}</strong>
+            </div>
+          </div>
+        ))
+      )}
+
+      {message && <div className="small-empty">{message}</div>}
+      <button type="button" className="btn-secondary full-btn" onClick={onClose} style={{ marginTop: 10 }}>Close</button>
+    </div>
+  );
+}
 
 function ExpensesModal({
   onClose,
