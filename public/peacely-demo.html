@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Peacely — Product Demo</title>
+<style>
+:root{--bg:#080b10;--card:#161c27d1;--border:#ffffff14;--text:#f3f4f6;--muted:#8f98a8;--green:#10b981;--greenSoft:#10b98124;--amber:#f59e0b;--rose:#f43f5e;--blue:#60a5fa}
+*{box-sizing:border-box}html,body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif}
+body{min-height:100vh}.shell{max-width:430px;margin:auto;min-height:100vh;padding:14px 16px 100px;background:radial-gradient(circle at 50% -10%,#10b98110,transparent 35%),var(--bg)}
+.header{display:flex;justify-content:space-between;align-items:center;padding:8px 0 20px}.brand{display:flex;gap:11px;align-items:center}.logo{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#10b981,#047857);display:grid;place-items:center;font-weight:900;font-size:20px;box-shadow:0 5px 22px #10b98130}.brand h1{font-size:21px;margin:0}.brand p{font-size:11px;color:var(--muted);margin:2px 0 0}.demo{font-size:10px;padding:6px 9px;border-radius:999px;background:var(--greenSoft);border:1px solid #10b98138;color:#a7f3d0;font-weight:800}
+.screen{display:none;animation:fade .45s ease}.screen.active{display:block}@keyframes fade{from{opacity:.2;transform:translateY(8px)}to{opacity:1;transform:none}}
+h2{font-size:22px;margin:0 0 4px}.sub{font-size:12px;color:var(--muted);margin-bottom:14px}.grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.metric,.card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:14px;box-shadow:0 8px 30px #00000018}.metric .icon{font-size:18px}.metric strong{display:block;font-size:21px;margin-top:7px}.metric span{display:block;color:var(--muted);font-size:10px;margin-top:3px}
+.card{margin-top:12px}.card h3{font-size:13px;margin:0 0 10px}.row{display:flex;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid #ffffff0c;font-size:11px}.row:last-child{border-bottom:0}.row span{color:var(--muted)}.pill{padding:4px 8px;border-radius:999px;font-size:9px;font-weight:800;background:#172131;color:#dce3ec}.paid{background:#10b98120;color:#6ee7b7}.warn{background:#f59e0b20;color:#fcd34d}.danger{background:#f43f5e20;color:#fda4af}
+.flow{display:flex;align-items:center;gap:7px;overflow:hidden;margin:18px 0}.flow div{min-width:74px;text-align:center;padding:10px 6px;border-radius:12px;background:#111923;border:1px solid var(--border);font-size:9px;font-weight:800}.flow b{color:var(--green);font-size:13px}.big{font-size:12px;line-height:1.55;color:#d5dbe5}.cta{display:block;text-align:center;margin-top:18px;padding:13px;border-radius:12px;background:var(--green);color:#04130d;text-decoration:none;font-weight:900;font-size:12px}.nav{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:min(430px,100%);display:grid;grid-template-columns:repeat(5,1fr);background:#0d121aeF;border-top:1px solid var(--border);backdrop-filter:blur(14px);padding:9px 7px 10px}.nav button{border:0;background:none;color:var(--muted);font-size:9px;font-weight:700}.nav button.active{color:#fff}.nav i{display:block;font-style:normal;font-size:17px;margin-bottom:3px}.progress{height:7px;border-radius:99px;background:#1a2230;overflow:hidden;margin:10px 0}.progress span{display:block;height:100%;width:87%;background:var(--green);border-radius:99px}
+.recording{position:fixed;top:8px;left:50%;transform:translateX(-50%);font-size:9px;color:#fca5a5;background:#2a1115;border:1px solid #f43f5e45;border-radius:999px;padding:5px 9px;z-index:5;opacity:0;transition:.3s}.recording.show{opacity:1}
+</style>
+</head>
+<body>
+<div class="recording" id="rec">● DEMO PREVIEW</div>
+<main class="shell">
+<header class="header"><div class="brand"><div class="logo">P</div><div><h1>Peacely</h1><p>PG management, without the paperwork</p></div></div><span class="demo">PRODUCT DEMO</span></header>
+
+<section class="screen active" data-time="0">
+<h2>Your PG at a glance</h2><p class="sub">Everything important in one place.</p>
+<div class="grid">
+<div class="metric"><div class="icon">💰</div><strong>₹2,16,000</strong><span>Expected Rent</span></div>
+<div class="metric"><div class="icon">✅</div><strong>₹1,92,000</strong><span>Collected</span></div>
+<div class="metric"><div class="icon">⏳</div><strong>₹24,000</strong><span>Pending</span></div>
+<div class="metric"><div class="icon">🛏️</div><strong>92%</strong><span>Occupancy</span></div>
+</div>
+<div class="card"><h3>Today's attention</h3><div class="row"><span>2 overdue rents</span><b class="pill danger">₹12,000</b></div><div class="row"><span>3 vacant beds</span><b class="pill warn">₹18,000 potential</b></div><div class="row"><span>1 maintenance issue</span><b class="pill">Open</b></div></div>
+</section>
+
+<section class="screen" data-time="3000">
+<h2>Manage every bed</h2><p class="sub">Property → Room → Bed → Tenant</p>
+<div class="card"><h3>Sunrise PG · Electronic City</h3><div class="row"><span>Room 101 · Bed A</span><b class="pill paid">Occupied</b></div><div class="row"><span>Room 101 · Bed B</span><b class="pill paid">Occupied</b></div><div class="row"><span>Room 102 · Bed A</span><b class="pill warn">Vacant</b></div><div class="row"><span>Room 102 · Bed B</span><b class="pill paid">Occupied</b></div></div>
+<div class="card"><h3>Tenant</h3><div class="row"><span>Rahul Sharma</span><b>₹8,000 / month</b></div><div class="row"><span>Room 101 · Bed A</span><span>Due 5th</span></div><div class="row"><span>Deposit</span><span>₹8,000</span></div></div>
+</section>
+
+<section class="screen" data-time="6000">
+<h2>Rent collection made simple</h2><p class="sub">Invoice → WhatsApp → Paid → Receipt</p>
+<div class="flow"><div>🧾<br>Invoice</div><b>→</b><div>💬<br>WhatsApp</div><b>→</b><div>₹<br>Paid</div><b>→</b><div>✓<br>Receipt</div></div>
+<div class="card"><h3>March Rent · INV-1048</h3><div class="row"><span>Rahul Sharma</span><b>₹8,000</b></div><div class="row"><span>Status</span><b class="pill paid">Paid</b></div><div class="row"><span>Payment method</span><span>UPI</span></div></div>
+<p class="big">Send the tenant a WhatsApp payment message, record the payment, and keep the receipt history in the same system.</p>
+</section>
+
+<section class="screen" data-time="9000">
+<h2>Know where your money goes</h2><p class="sub">Expenses, cash flow and property profitability.</p>
+<div class="grid"><div class="metric"><div class="icon">📥</div><strong>₹1,92,000</strong><span>Collected</span></div><div class="metric"><div class="icon">📤</div><strong>₹34,500</strong><span>Expenses</span></div><div class="metric"><div class="icon">📈</div><strong>₹1,57,500</strong><span>Net Cash</span></div><div class="metric"><div class="icon">🏠</div><strong>3</strong><span>Properties</span></div></div>
+<div class="card"><h3>Property profitability</h3><div class="row"><span>Sunrise PG</span><b>₹72,500</b></div><div class="row"><span>Green View PG</span><b>₹48,000</b></div><div class="row"><span>City Stay PG</span><b>₹37,000</b></div></div>
+</section>
+
+<section class="screen" data-time="12000">
+<h2>See what needs attention</h2><p class="sub">A simple operating system for your PG.</p>
+<div class="card"><h3>Collection Health</h3><div class="progress"><span></span></div><div class="row"><span>Collection rate</span><b>87%</b></div><div class="row"><span>Outstanding</span><b class="danger">₹24,000</b></div></div>
+<div class="card"><h3>One workflow</h3><div class="flow"><div>🏠<br>Property</div><b>→</b><div>🛏️<br>Beds</div><b>→</b><div>👤<br>Tenant</div><b>→</b><div>₹<br>Rent</div></div><p class="big">Manage properties, tenants, rent, invoices, expenses and payments from one place.</p></div>
+<a class="cta" href="https://chillin-production.up.railway.app">Open Peacely Beta</a>
+</section>
+</main>
+<nav class="nav"><button class="active"><i>⌂</i>Home</button><button><i>🏠</i>Properties</button><button><i>👥</i>Tenants</button><button><i>₹</i>Payments</button><button><i>📊</i>Analytics</button></nav>
+<script>
+const screens=[...document.querySelectorAll('.screen')];let i=0;const rec=document.getElementById('rec');
+function show(n){screens.forEach((s,k)=>s.classList.toggle('active',k===n));document.querySelectorAll('.nav button').forEach((b,k)=>b.classList.toggle('active',k===Math.min(n,4)));}
+function play(){show(i);rec.classList.add('show');setTimeout(()=>{i=(i+1)%screens.length;play()},3000)}
+play();
+</script>
+</body>
+</html>
