@@ -6504,6 +6504,11 @@ function BottomNav({
       '🧾',
       'Invoices',
     ],
+    [
+      'analytics',
+      '📊',
+      'Analytics',
+    ],
   ];
 
   return (
