@@ -1805,6 +1805,66 @@ function App() {
     [vacancyBedDetails],
   );
 
+  const propertyProfitability = useMemo(
+    () =>
+      properties.map((property) => {
+        const propertyTenants = tenants.filter(
+          (tenant) =>
+            Number(tenant.property_id) === Number(property.id),
+        );
+        const tenantIds = new Set(
+          propertyTenants.map((tenant) => Number(tenant.id)),
+        );
+        const propertyPayments = payments
+          .filter(
+            (payment) =>
+              tenantIds.has(Number(payment.tenant_id)) &&
+              normalize(payment.payment_month) ===
+                normalize(currentMonthName()),
+          )
+          .reduce(
+            (sum, payment) =>
+              sum + Number(payment.amount || 0),
+            0,
+          );
+        const propertyExpenses = expenses
+          .filter(
+            (expense) =>
+              Number(expense.property_id) === Number(property.id) &&
+              String(expense.expense_date || '').slice(0, 7) ===
+                today().slice(0, 7),
+          )
+          .reduce(
+            (sum, expense) =>
+              sum + Number(expense.amount || 0),
+            0,
+          );
+        const propertyBeds = beds.filter(
+          (bed) =>
+            Number(bed.property_id) === Number(property.id),
+        );
+        const occupied = propertyBeds.filter(
+          (bed) => Boolean(bed.is_occupied),
+        ).length;
+        const occupancyRate =
+          propertyBeds.length > 0
+            ? Math.round(
+                (occupied / propertyBeds.length) * 100,
+              )
+            : 0;
+
+        return {
+          id: property.id,
+          name: property.name,
+          collected: propertyPayments,
+          expenses: propertyExpenses,
+          net: propertyPayments - propertyExpenses,
+          occupancy: occupancyRate,
+        };
+      }),
+    [beds, expenses, payments, properties, tenants],
+  );
+
   const openMaintenanceTickets = useMemo(
     () => maintenanceTickets.filter((ticket) => {
       const status = normalize(ticket.status);
@@ -2693,6 +2753,9 @@ function App() {
               0
                 ? financeSummary.collection_rate
                 : collectionRate
+            }
+            propertyProfitability={
+              propertyProfitability
             }
           />
         )}
@@ -5856,6 +5919,7 @@ function AnalyticsView({
   overdue,
   occupancy,
   collectionRate,
+  propertyProfitability,
 }: {
   properties: Property[];
   rooms: Room[];
@@ -5867,6 +5931,14 @@ function AnalyticsView({
   overdue: number;
   occupancy: number;
   collectionRate: number;
+  propertyProfitability: {
+    id: number;
+    name: string;
+    collected: number;
+    expenses: number;
+    net: number;
+    occupancy: number;
+  }[];
 }) {
   return (
     <div className="view-container">
@@ -5998,6 +6070,34 @@ function AnalyticsView({
             value={`${occupancy}%`}
           />
         </div>
+      </div>
+
+      <div className="glass-card">
+        <h3>
+          Property Profitability · This Month
+        </h3>
+
+        {propertyProfitability.length === 0 ? (
+          <div className="small-empty">
+            Add a property to see property-level financial performance.
+          </div>
+        ) : (
+          <div className="analytics-list">
+            {propertyProfitability.map((property) => (
+              <div className="analytics-row" key={property.id}>
+                <div>
+                  <strong>{property.name}</strong>
+                  <span style={{ display: 'block', marginTop: '4px' }}>
+                    {property.occupancy}% occupied · {money(property.collected)} collected · {money(property.expenses)} expenses
+                  </span>
+                </div>
+                <strong>
+                  {money(property.net)}
+                </strong>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="glass-card">
