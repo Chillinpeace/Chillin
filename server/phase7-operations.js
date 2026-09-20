@@ -93,7 +93,6 @@ async function ensureSchema() {
 async function auth(req,res,next) {
   if (req.path === '/auth' || req.path.startsWith('/auth/')) return next();
   try {
-    await ensureSchema();
     const owner = await ownerFromRequest(req);
     if (!owner) return res.status(401).json({success:false,error:'Authentication required.'});
     req.p7Owner = owner;
