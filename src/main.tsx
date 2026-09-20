@@ -62,6 +62,10 @@ interface Bed {
   tenant_name?: string;
 }
 
+interface VacancyBed extends Bed {
+  potential_monthly_rent: number;
+}
+
 interface Tenant {
   id: number;
   name: string;
@@ -1738,6 +1742,40 @@ function App() {
     [beds],
   );
 
+  const vacancyBedDetails = useMemo<VacancyBed[]>(
+    () =>
+      vacancyBeds.map((bed) => {
+        const room = rooms.find(
+          (item) => Number(item.id) === Number(bed.room_id),
+        );
+        const roomBeds = beds.filter(
+          (item) => Number(item.room_id) === Number(bed.room_id),
+        );
+        const bedCount = roomBeds.length || Number(room?.bed_count || 0);
+        const roomRent = Number(room?.rent_amount || 0);
+        const potentialMonthlyRent =
+          bedCount > 0 ? roomRent / bedCount : 0;
+
+        return {
+          ...bed,
+          room_number: bed.room_number || room?.room_number,
+          property_id: bed.property_id || room?.property_id,
+          property_name: bed.property_name || room?.property_name,
+          potential_monthly_rent: potentialMonthlyRent,
+        };
+      }),
+    [beds, rooms, vacancyBeds],
+  );
+
+  const vacancyPotentialRevenue = useMemo(
+    () =>
+      vacancyBedDetails.reduce(
+        (sum, bed) => sum + Number(bed.potential_monthly_rent || 0),
+        0,
+      ),
+    [vacancyBedDetails],
+  );
+
   const openMaintenanceTickets = useMemo(
     () => maintenanceTickets.filter((ticket) => {
       const status = normalize(ticket.status);
@@ -2475,6 +2513,8 @@ function App() {
             }
             dashboardFinance={dashboardFinance}
             vacancyBeds={vacancyBeds}
+            vacancyBedDetails={vacancyBedDetails}
+            vacancyPotentialRevenue={vacancyPotentialRevenue}
             openMaintenanceTickets={openMaintenanceTickets}
             getTenantPending={
               getTenantPending
@@ -3564,6 +3604,8 @@ function Dashboard({
   recentPayments,
   dashboardFinance,
   vacancyBeds,
+  vacancyBedDetails,
+  vacancyPotentialRevenue,
   openMaintenanceTickets,
   getTenantPending,
   getTenantPaid,
@@ -3586,6 +3628,8 @@ function Dashboard({
   recentPayments: Payment[];
   dashboardFinance: { expenses: number; net: number };
   vacancyBeds: Bed[];
+  vacancyBedDetails: VacancyBed[];
+  vacancyPotentialRevenue: number;
   openMaintenanceTickets: MaintenanceTicket[];
   getTenantPending: (
     tenant: Tenant,
@@ -3777,15 +3821,27 @@ function Dashboard({
         <>
           <SectionHeading
             title="Vacancy"
-            subtitle="Available beds that can be filled"
+            subtitle="Available beds and the monthly rent they represent"
             action={
               <button className="text-btn" onClick={() => setActiveTab('properties')}>
                 View properties
               </button>
             }
           />
+          <div className="glass-card">
+            <div className="metrics-row">
+              <MiniMetric
+                label="Vacant Beds"
+                value={vacancyBeds.length}
+              />
+              <MiniMetric
+                label="Potential Monthly Revenue"
+                value={money(vacancyPotentialRevenue)}
+              />
+            </div>
+          </div>
           <div className="list-card">
-            {vacancyBeds.slice(0, 5).map((bed) => (
+            {vacancyBedDetails.slice(0, 5).map((bed) => (
               <div className="list-row" key={bed.id}>
                 <div className="avatar">🛏️</div>
                 <div className="list-main">
@@ -3795,12 +3851,18 @@ function Dashboard({
                   </span>
                 </div>
                 <div className="list-side">
-                  <strong>Available</strong>
+                  <strong>{money(bed.potential_monthly_rent)}</strong>
                   <span className="status pending">Vacant</span>
                 </div>
               </div>
             ))}
           </div>
+          {vacancyBeds.length > 5 && (
+            <div className="small-empty">
+              Showing 5 of {vacancyBeds.length} vacant beds. Total potential monthly revenue:
+              {' '}{money(vacancyPotentialRevenue)}.
+            </div>
+          )}
         </>
       )}
 
