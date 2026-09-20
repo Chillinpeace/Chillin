@@ -876,6 +876,34 @@ function App() {
     setActiveModal(modal);
   };
 
+  const openVacantBedAssignment = (bed: VacancyBed) => {
+    const room = rooms.find(
+      (item) => Number(item.id) === Number(bed.room_id),
+    );
+
+    if (!room) {
+      setError('Could not find the room for this vacant bed.');
+      return;
+    }
+
+    setTenantPropertyId(String(bed.property_id || room.property_id));
+    setTenantRoomId(String(bed.room_id));
+    setTenantBedId(String(bed.id));
+    setTenantRent(String(Number(bed.potential_monthly_rent || room.rent_amount || 0)));
+    setTenantName('');
+    setTenantPhone('');
+    setTenantGender('');
+    setTenantIdProofType('');
+    setTenantIdPhotoFront('');
+    setTenantIdPhotoBack('');
+    setTenantEmail('');
+    setTenantDueDate('5');
+    setTenantDeposit('');
+    setTenantMoveInDate(today());
+    setError('');
+    setActiveModal('tenant');
+  };
+
   /*
    * IMPORTANT:
    * Do not block modal closing while saving.
@@ -3612,6 +3640,7 @@ function Dashboard({
   getTenantPaid,
   openTenantDetails,
   openModal,
+  openVacantBedAssignment,
   setActiveTab,
 }: {
   expectedRent: number;
@@ -3643,6 +3672,9 @@ function Dashboard({
   ) => void;
   openModal: (
     modal: Modal,
+  ) => void;
+  openVacantBedAssignment: (
+    bed: VacancyBed,
   ) => void;
   setActiveTab: (
     tab: Tab,
@@ -3847,10 +3879,20 @@ function Dashboard({
                   <span>
                     Room {bed.room_number || '-'} · Bed {bed.bed_number || '-'}
                   </span>
+                  <span>
+                    Lost potential: {money(bed.potential_monthly_rent)}/month
+                  </span>
                 </div>
                 <div className="list-side">
                   <strong>{money(bed.potential_monthly_rent)}</strong>
                   <span className="status pending">Vacant</span>
+                  <button
+                    type="button"
+                    className="mini-action"
+                    onClick={() => openVacantBedAssignment(bed)}
+                  >
+                    Assign Tenant
+                  </button>
                 </div>
               </div>
             ))}
