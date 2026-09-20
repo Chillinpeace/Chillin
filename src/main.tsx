@@ -1752,9 +1752,10 @@ function App() {
           (item) => Number(item.room_id) === Number(bed.room_id),
         );
         const bedCount = roomBeds.length || Number(room?.bed_count || 0);
-        const roomRent = Number(room?.rent_amount || 0);
-        const potentialMonthlyRent =
-          bedCount > 0 ? roomRent / bedCount : 0;
+        // rent_amount is the monthly rent for one bed in the room.
+        // Each vacant bed therefore represents one full bed rent.
+        const roomRentPerBed = Number(room?.rent_amount || 0);
+        const potentialMonthlyRent = roomRentPerBed;
 
         return {
           ...bed,
