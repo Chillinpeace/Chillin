@@ -612,6 +612,11 @@ app.post(
     const token =
       await createSession(owner.id);
 
+    await safeQuery(
+      'UPDATE owners SET last_active_at = CURRENT_TIMESTAMP WHERE id = $1',
+      [owner.id],
+    );
+
     setSessionCookie(res, token);
 
     return res.json({
