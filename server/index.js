@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { pool, query, initializeDatabase } from './database.js';
 import { runPaymentAutomation } from './payment-automation.js';
+import adminRouter from './admin.js';
 
 const app = express();
 
@@ -19,6 +20,9 @@ const QUERY_TIMEOUT_MS = 15000;
 
 app.use(express.json({ limit: '3mb', verify: (req, _res, buffer) => { req.rawBody = buffer.toString('utf8'); } }));
 app.use(express.urlencoded({ extended: true }));
+
+// Private Peacely admin API. Mounted before the normal owner-authenticated routes.
+app.use('/api', adminRouter);
 
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
