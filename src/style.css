@@ -2099,7 +2099,7 @@ select:focus-visible {
 
 .auth-benefits div {
   font-size: 14px;
-  color: var(--text-primary);
+  color: var(--text-main);
 }
 
 .auth-trust {
@@ -2113,7 +2113,7 @@ select:focus-visible {
 }
 
 .auth-trust strong {
-  color: var(--text-primary);
+  color: var(--text-main);
   font-size: 13px;
 }
 
