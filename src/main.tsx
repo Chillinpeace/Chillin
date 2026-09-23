@@ -279,7 +279,7 @@ function App() {
     useState<Owner | null>(null);
 
   const [authMode, setAuthMode] =
-    useState<'login' | 'signup'>('login');
+    useState<'intro' | 'login' | 'signup'>('intro');
 
   const [authName, setAuthName] =
     useState('');
@@ -2409,135 +2409,194 @@ function App() {
     return (
       <div className="mobile-shell auth-shell">
         <div className="auth-card glass-card">
-          <div className="auth-brand">
-            <div className="brand-logo auth-logo">
-              P
-            </div>
+          {authMode === 'intro' ? (
+            <>
+              <div className="auth-brand">
+                <div className="brand-logo auth-logo">
+                  P
+                </div>
 
-            <h1>Peacely</h1>
+                <h1>Peacely</h1>
 
-            <p>
-              Property & Tenant Management
-            </p>
-          </div>
+                <p>
+                  The simple way to run your PG
+                </p>
+              </div>
 
-          {authError && (
-            <div className="error-box">
-              {authError}
-            </div>
+              <div className="auth-intro-copy">
+                <h2>Manage your PG without the paperwork.</h2>
+
+                <p>
+                  Properties, rooms, beds, tenants, rent, payments, expenses and profit — all in one place.
+                </p>
+              </div>
+
+              <div className="auth-benefits">
+                <div>🏠 Properties, rooms & beds</div>
+                <div>👥 Tenants & occupancy</div>
+                <div>💰 Rent & payments</div>
+                <div>📊 Expenses & profit</div>
+              </div>
+
+              <button
+                type="button"
+                className="btn-primary full-btn"
+                onClick={() => {
+                  window.location.href = '/peacely-demo.html';
+                }}
+              >
+                ▶ See How Peacely Works
+              </button>
+
+              <div className="auth-trust">
+                <strong>Free to try</strong>
+                <span>No payment · No card required · No commitment</span>
+              </div>
+
+              <button
+                type="button"
+                className="auth-text-btn"
+                onClick={() => {
+                  setAuthMode('signup');
+                  setAuthError('');
+                }}
+              >
+                Ready to try it? Create a free account
+              </button>
+
+              <button
+                type="button"
+                className="auth-text-btn secondary"
+                onClick={() => {
+                  setAuthMode('login');
+                  setAuthError('');
+                }}
+              >
+                Already have an account? Log in
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="auth-brand">
+                <div className="brand-logo auth-logo">
+                  P
+                </div>
+
+                <h1>Peacely</h1>
+
+                <p>
+                  {authMode === 'login'
+                    ? 'Welcome back'
+                    : 'Create your free account'}
+                </p>
+              </div>
+
+              {authError && (
+                <div className="error-box">
+                  {authError}
+                </div>
+              )}
+
+              <div className="auth-tabs">
+                <button
+                  className={
+                    authMode === 'login'
+                      ? 'auth-tab active'
+                      : 'auth-tab'
+                  }
+                  onClick={() => {
+                    setAuthMode('login');
+                    setAuthError('');
+                  }}
+                >
+                  Log In
+                </button>
+
+                <button
+                  className={
+                    authMode === 'signup'
+                      ? 'auth-tab active'
+                      : 'auth-tab'
+                  }
+                  onClick={() => {
+                    setAuthMode('signup');
+                    setAuthError('');
+                  }}
+                >
+                  Sign Up
+                </button>
+              </div>
+
+              <form
+                onSubmit={
+                  authMode === 'login'
+                    ? handleLogin
+                    : handleSignup
+                }
+              >
+                {authMode === 'signup' && (
+                  <input
+                    className="modal-input"
+                    placeholder="Full name"
+                    value={authName}
+                    onChange={(e) =>
+                      setAuthName(e.target.value)
+                    }
+                    autoComplete="name"
+                  />
+                )}
+
+                <input
+                  className="modal-input"
+                  type="email"
+                  placeholder="Email address"
+                  value={authEmail}
+                  onChange={(e) =>
+                    setAuthEmail(e.target.value)
+                  }
+                  autoComplete="email"
+                />
+
+                <input
+                  className="modal-input"
+                  type="password"
+                  placeholder="Password"
+                  value={authPassword}
+                  onChange={(e) =>
+                    setAuthPassword(e.target.value)
+                  }
+                  autoComplete={
+                    authMode === 'login'
+                      ? 'current-password'
+                      : 'new-password'
+                  }
+                />
+
+                <button
+                  className="btn-primary full-btn"
+                  type="submit"
+                  disabled={authSaving}
+                >
+                  {authSaving
+                    ? 'Please wait...'
+                    : authMode === 'login'
+                      ? 'Log In'
+                      : 'Create Free Account'}
+                </button>
+              </form>
+
+              <button
+                type="button"
+                className="auth-back-btn"
+                onClick={() => {
+                  setAuthMode('intro');
+                  setAuthError('');
+                }}
+              >
+                ← See Peacely before signing up
+              </button>
+            </>
           )}
-
-          <div className="auth-tabs">
-            <button
-              className={
-                authMode === 'login'
-                  ? 'auth-tab active'
-                  : 'auth-tab'
-              }
-              onClick={() => {
-                setAuthMode(
-                  'login',
-                );
-                setAuthError('');
-              }}
-            >
-              Log In
-            </button>
-
-            <button
-              className={
-                authMode === 'signup'
-                  ? 'auth-tab active'
-                  : 'auth-tab'
-              }
-              onClick={() => {
-                setAuthMode(
-                  'signup',
-                );
-                setAuthError('');
-              }}
-            >
-              Sign Up
-            </button>
-          </div>
-
-          <form
-            onSubmit={
-              authMode === 'login'
-                ? handleLogin
-                : handleSignup
-            }
-          >
-            {authMode === 'signup' && (
-              <>
-                <input
-                  className="modal-input"
-                  placeholder="Full name"
-                  value={authName}
-                  onChange={(e) =>
-                    setAuthName(
-                      e.target.value,
-                    )
-                  }
-                  autoComplete="name"
-                />
-
-                <input
-                  className="modal-input"
-                  placeholder="Phone number"
-                  value={authPhone}
-                  onChange={(e) =>
-                    setAuthPhone(
-                      e.target.value,
-                    )
-                  }
-                  autoComplete="tel"
-                />
-              </>
-            )}
-
-            <input
-              className="modal-input"
-              type="email"
-              placeholder="Email address"
-              value={authEmail}
-              onChange={(e) =>
-                setAuthEmail(
-                  e.target.value,
-                )
-              }
-              autoComplete="email"
-            />
-
-            <input
-              className="modal-input"
-              type="password"
-              placeholder="Password"
-              value={authPassword}
-              onChange={(e) =>
-                setAuthPassword(
-                  e.target.value,
-                )
-              }
-              autoComplete={
-                authMode === 'login'
-                  ? 'current-password'
-                  : 'new-password'
-              }
-            />
-
-            <button
-              className="btn-primary full-btn"
-              type="submit"
-              disabled={authSaving}
-            >
-              {authSaving
-                ? 'Please wait...'
-                : authMode === 'login'
-                  ? 'Log In'
-                  : 'Create Account'}
-            </button>
-          </form>
         </div>
       </div>
     );
