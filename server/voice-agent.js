@@ -467,6 +467,97 @@ ${JSON.stringify(context || {}, null, 2)}`;
   return JSON.parse(outputText);
 }
 
+router.post('/voice-agent/transcribe', async (req, res) => {
+  try {
+    const owner = await ownerFromRequest(req);
+
+    if (!owner) {
+      return res.status(401).json({ success: false, error: 'Authentication required.' });
+    }
+
+    if (String(owner.email || '').toLowerCase().endsWith('@guest.peacely.local')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Please log in or sign up before using the Peacely Voice Agent.',
+      });
+    }
+
+    const apiKey = clean(process.env.OPENAI_API_KEY);
+    if (!apiKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'AI voice is not configured. Add OPENAI_API_KEY in Railway variables.',
+      });
+    }
+
+    const audioBase64 = clean(req.body?.audio);
+    const mimeType = clean(req.body?.mime_type) || 'audio/webm';
+
+    if (!audioBase64) {
+      return res.status(400).json({ success: false, error: 'Audio is empty.' });
+    }
+
+    const audio = Buffer.from(audioBase64, 'base64');
+    if (!audio.length) {
+      return res.status(400).json({ success: false, error: 'Audio is empty.' });
+    }
+
+    if (audio.length > 25 * 1024 * 1024) {
+      return res.status(400).json({ success: false, error: 'Audio recording is too large.' });
+    }
+
+    const extension =
+      mimeType.includes('mp4') || mimeType.includes('m4a')
+        ? 'm4a'
+        : mimeType.includes('ogg')
+          ? 'ogg'
+          : mimeType.includes('mpeg') || mimeType.includes('mp3')
+            ? 'mp3'
+            : 'webm';
+
+    const form = new FormData();
+    form.append('file', new Blob([audio], { type: mimeType }), `peacely-voice.${extension}`);
+    form.append('model', clean(process.env.OPENAI_TRANSCRIBE_MODEL) || 'gpt-transcribe');
+    form.append(
+      'prompt',
+      'Peacely property management voice command. Preserve tenant names, property names, room numbers, bed numbers, Indian English, Hindi, Kannada, Hinglish, code-switching, slang, informal speech, and spoken numbers. Do not translate the command; transcribe what the owner said naturally.',
+    );
+    form.append('languages[]', 'en');
+    form.append('languages[]', 'hi');
+    form.append('languages[]', 'kn');
+
+    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: form,
+    });
+
+    const data = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(data?.error?.message || 'Voice transcription failed.');
+    }
+
+    const text = clean(data?.text);
+    if (!text) {
+      return res.status(422).json({ success: false, error: 'I could not hear a clear command.' });
+    }
+
+    return res.json({
+      success: true,
+      text,
+      languages: Array.isArray(data?.languages) ? data.languages : [],
+    });
+  } catch (error) {
+    console.error('Peacely Voice Agent transcription failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Unable to transcribe voice.',
+    });
+  }
+});
+
 router.post('/voice-agent/speak', async (req, res) => {
   try {
     const owner = await ownerFromRequest(req);
