@@ -430,6 +430,130 @@ function App() {
   const [reassignRoomId, setReassignRoomId] = useState('');
   const [reassignBedId, setReassignBedId] = useState('');
 
+  const GUEST_DRAFT_KEY = 'peacely_guest_property_draft_v1';
+
+  type GuestDraft = {
+    properties: Property[];
+    rooms: Room[];
+    beds: Bed[];
+  };
+
+  const readGuestDraft = (): GuestDraft => {
+    try {
+      const raw = window.localStorage.getItem(GUEST_DRAFT_KEY);
+      if (!raw) return { properties: [], rooms: [], beds: [] };
+      const parsed = JSON.parse(raw);
+      return {
+        properties: Array.isArray(parsed?.properties) ? parsed.properties : [],
+        rooms: Array.isArray(parsed?.rooms) ? parsed.rooms : [],
+        beds: Array.isArray(parsed?.beds) ? parsed.beds : [],
+      };
+    } catch {
+      return { properties: [], rooms: [], beds: [] };
+    }
+  };
+
+  const writeGuestDraft = (
+    properties: Property[],
+    rooms: Room[],
+    beds: Bed[],
+  ) => {
+    try {
+      window.localStorage.setItem(
+        GUEST_DRAFT_KEY,
+        JSON.stringify({ properties, rooms, beds }),
+      );
+    } catch {}
+  };
+
+  const clearGuestDraft = () => {
+    try {
+      window.localStorage.removeItem(GUEST_DRAFT_KEY);
+    } catch {}
+  };
+
+  const syncGuestDraftToAccount = async () => {
+    const draft = readGuestDraft();
+    if (!draft.properties.length) return;
+
+    const propertyIdMap = new Map<number, number>();
+    const roomIdMap = new Map<number, number>();
+
+    for (const property of draft.properties) {
+      const created = await apiRequest<{ property: Property }>('/properties', {
+        method: 'POST',
+        body: JSON.stringify({
+          name: property.name,
+          address: property.address || '',
+          property_type: property.property_type || 'Gents',
+          rent_cycle: property.rent_cycle || '1st of every month',
+        }),
+      });
+
+      const newPropertyId = Number(created.property?.id || 0);
+      if (!newPropertyId) {
+        throw new Error('Unable to save your property to your account.');
+      }
+
+      propertyIdMap.set(Number(property.id), newPropertyId);
+    }
+
+    for (const room of draft.rooms) {
+      const newPropertyId = propertyIdMap.get(Number(room.property_id));
+      if (!newPropertyId) continue;
+
+      const created = await apiRequest<{ room: Room }>('/rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: newPropertyId,
+          room_number: room.room_number,
+          sharing_type: room.sharing_type || 'Single',
+          room_type: room.room_type || 'Non AC',
+          floor_name: room.floor_name || 'Ground Floor',
+          per_day_rent: Number(room.per_day_rent) || 0,
+          rent_amount: Number(room.rent_amount) || 0,
+        }),
+      });
+
+      const newRoomId = Number(created.room?.id || 0);
+      if (newRoomId) {
+        roomIdMap.set(Number(room.id), newRoomId);
+      }
+    }
+
+    for (const bed of draft.beds) {
+      const newRoomId = roomIdMap.get(Number(bed.room_id));
+      if (!newRoomId) continue;
+
+      const guestBedNumber = String(bed.bed_number || '').trim();
+      const normalized = guestBedNumber.toLowerCase().replace(/\s+/g, ' ');
+      const room = draft.rooms.find((item) => Number(item.id) === Number(bed.room_id));
+      const sharing = String(room?.sharing_type || '').toLowerCase();
+      const sharingCount =
+        Number(sharing.match(/\b(\d+)\b/)?.[1] || 0) ||
+        ({ single: 1, double: 2, triple: 3, four: 4, five: 5, six: 6 } as Record<string, number>)[sharing] ||
+        0;
+
+      // Room creation already creates the beds required by its sharing type.
+      // Only create guest-added custom beds that are not part of that automatic set.
+      const isAutomaticBed =
+        /^bed\s+\d+$/.test(normalized) &&
+        Number(normalized.replace('bed ', '')) <= sharingCount;
+
+      if (!isAutomaticBed && guestBedNumber) {
+        await apiRequest('/beds', {
+          method: 'POST',
+          body: JSON.stringify({
+            room_id: newRoomId,
+            bed_number: guestBedNumber,
+          }),
+        });
+      }
+    }
+
+    clearGuestDraft();
+  };
+
   const [paymentTenantId, setPaymentTenantId] =
     useState('');
   const [paymentInvoiceId, setPaymentInvoiceId] =
@@ -660,15 +784,23 @@ function App() {
 
           await loadAllData();
         } else {
+          const draft = readGuestDraft();
           setOwner(null);
           setAuthenticated(false);
           setGuestMode(true);
+          setProperties(draft.properties);
+          setRooms(draft.rooms);
+          setBeds(draft.beds);
           setLoading(false);
         }
       } catch {
+        const draft = readGuestDraft();
         setOwner(null);
         setAuthenticated(false);
         setGuestMode(true);
+        setProperties(draft.properties);
+        setRooms(draft.rooms);
+        setBeds(draft.beds);
         setLoading(false);
       }
     };
@@ -712,6 +844,7 @@ function App() {
       setGuestAuthPrompt(false);
       setAuthPassword('');
 
+      await syncGuestDraftToAccount();
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -767,6 +900,7 @@ function App() {
       setAuthenticated(true);
       setAuthPassword('');
 
+      await syncGuestDraftToAccount();
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -988,11 +1122,14 @@ function App() {
     try {
       if (guestMode) {
         const createdPropertyId = -Date.now();
-        setProperties((current) => [...current, {
+        const createdProperty: Property = {
           id: createdPropertyId, name: propName.trim(), address: propAddress.trim(),
           property_type: propType, rent_cycle: rentCycle, room_count: 0, bed_count: 0,
           occupied_bed_count: 0, tenant_count: 0, occupancy_rate: 0, monthly_revenue: 0,
-        }]);
+        };
+        const nextProperties = [...properties, createdProperty];
+        setProperties(nextProperties);
+        writeGuestDraft(nextProperties, rooms, beds);
         resetForms(); closeModal(); setActiveTab('properties'); return;
       }
 
@@ -1082,15 +1219,19 @@ function App() {
 
     try {
       if (guestMode) {
-        setBeds((current) => current.filter((item) => item.id !== bed.id));
-        setRooms((current) => current.map((room) =>
+        const nextBeds = beds.filter((item) => item.id !== bed.id);
+        const nextRooms = rooms.map((room) =>
           room.id === bed.room_id ? { ...room, bed_count: Math.max(Number(room.bed_count || 0) - 1, 0) } : room,
-        ));
-        if (bed.property_id) {
-          setProperties((current) => current.map((property) =>
-            property.id === bed.property_id ? { ...property, bed_count: Math.max(Number(property.bed_count || 0) - 1, 0) } : property,
-          ));
-        }
+        );
+        const nextProperties = bed.property_id
+          ? properties.map((property) =>
+              property.id === bed.property_id ? { ...property, bed_count: Math.max(Number(property.bed_count || 0) - 1, 0) } : property,
+            )
+          : properties;
+        setBeds(nextBeds);
+        setRooms(nextRooms);
+        setProperties(nextProperties);
+        writeGuestDraft(nextProperties, nextRooms, nextBeds);
         return;
       }
       await apiRequest(`/beds/${bed.id}`, { method: 'DELETE' });
@@ -1116,9 +1257,13 @@ function App() {
 
     try {
       if (guestMode) {
-        setProperties((current) => current.filter((item) => item.id !== property.id));
-        setRooms((current) => current.filter((item) => item.property_id !== property.id));
-        setBeds((current) => current.filter((item) => item.property_id !== property.id));
+        const nextProperties = properties.filter((item) => item.id !== property.id);
+        const nextRooms = rooms.filter((item) => item.property_id !== property.id);
+        const nextBeds = beds.filter((item) => item.property_id !== property.id);
+        setProperties(nextProperties);
+        setRooms(nextRooms);
+        setBeds(nextBeds);
+        writeGuestDraft(nextProperties, nextRooms, nextBeds);
         setManagedPropertyId(null);
         return;
       }
@@ -1172,13 +1317,17 @@ function App() {
           id: roomId - index - 1, room_id: roomId, bed_number: String(index + 1),
           is_occupied: false, property_id: propertyId,
         }));
-        setRooms((current) => [...current, createdRoom]);
-        setBeds((current) => [...current, ...createdBeds]);
-        setProperties((current) => current.map((property) =>
+        const nextRooms = [...rooms, createdRoom];
+        const nextBeds = [...beds, ...createdBeds];
+        const nextProperties = properties.map((property) =>
           property.id === propertyId
             ? { ...property, room_count: property.room_count + 1, bed_count: Number(property.bed_count || 0) + bedCount }
             : property,
-        ));
+        );
+        setRooms(nextRooms);
+        setBeds(nextBeds);
+        setProperties(nextProperties);
+        writeGuestDraft(nextProperties, nextRooms, nextBeds);
         resetForms(); closeModal(); setActiveTab('properties'); return;
       }
 
@@ -1234,16 +1383,21 @@ function App() {
         const room = rooms.find((item) => item.id === roomId);
         if (!room) { setError('Could not find the selected room.'); return; }
         const bedId = -Date.now();
-        setBeds((current) => [...current, {
+        const createdBed: Bed = {
           id: bedId, room_id: roomId, bed_number: bedNumber.trim(),
           is_occupied: false, property_id: room.property_id,
-        }]);
-        setRooms((current) => current.map((item) =>
+        };
+        const nextBeds = [...beds, createdBed];
+        const nextRooms = rooms.map((item) =>
           item.id === roomId ? { ...item, bed_count: Number(item.bed_count || 0) + 1 } : item,
-        ));
-        setProperties((current) => current.map((property) =>
+        );
+        const nextProperties = properties.map((property) =>
           property.id === room.property_id ? { ...property, bed_count: Number(property.bed_count || 0) + 1 } : property,
-        ));
+        );
+        setBeds(nextBeds);
+        setRooms(nextRooms);
+        setProperties(nextProperties);
+        writeGuestDraft(nextProperties, nextRooms, nextBeds);
         resetForms(); closeModal(); return;
       }
 
