@@ -4167,6 +4167,7 @@ function VoiceAgentModal({
   const [pendingAction, setPendingAction] = useState<VoiceAgentAction | null>(null);
   const recognitionRef = useRef<any>(null);
   const conversationActiveRef = useRef(false);
+  const processingRef = useRef(false);
 
   const stopRecognition = () => {
     conversationActiveRef.current = false;
@@ -4262,6 +4263,8 @@ function VoiceAgentModal({
     const command = spokenText.trim();
     if (!command) return;
 
+    processingRef.current = true;
+
     if (pendingAction && /^(yes|yeah|yep|confirm|confirmed|do it|go ahead|okay|ok)\b/i.test(command)) {
       setProcessing(true);
       try {
@@ -4314,6 +4317,7 @@ function VoiceAgentModal({
     } catch (error) {
       setSpokenReply(error instanceof Error ? error.message : 'Unable to process that command.');
     } finally {
+      processingRef.current = false;
       setProcessing(false);
     }
   };
@@ -4361,7 +4365,13 @@ function VoiceAgentModal({
       if (visible) setTranscript(visible);
 
       if (finalText.trim()) {
+        // Stop the microphone immediately before Peacely speaks.
+        // Keep the conversation session active so listening can resume
+        // only after the AI response has completely finished.
         setListening(false);
+        try {
+          recognition.stop();
+        } catch {}
         void runCommand(finalText.trim());
       }
     };
@@ -4379,7 +4389,7 @@ function VoiceAgentModal({
 
     recognition.onend = () => {
       setListening(false);
-      if (conversationActiveRef.current && !processing) {
+      if (conversationActiveRef.current && !processingRef.current) {
         restartConversationListening();
       }
     };
