@@ -1183,6 +1183,17 @@ function App() {
       }
 
       await apiRequest('/rooms', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(roomPropertyId),
+          room_number: roomNumber.trim(),
+          sharing_type: sharingType,
+          room_type: roomType,
+          floor_name: roomFloorName || 'Ground Floor',
+          per_day_rent: Number(roomPerDayRent) || 0,
+          rent_amount: Number(roomRent) || 0,
+        }),
+      });
 
       resetForms();
       closeModal();
@@ -1237,6 +1248,12 @@ function App() {
       }
 
       await apiRequest('/beds', {
+        method: 'POST',
+        body: JSON.stringify({
+          room_id: Number(bedRoomId),
+          bed_number: bedNumber.trim(),
+        }),
+      });
 
       resetForms();
       closeModal();
