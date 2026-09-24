@@ -442,6 +442,94 @@ ${JSON.stringify(context || {}, null, 2)}`;
   return JSON.parse(outputText);
 }
 
+router.post('/voice-agent/speak', async (req, res) => {
+  try {
+    const owner = await ownerFromRequest(req);
+
+    if (!owner) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required.',
+      });
+    }
+
+    if (String(owner.email || '').toLowerCase().endsWith('@guest.peacely.local')) {
+      return res.status(403).json({
+        success: false,
+        error: 'Please log in or sign up before using the Peacely Voice Agent.',
+      });
+    }
+
+    const text = clean(req.body?.text);
+    const language = clean(req.body?.language) || 'en-IN';
+
+    if (!text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Speech text is empty.',
+      });
+    }
+
+    if (text.length > 4096) {
+      return res.status(400).json({
+        success: false,
+        error: 'Speech text is too long.',
+      });
+    }
+
+    const apiKey = clean(process.env.OPENAI_API_KEY);
+    if (!apiKey) {
+      return res.status(503).json({
+        success: false,
+        error: 'AI voice is not configured. Add OPENAI_API_KEY in Railway variables.',
+      });
+    }
+
+    const languageName =
+      language === 'hi-IN'
+        ? 'Hindi'
+        : language === 'kn-IN'
+          ? 'Kannada'
+          : 'Indian English';
+
+    const response = await fetch('https://api.openai.com/v1/audio/speech', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: clean(process.env.OPENAI_TTS_MODEL) || 'gpt-4o-mini-tts',
+        voice: clean(process.env.OPENAI_TTS_VOICE) || 'marin',
+        input: text,
+        instructions: `Speak naturally as Peacely, a helpful property-management assistant. Respond in ${languageName}. Keep the delivery concise, clear and conversational. This is an AI-generated voice.`,
+        response_format: 'mp3',
+      }),
+    });
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      throw new Error(data?.error?.message || 'AI voice generation failed.');
+    }
+
+    const audio = Buffer.from(await response.arrayBuffer());
+
+    res.set({
+      'Content-Type': 'audio/mpeg',
+      'Content-Length': String(audio.length),
+      'Cache-Control': 'no-store',
+    });
+
+    return res.send(audio);
+  } catch (error) {
+    console.error('Peacely Voice Agent speech failed:', error);
+    return res.status(500).json({
+      success: false,
+      error: error?.message || 'Unable to generate AI voice.',
+    });
+  }
+});
+
 router.post('/voice-agent/command', async (req, res) => {
   try {
     const owner = await ownerFromRequest(req);
