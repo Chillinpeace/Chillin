@@ -12,6 +12,16 @@ const num = (v, fallback = 0) => {
   return Number.isFinite(n) ? n : fallback;
 };
 
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata',
+  });
+};
+
 const cookies = (req) => {
   const out = {};
   for (const part of String(req.headers.cookie || '').split(';')) {
@@ -160,7 +170,7 @@ async function buildInvoicePdf(invoice) {
   doc.text(`Tenant: ${invoice.tenant_name}`);
   doc.text(`Property: ${invoice.property_name}`);
   doc.text(`Month: ${invoice.month || '-'}`);
-  doc.text(`Due date: ${invoice.due_date}`);
+  doc.text(`Due date: ${formatDate(invoice.due_date)}`);
   doc.text('Payment status: PAID');
   doc.moveDown();
   doc.fontSize(14).text(`Amount paid: ₹${num(invoice.paid_amount).toLocaleString('en-IN')}`);
@@ -670,7 +680,7 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   ` : ''}
   ${clean(invoice.phone) ? `<div class="detail"><strong>Phone</strong><br>${escapeHtml(invoice.phone)}</div>` : ''}
   ${clean(invoice.payment_instructions) ? `<div class="detail note">${escapeHtml(invoice.payment_instructions)}</div>` : ''}
-  <div class="detail"><strong>After paying</strong><br>Inform the property owner. The owner will confirm the payment in Peacely and your paid invoice will be sent automatically.</div>
+  <div class="detail"><strong>After paying</strong><br>Inform the property owner.</div>
   </div>
 </div>
 </body>
@@ -722,7 +732,7 @@ router.get('/payment-automation/invoices/:id/whatsapp-link', auth, async (req, r
 
   const message = clean(invoice.status).toLowerCase() === 'paid'
     ? `Hello ${invoice.tenant_name},\n\nYour rent payment for invoice ${invoice.invoice_number} has been confirmed in Peacely.\n\nAmount paid: ₹${num(invoice.paid_amount || invoice.amount).toLocaleString('en-IN')}\nPaid receipt: ${receiptUrl}`
-    : `Hello ${invoice.tenant_name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${invoice.invoice_number}\nMonth: ${invoice.month || '-'}\nAmount: ₹${num(invoice.amount).toLocaleString('en-IN')}\nDue date: ${invoice.due_date}\n\nPay directly to the property owner using the UPI/phone/QR details here:\n${paymentPageUrl}\n\nAfter paying, inform the owner. The owner will confirm the payment in Peacely.`;
+    : `Hello ${invoice.tenant_name},\n\nHere is your rent invoice from Peacely.\n\nInvoice: ${invoice.invoice_number}\nMonth: ${invoice.month || '-'}\nAmount: ₹${num(invoice.amount).toLocaleString('en-IN')}\nDue date: ${formatDate(invoice.due_date)}\n\nPay directly to the property owner using the UPI/phone/QR details here:\n${paymentPageUrl}\n\nAfter paying, inform the owner.`;
   return res.redirect(`https://wa.me/${phone}?text=${encodeURIComponent(message)}`);
 });
 router.get('/payment-automation/invoices/:id/payment-page', auth, async (req, res) => {
