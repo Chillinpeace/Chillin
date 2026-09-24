@@ -32,5 +32,26 @@ router.get('/expenses',requireOwner,async(req,res)=>{try{const ownerId=req.expen
 router.get('/expenses/summary',requireOwner,async(req,res)=>{try{const ownerId=req.expenseOwner.id;const month=clean(req.query.month),params=[ownerId],where=['e.owner_id=$1'];if(month){if(!/^\d{4}-\d{2}$/.test(month))return res.status(400).json({success:false,error:'Month must be YYYY-MM.'});params.push(`${month}-01`);where.push('e.expense_date >= $2::date');where.push("e.expense_date < ($2::date + INTERVAL '1 month')");}const totals=await query(`SELECT COALESCE(SUM(e.amount),0) AS total,COUNT(*)::INTEGER AS count FROM expenses e WHERE ${where.join(' AND ')}`,params);const categories=await query(`SELECT e.category,COALESCE(SUM(e.amount),0) AS amount,COUNT(*)::INTEGER AS count FROM expenses e WHERE ${where.join(' AND ')} GROUP BY e.category ORDER BY amount DESC`,params);const months=await query(`SELECT TO_CHAR(DATE_TRUNC('month',e.expense_date),'YYYY-MM') AS month,COALESCE(SUM(e.amount),0) AS amount,COUNT(*)::INTEGER AS count FROM expenses e WHERE e.owner_id=$1 AND e.expense_date>=DATE_TRUNC('month',CURRENT_DATE)-INTERVAL '11 months' GROUP BY DATE_TRUNC('month',e.expense_date) ORDER BY month DESC`,[ownerId]);return res.json({success:true,total:Number(totals.rows[0]?.total||0),count:Number(totals.rows[0]?.count||0),categories:categories.rows.map(r=>({...r,amount:Number(r.amount||0)})),months:months.rows.map(r=>({...r,amount:Number(r.amount||0)}))});}catch(e){console.error('Expense summary failed:',e);return res.status(500).json({success:false,error:'Unable to load expense summary.'});}});
 router.post('/expenses',requireOwner,async(req,res)=>{try{const ownerId=req.expenseOwner.id,expenseDate=clean(req.body?.expense_date||req.body?.date),category=clean(req.body?.category)||'Other',amount=money(req.body?.amount),note=clean(req.body?.note||req.body?.notes),propertyId=req.body?.property_id===''||req.body?.property_id===undefined?null:req.body?.property_id;if(!validDate(expenseDate))return res.status(400).json({success:false,error:'Expense date must be YYYY-MM-DD.'});if(!Number.isFinite(amount)||amount<=0)return res.status(400).json({success:false,error:'Expense amount must be greater than zero.'});if(category.length>100)return res.status(400).json({success:false,error:'Expense category is too long.'});const property=await propertyForOwner(ownerId,propertyId);const r=await query(`INSERT INTO expenses(owner_id,property_id,expense_date,category,amount,note) VALUES($1,$2,$3,$4,$5,$6) RETURNING id,owner_id,property_id,expense_date,category,amount,note,created_at`,[ownerId,property?.id||null,expenseDate,category,amount,note]);return res.status(201).json({...r.rows[0],property_name:property?.name||null,updated_at:r.rows[0]?.created_at||null});}catch(e){console.error('Expense create failed:',e);return res.status(500).json({success:false,error:e.message||'Unable to create expense.'});}});
 router.put('/expenses/:id',requireOwner,async(_req,res)=>res.status(403).json({success:false,error:'Expenses are permanent and cannot be edited.'}));
-router.delete('/expenses/:id',requireOwner,async(_req,res)=>res.status(403).json({success:false,error:'Expenses are permanent and cannot be deleted.'}));
+router.delete('/expenses/:id',requireOwner,async(req,res)=>{
+  try{
+    const id=Number(req.params.id);
+    if(!Number.isInteger(id)||id<1){
+      return res.status(400).json({success:false,error:'Invalid expense.'});
+    }
+
+    const result=await query(
+      'DELETE FROM expenses WHERE id=$1 AND owner_id=$2 RETURNING id',
+      [id,req.expenseOwner.id],
+    );
+
+    if(!result.rows.length){
+      return res.status(404).json({success:false,error:'Expense not found.'});
+    }
+
+    return res.json({success:true,deleted_id:Number(result.rows[0].id)});
+  }catch(e){
+    console.error('Expense delete failed:',e);
+    return res.status(500).json({success:false,error:e.message||'Unable to delete expense.'});
+  }
+});
 export default router;
