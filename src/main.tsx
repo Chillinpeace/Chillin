@@ -3902,9 +3902,6 @@ function Header({
                 <button className="profile-menu-item" type="button" onClick={() => { onAuth(); setMenuOpen(false); }}>
                   <span>↪</span><span>Log In</span>
                 </button>
-                <button className="profile-menu-item" type="button" onClick={() => { onSignup(); setMenuOpen(false); }}>
-                  <span>✦</span><span>Sign Up</span>
-                </button>
               </>
             )}
 
