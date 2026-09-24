@@ -4178,14 +4178,12 @@ function VoiceAgentModal({
   };
 
   const restartConversationListening = () => {
-    if (!conversationActiveRef.current) return;
+    if (!conversationActiveRef.current || processingRef.current) return;
 
     window.setTimeout(() => {
-      if (!conversationActiveRef.current) return;
-      try {
-        recognitionRef.current?.start();
-      } catch {}
-    }, 250);
+      if (!conversationActiveRef.current || processingRef.current) return;
+      startListening();
+    }, 300);
   };
 
   const speakReply = async (text: string) => {
@@ -4323,7 +4321,7 @@ function VoiceAgentModal({
   };
 
   const startListening = () => {
-    if (processing) return;
+    if (processingRef.current) return;
 
     stopRecognition();
     conversationActiveRef.current = true;
@@ -4342,7 +4340,9 @@ function VoiceAgentModal({
     const recognition = new SpeechRecognitionCtor();
     recognitionRef.current = recognition;
     recognition.lang = language;
-    recognition.continuous = true;
+    // Siri-like half-duplex behavior: listen for one user utterance,
+    // then fully stop the microphone before Peacely speaks.
+    recognition.continuous = false;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
@@ -4369,9 +4369,15 @@ function VoiceAgentModal({
         // Keep the conversation session active so listening can resume
         // only after the AI response has completely finished.
         setListening(false);
+        // Abort immediately so no microphone capture remains while the
+        // AI voice response is playing. Keep the conversation session active.
         try {
-          recognition.stop();
-        } catch {}
+          recognition.abort();
+        } catch {
+          try {
+            recognition.stop();
+          } catch {}
+        }
         void runCommand(finalText.trim());
       }
     };
