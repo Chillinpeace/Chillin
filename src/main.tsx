@@ -3716,7 +3716,7 @@ function App() {
                         bed.id
                       }
                     >
-                      Bed {bed.bed_number} · Available
+                      {bed.bed_number} · Available
                     </option>
                   ),
                 )}
@@ -3801,7 +3801,7 @@ function App() {
               </select>
               <select className="modal-input" value={reassignBedId} disabled={!reassignRoomId} onChange={(e) => setReassignBedId(e.target.value)}>
                 <option value="">{reassignRoomId ? 'Select available bed' : 'Select room first'}</option>
-                {reassignAvailableBeds.map((bed) => <option key={bed.id} value={bed.id}>Bed {bed.bed_number} · Available</option>)}
+                {reassignAvailableBeds.map((bed) => <option key={bed.id} value={bed.id}>{bed.bed_number} · Available</option>)}
               </select>
               <ModalButtons saving={saving} onCancel={closeModal} />
             </form>
