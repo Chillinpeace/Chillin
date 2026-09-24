@@ -1143,6 +1143,16 @@ function App() {
 
       const createdPropertyId = Number(created.property?.id || 0);
 
+      // Keep the newly created property in the UI immediately. Do not let a
+      // secondary dashboard refresh wipe it out if another guest-only
+      // endpoint is temporarily unavailable.
+      if (created.property) {
+        setProperties((current) => [
+          ...current,
+          created.property,
+        ]);
+      }
+
       resetForms();
 
       if (createdPropertyId) {
@@ -1154,8 +1164,6 @@ function App() {
       } else {
         closeModal();
       }
-
-      await loadAllData();
     } catch (err) {
       setError(
         err instanceof Error
