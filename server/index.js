@@ -442,8 +442,8 @@ app.get(
   asyncHandler(async (req, res) => {
     const owner = await getSessionOwner(req);
 
-    if (!owner) {
-      return res.status(401).json({
+    if (!owner || owner.email?.endsWith('@guest.peacely.local')) {
+      return res.status(owner ? 200 : 401).json({
         authenticated: false,
         owner: null,
       });
