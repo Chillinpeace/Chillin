@@ -4166,12 +4166,25 @@ function VoiceAgentModal({
   const [reply, setReply] = useState('Tap the microphone and tell Peacely what you want done.');
   const [pendingAction, setPendingAction] = useState<VoiceAgentAction | null>(null);
   const recognitionRef = useRef<any>(null);
+  const conversationActiveRef = useRef(false);
 
   const stopRecognition = () => {
+    conversationActiveRef.current = false;
     try {
       recognitionRef.current?.stop();
     } catch {}
     setListening(false);
+  };
+
+  const restartConversationListening = () => {
+    if (!conversationActiveRef.current || processing) return;
+
+    window.setTimeout(() => {
+      if (!conversationActiveRef.current || processing) return;
+      try {
+        recognitionRef.current?.start();
+      } catch {}
+    }, 250);
   };
 
   const speakReply = async (text: string) => {
@@ -4213,14 +4226,26 @@ function VoiceAgentModal({
         }
       };
       await audio.play();
+      await new Promise<void>((resolve) => {
+        if (audio.ended) {
+          resolve();
+          return;
+        }
+        audio.addEventListener('ended', () => resolve(), { once: true });
+        audio.addEventListener('error', () => resolve(), { once: true });
+      });
     } catch {
       if ('speechSynthesis' in window) {
         try {
           window.speechSynthesis.cancel();
-          const fallback = new SpeechSynthesisUtterance(spoken);
-          fallback.lang = language;
-          fallback.rate = 0.95;
-          window.speechSynthesis.speak(fallback);
+          await new Promise<void>((resolve) => {
+            const fallback = new SpeechSynthesisUtterance(spoken);
+            fallback.lang = language;
+            fallback.rate = 0.95;
+            fallback.onend = () => resolve();
+            fallback.onerror = () => resolve();
+            window.speechSynthesis.speak(fallback);
+          });
         } catch {}
       }
     }
@@ -4228,7 +4253,9 @@ function VoiceAgentModal({
 
   const setSpokenReply = (text: string) => {
     setReply(text);
-    void speakReply(text);
+    void speakReply(text).finally(() => {
+      restartConversationListening();
+    });
   };
 
   const runCommand = async (spokenText: string) => {
@@ -4294,6 +4321,8 @@ function VoiceAgentModal({
   const startListening = () => {
     if (processing) return;
 
+    conversationActiveRef.current = true;
+
     const speechWindow = window as unknown as {
       SpeechRecognition?: new () => any;
       webkitSpeechRecognition?: new () => any;
@@ -4310,7 +4339,7 @@ function VoiceAgentModal({
     const recognition = new SpeechRecognitionCtor();
     recognitionRef.current = recognition;
     recognition.lang = language;
-    recognition.continuous = false;
+    recognition.continuous = true;
     recognition.interimResults = true;
     recognition.maxAlternatives = 1;
 
@@ -4349,7 +4378,12 @@ function VoiceAgentModal({
       setSpokenReply(message);
     };
 
-    recognition.onend = () => setListening(false);
+    recognition.onend = () => {
+      setListening(false);
+      if (conversationActiveRef.current && !processing) {
+        restartConversationListening();
+      }
+    };
 
     try {
       recognition.start();
