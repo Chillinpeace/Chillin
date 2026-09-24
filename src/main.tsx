@@ -1092,12 +1092,6 @@ function App() {
     setTenantMoveInDate(today());
     setError('');
 
-    if (guestMode) {
-      setGuestAuthPrompt(true);
-      setActiveModal('none');
-      return;
-    }
-
     setActiveModal('tenant');
   };
 
@@ -1187,32 +1181,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const propertyId = Number(floorPropertyId);
-        const newLevel: PropertyLevel = {
-          id: Date.now(),
-          property_id: propertyId,
-          building_name: 'Main Building',
-          floor_name: floorName.trim(),
-          created_at: new Date().toISOString(),
-        };
-        const nextLevels = [
-          ...propertyLevels.filter(
-            (level) =>
-              !(
-                level.property_id === propertyId &&
-                normalize(level.floor_name) === normalize(newLevel.floor_name)
-              ),
-          ),
-          newLevel,
-        ];
-        setPropertyLevels(nextLevels);
-        writeGuestDraft(properties, rooms, beds, nextLevels);
-        resetForms();
-        setActiveModal('none');
-        return;
-      }
-
       await apiRequest('/nivaasi-upgrades/structure', {
         method: 'POST',
         body: JSON.stringify({
@@ -1246,22 +1214,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const nextBeds = beds.filter((item) => item.id !== bed.id);
-        const nextRooms = rooms.map((room) =>
-          room.id === bed.room_id ? { ...room, bed_count: Math.max(Number(room.bed_count || 0) - 1, 0) } : room,
-        );
-        const nextProperties = bed.property_id
-          ? properties.map((property) =>
-              property.id === bed.property_id ? { ...property, bed_count: Math.max(Number(property.bed_count || 0) - 1, 0) } : property,
-            )
-          : properties;
-        setBeds(nextBeds);
-        setRooms(nextRooms);
-        setProperties(nextProperties);
-        writeGuestDraft(nextProperties, nextRooms, nextBeds);
-        return;
-      }
       await apiRequest(`/beds/${bed.id}`, { method: 'DELETE' });
       await loadAllData();
     } catch (err) {
@@ -1284,17 +1236,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const nextProperties = properties.filter((item) => item.id !== property.id);
-        const nextRooms = rooms.filter((item) => item.property_id !== property.id);
-        const nextBeds = beds.filter((item) => item.property_id !== property.id);
-        setProperties(nextProperties);
-        setRooms(nextRooms);
-        setBeds(nextBeds);
-        writeGuestDraft(nextProperties, nextRooms, nextBeds);
-        setManagedPropertyId(null);
-        return;
-      }
       await apiRequest(`/properties/${property.id}`, { method: 'DELETE' });
       setManagedPropertyId(null);
       await loadAllData();
@@ -1328,37 +1269,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const propertyId = Number(roomPropertyId);
-        const roomId = -Date.now();
-        const bedCountBySharing: Record<string, number> = {
-          Single: 1, Double: 2, Triple: 3, 'Four Sharing': 4, 'Five Sharing': 5, 'Six Sharing': 6,
-        };
-        const bedCount = bedCountBySharing[sharingType] || 1;
-        const createdRoom: Room = {
-          id: roomId, property_id: propertyId, room_number: roomNumber.trim(),
-          sharing_type: sharingType, room_type: roomType, floor_name: roomFloorName || 'Ground Floor',
-          per_day_rent: Number(roomPerDayRent) || 0, rent_amount: Number(roomRent) || 0,
-          bed_count: bedCount, occupied_bed_count: 0,
-        };
-        const createdBeds: Bed[] = Array.from({ length: bedCount }, (_, index) => ({
-          id: roomId - index - 1, room_id: roomId, bed_number: String(index + 1),
-          is_occupied: false, property_id: propertyId,
-        }));
-        const nextRooms = [...rooms, createdRoom];
-        const nextBeds = [...beds, ...createdBeds];
-        const nextProperties = properties.map((property) =>
-          property.id === propertyId
-            ? { ...property, room_count: property.room_count + 1, bed_count: Number(property.bed_count || 0) + bedCount }
-            : property,
-        );
-        setRooms(nextRooms);
-        setBeds(nextBeds);
-        setProperties(nextProperties);
-        writeGuestDraft(nextProperties, nextRooms, nextBeds);
-        resetForms(); closeModal(); setActiveTab('properties'); return;
-      }
-
       await apiRequest('/rooms', {
         method: 'POST',
         body: JSON.stringify({
@@ -1406,29 +1316,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const roomId = Number(bedRoomId);
-        const room = rooms.find((item) => item.id === roomId);
-        if (!room) { setError('Could not find the selected room.'); return; }
-        const bedId = -Date.now();
-        const createdBed: Bed = {
-          id: bedId, room_id: roomId, bed_number: bedNumber.trim(),
-          is_occupied: false, property_id: room.property_id,
-        };
-        const nextBeds = [...beds, createdBed];
-        const nextRooms = rooms.map((item) =>
-          item.id === roomId ? { ...item, bed_count: Number(item.bed_count || 0) + 1 } : item,
-        );
-        const nextProperties = properties.map((property) =>
-          property.id === room.property_id ? { ...property, bed_count: Number(property.bed_count || 0) + 1 } : property,
-        );
-        setBeds(nextBeds);
-        setRooms(nextRooms);
-        setProperties(nextProperties);
-        writeGuestDraft(nextProperties, nextRooms, nextBeds);
-        resetForms(); closeModal(); return;
-      }
-
       await apiRequest('/beds', {
         method: 'POST',
         body: JSON.stringify({
