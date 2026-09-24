@@ -1160,9 +1160,9 @@ function App() {
     setError('');
 
     try {
-      const created = await apiRequest<{
-        property: Property;
-      }>('/properties', {
+      const created = await apiRequest<
+        { property: Property } | Property
+      >('/properties', {
         method: 'POST',
         body: JSON.stringify({
           name: propName.trim(),
@@ -1172,24 +1172,37 @@ function App() {
         }),
       });
 
-      const createdPropertyId = Number(created.property?.id || 0);
+      const createdProperty =
+        !Array.isArray(created) && 'property' in created
+          ? created.property
+          : (created as Property);
 
-      // Keep the newly created property in the UI immediately. Do not let a
-      // secondary dashboard refresh wipe it out if another guest-only
-      // endpoint is temporarily unavailable.
-      if (created.property) {
-        setProperties((current) => [
+      const createdPropertyId = Number(createdProperty?.id || 0);
+
+      if (!createdPropertyId) {
+        throw new Error('Property was not saved. Please try again.');
+      }
+
+      // Keep the confirmed server record in the UI immediately.
+      setProperties((current) => {
+        const existing = current.some(
+          (item) => Number(item.id) === createdPropertyId,
+        );
+
+        if (existing) return current;
+
+        return [
           ...current,
           {
-            ...created.property,
-            room_count: Number(created.property.room_count || 0),
-            bed_count: Number(created.property.bed_count || 0),
-            occupied_bed_count: Number(created.property.occupied_bed_count || 0),
-            tenant_count: Number(created.property.tenant_count || 0),
-            monthly_revenue: Number(created.property.monthly_revenue || 0),
+            ...createdProperty,
+            room_count: Number(createdProperty.room_count || 0),
+            bed_count: Number(createdProperty.bed_count || 0),
+            occupied_bed_count: Number(createdProperty.occupied_bed_count || 0),
+            tenant_count: Number(createdProperty.tenant_count || 0),
+            monthly_revenue: Number(createdProperty.monthly_revenue || 0),
           },
-        ]);
-      }
+        ];
+      });
 
       resetForms();
 
