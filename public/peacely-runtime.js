@@ -314,20 +314,11 @@
       }
     }
 
-    const key = collectionKeys[pathname];
-    if (!key || !response.ok) return response;
-
-    const payload = await response.clone().json().catch(() => null);
-    if (!payload || !Array.isArray(payload[key])) return response;
-
-    const headers = new Headers(response.headers);
-    headers.set('Content-Type', 'application/json');
-    headers.delete('Content-Length');
-    return new Response(JSON.stringify(payload[key]), {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    });
+    // Do not rewrite collection API responses.
+    // The application handles both the normal API envelope and raw arrays.
+    // Rewriting responses here can make a successful property save appear
+    // to disappear from the React state.
+    return response;
   };
 
   window.addEventListener('error', (event) => {
