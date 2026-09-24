@@ -234,6 +234,30 @@ function fallbackParse(command, context) {
     };
   }
 
+  if ((/whatsapp|what'?s?app|wa/i.test(command) && /(remind|reminder|message|send)/i.test(command)) || /व्हाट्स?ऐप.*(रिमाइंड|याद|मैसेज|संदेश)|रिमाइंड.*व्हाट्स?ऐप/i.test(command) || /(remind|reminder).*tenant/i.test(command)) {
+    const reminderTenant = tenant || (tenants.length === 1 ? tenants[0] : null);
+
+    if (!reminderTenant) {
+      return {
+        action: 'send_reminder',
+        reply: 'Which tenant should I send the WhatsApp rent reminder to? Please say the tenant name.',
+        requires_confirmation: false,
+        params: {
+          tenant_id: null,
+        },
+      };
+    }
+
+    return {
+      action: 'send_reminder',
+      reply: `I will open WhatsApp with a rent reminder for ${reminderTenant.name}.`,
+      requires_confirmation: false,
+      params: {
+        tenant_id: reminderTenant.id,
+      },
+    };
+  }
+
   if ((/paid|payment|received/i.test(command) || /दिया|भुगतान|जमा|पेमेंट/i.test(command)) && tenant && amount !== null) {
     const invoice = invoices
       .filter((item) => Number(item.tenant_id) === Number(tenant.id))
@@ -391,7 +415,8 @@ Important rules:
 - Do not delete tenants, payments, invoices, rooms or beds through voice.
 - Do not claim an action was completed. Your output is only a plan that the Peacely UI will execute after validation.
 - For read-only requests use show_outstanding, show_collections, show_expenses, or open_tab.
-- For WhatsApp reminders use send_reminder only when a specific tenant is identifiable.
+- Treat phrases like “send the tenant WhatsApp reminder”, “send a WhatsApp reminder”, “WhatsApp reminder for Rahul”, “remind Rahul on WhatsApp”, and Hindi/Hinglish equivalents as send_reminder requests.
+- For WhatsApp reminders, use send_reminder when a specific tenant is identifiable; if the tenant is ambiguous, ask for the tenant name instead of guessing.
 - Keep reply short and conversational.
 
 Available actions: ${ACTIONS.join(', ')}.
