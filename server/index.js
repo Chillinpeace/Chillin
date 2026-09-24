@@ -343,14 +343,38 @@ async function getSessionOwner(req) {
 }
 
 async function requireAuth(req, res, next) {
-  const owner = await getSessionOwner(req);
+  let owner = await getSessionOwner(req);
 
   if (!owner) {
-    return sendError(
-      res,
-      401,
-      'Authentication required. Please log in again.',
+    const guestToken = createToken();
+    const guestEmail = `guest-${guestToken.slice(0, 24)}@guest.peacely.local`;
+    const guestResult = await safeQuery(
+      `
+        INSERT INTO owners (
+          name,
+          email,
+          phone,
+          password_hash
+        )
+        VALUES (
+          'Guest Owner',
+          $1,
+          '',
+          $2
+        )
+        RETURNING id, name, email, phone, created_at
+      `,
+      [guestEmail, hashPassword(guestToken)],
     );
+
+    const guestOwner = guestResult.rows[0];
+    const sessionToken = await createSession(guestOwner.id);
+    setSessionCookie(res, sessionToken);
+
+    owner = {
+      ...guestOwner,
+      session_id: null,
+    };
   }
 
   req.owner = owner;
@@ -483,6 +507,10 @@ app.post(
       );
     }
 
+    const currentOwner = await getSessionOwner(req);
+    const currentIsGuest =
+      currentOwner?.email?.endsWith('@guest.peacely.local');
+
     const existing = await safeQuery(
       `
         SELECT id
@@ -504,36 +532,65 @@ app.post(
     const passwordHash =
       hashPassword(password);
 
-    const result = await safeQuery(
-      `
-        INSERT INTO owners (
-          name,
-          email,
-          phone,
-          password_hash
-        )
-        VALUES (
-          $1,
-          $2,
-          $3,
-          $4
-        )
-        RETURNING
-          id,
-          name,
-          email,
-          phone,
-          created_at
-      `,
-      [
-        name,
-        email,
-        phone,
-        passwordHash,
-      ],
-    );
+    let owner;
 
-    const owner = result.rows[0];
+    if (currentIsGuest) {
+      const result = await safeQuery(
+        `
+          UPDATE owners
+          SET
+            name = $1,
+            email = $2,
+            phone = $3,
+            password_hash = $4
+          WHERE id = $5
+          RETURNING
+            id,
+            name,
+            email,
+            phone,
+            created_at
+        `,
+        [
+          name,
+          email,
+          phone,
+          passwordHash,
+          currentOwner.id,
+        ],
+      );
+      owner = result.rows[0];
+    } else {
+      const result = await safeQuery(
+        `
+          INSERT INTO owners (
+            name,
+            email,
+            phone,
+            password_hash
+          )
+          VALUES (
+            $1,
+            $2,
+            $3,
+            $4
+          )
+          RETURNING
+            id,
+            name,
+            email,
+            phone,
+            created_at
+        `,
+        [
+          name,
+          email,
+          phone,
+          passwordHash,
+        ],
+      );
+      owner = result.rows[0];
+    }
 
     const token =
       await createSession(owner.id);
