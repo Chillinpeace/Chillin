@@ -436,17 +436,19 @@ function App() {
     properties: Property[];
     rooms: Room[];
     beds: Bed[];
+    propertyLevels: PropertyLevel[];
   };
 
   const readGuestDraft = (): GuestDraft => {
     try {
       const raw = window.localStorage.getItem(GUEST_DRAFT_KEY);
-      if (!raw) return { properties: [], rooms: [], beds: [] };
+      if (!raw) return { properties: [], rooms: [], beds: [], propertyLevels: [] };
       const parsed = JSON.parse(raw);
       return {
         properties: Array.isArray(parsed?.properties) ? parsed.properties : [],
         rooms: Array.isArray(parsed?.rooms) ? parsed.rooms : [],
         beds: Array.isArray(parsed?.beds) ? parsed.beds : [],
+        propertyLevels: Array.isArray(parsed?.propertyLevels) ? parsed.propertyLevels : [],
       };
     } catch {
       return { properties: [], rooms: [], beds: [] };
@@ -457,11 +459,12 @@ function App() {
     properties: Property[],
     rooms: Room[],
     beds: Bed[],
+    levels: PropertyLevel[] = propertyLevels,
   ) => {
     try {
       window.localStorage.setItem(
         GUEST_DRAFT_KEY,
-        JSON.stringify({ properties, rooms, beds }),
+        JSON.stringify({ properties, rooms, beds, propertyLevels: levels }),
       );
     } catch {}
   };
@@ -496,6 +499,20 @@ function App() {
       }
 
       propertyIdMap.set(Number(property.id), newPropertyId);
+    }
+
+    for (const level of draft.propertyLevels) {
+      const newPropertyId = propertyIdMap.get(Number(level.property_id));
+      if (!newPropertyId || !level.floor_name) continue;
+
+      await apiRequest('/nivaasi-upgrades/structure', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: newPropertyId,
+          building_name: level.building_name || 'Main Building',
+          floor_name: level.floor_name,
+        }),
+      });
     }
 
     for (const room of draft.rooms) {
@@ -795,6 +812,7 @@ function App() {
           setProperties(draft.properties);
           setRooms(draft.rooms);
           setBeds(draft.beds);
+          setPropertyLevels(draft.propertyLevels);
           setLoading(false);
         }
       } catch {
@@ -805,6 +823,7 @@ function App() {
         setProperties(draft.properties);
         setRooms(draft.rooms);
         setBeds(draft.beds);
+        setPropertyLevels(draft.propertyLevels);
         setLoading(false);
       }
     };
@@ -1191,6 +1210,32 @@ function App() {
     setError('');
 
     try {
+      if (guestMode) {
+        const propertyId = Number(floorPropertyId);
+        const newLevel: PropertyLevel = {
+          id: Date.now(),
+          property_id: propertyId,
+          building_name: 'Main Building',
+          floor_name: floorName.trim(),
+          created_at: new Date().toISOString(),
+        };
+        const nextLevels = [
+          ...propertyLevels.filter(
+            (level) =>
+              !(
+                level.property_id === propertyId &&
+                normalize(level.floor_name) === normalize(newLevel.floor_name)
+              ),
+          ),
+          newLevel,
+        ];
+        setPropertyLevels(nextLevels);
+        writeGuestDraft(properties, rooms, beds, nextLevels);
+        resetForms();
+        setActiveModal('none');
+        return;
+      }
+
       await apiRequest('/nivaasi-upgrades/structure', {
         method: 'POST',
         body: JSON.stringify({
