@@ -4089,7 +4089,7 @@ function Header({
                   <span>🗑️</span><span>Delete account</span>
                 </button>
               </>
-            )
+            )}
           </aside>
         </div>
       )}
