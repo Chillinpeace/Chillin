@@ -2936,6 +2936,7 @@ function App() {
         onAccountSettings={() => openModal('accountSettings')}
         onExpenses={() => openModal('expenses')}
         onAuth={() => continueToAuth('login')}
+        onSignup={() => continueToAuth('signup')}
       />
 
       {error && (
