@@ -5674,7 +5674,13 @@ function ExpensesModal({
     if (!window.confirm('Delete this expense?')) return;
     try {
       await apiRequest('/expenses/' + expense.id, { method: 'DELETE' });
-      await loadExpenses();
+
+      // Remove it immediately from the current list so the deleted expense
+      // cannot remain visible if a follow-up refresh is delayed or fails.
+      setExpenses((current) =>
+        current.filter((item) => Number(item.id) !== Number(expense.id)),
+      );
+
       setMessage('Expense deleted.');
     } catch (error) {
       setMessage(error instanceof Error ? error.message : 'Could not delete expense.');
