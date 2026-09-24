@@ -4321,6 +4321,7 @@ function VoiceAgentModal({
   const startListening = () => {
     if (processing) return;
 
+    stopRecognition();
     conversationActiveRef.current = true;
 
     const speechWindow = window as unknown as {
@@ -4333,8 +4334,6 @@ function VoiceAgentModal({
       setSpokenReply('Voice recognition is not supported in this browser. Please use Chrome on Android or another supported browser.');
       return;
     }
-
-    stopRecognition();
 
     const recognition = new SpeechRecognitionCtor();
     recognitionRef.current = recognition;
