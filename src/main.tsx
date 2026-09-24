@@ -2479,9 +2479,7 @@ function App() {
           ),
         )}\nPending: ${money(
           pending,
-        )}\nDue date: ${
-          tenant.due_date
-        }\n\nThank you.`,
+        )}\nDue date: ${formatDate(tenant.due_date)}\n\nThank you.`,
       );
 
     window.open(
