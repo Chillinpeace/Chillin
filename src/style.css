@@ -206,6 +206,18 @@ button:disabled {
 }
 
 .page-header,
+.section-heading .text-btn {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text-main);
+  border: 1px solid var(--card-border);
+  border-radius: 12px;
+  padding: 9px 13px;
+  font-size: 11px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
 .section-heading {
   display: flex;
   justify-content: space-between;
