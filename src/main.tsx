@@ -4177,10 +4177,10 @@ function VoiceAgentModal({
   };
 
   const restartConversationListening = () => {
-    if (!conversationActiveRef.current || processing) return;
+    if (!conversationActiveRef.current) return;
 
     window.setTimeout(() => {
-      if (!conversationActiveRef.current || processing) return;
+      if (!conversationActiveRef.current) return;
       try {
         recognitionRef.current?.start();
       } catch {}
