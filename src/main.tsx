@@ -1057,6 +1057,14 @@ function App() {
   const openModal = (modal: Modal) => {
     setError('');
 
+    // Owners can use Peacely without logging in. Adding a tenant is the
+    // one action that requires an account so tenant records stay attached
+    // to a real owner account.
+    if (modal === 'tenant' && !owner) {
+      setGuestAuthPrompt(true);
+      return;
+    }
+
     setActiveModal(modal);
   };
 
@@ -1067,6 +1075,13 @@ function App() {
   };
 
   const openVacantBedAssignment = (bed: VacancyBed) => {
+    // Assigning a vacant bed to a tenant requires an owner account.
+    // Everything else remains available in guest mode.
+    if (!owner) {
+      setGuestAuthPrompt(true);
+      return;
+    }
+
     const room = rooms.find(
       (item) => Number(item.id) === Number(bed.room_id),
     );
@@ -3037,10 +3052,46 @@ function App() {
         }
       />
 
-      {activeModal !== 'none' && (
+      {(activeModal !== 'none' || guestAuthPrompt) && (
         <ModalOverlay
-          onClose={closeModal}
+          onClose={() => {
+            closeModal();
+            setGuestAuthPrompt(false);
+          }}
         >
+          {guestAuthPrompt && (
+            <div>
+              <ModalTitle
+                title="Login required"
+                subtitle="You can use Peacely without logging in. To add a tenant, please log in or create a free account."
+              />
+
+              <button
+                type="button"
+                className="btn-primary full-btn"
+                onClick={() => continueToAuth('login')}
+              >
+                Log In
+              </button>
+
+              <button
+                type="button"
+                className="btn-secondary full-btn"
+                onClick={() => continueToAuth('signup')}
+              >
+                Sign Up
+              </button>
+
+              <button
+                type="button"
+                className="auth-back-btn"
+                onClick={() => setGuestAuthPrompt(false)}
+              >
+                Continue without login
+              </button>
+            </div>
+          )}
+
           {activeModal ===
             'property' && (
             <form
