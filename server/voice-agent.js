@@ -41,7 +41,7 @@ async function ownerFromRequest(req) {
 const normalize = (value) =>
   clean(value)
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/[^\\p{L}\\p{N}]+/gu, ' ')
     .trim();
 
 const numberFromText = (text) => {
@@ -95,7 +95,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/(who|which|show|list).*(hasn't|has not|not).*(paid|pay)/i.test(command) || /outstanding|pending dues|unpaid/i.test(command)) {
+  if (/(who|which|show|list).*(hasn't|has not|not).*(paid|pay)/i.test(command) || /outstanding|pending dues|unpaid/i.test(command) || /किसने.*(नहीं|नही).*(दिया|भुगतान|पैसे)|किसका.*(किराया|पैसा).*(बाकी|बकाया)|बकाया|बाकी.*किराया|भुगतान.*बाकी|पैसे.*नहीं.*दिए/i.test(command)) {
     return {
       action: 'show_outstanding',
       reply: 'I will show the tenants with outstanding rent.',
@@ -104,7 +104,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/(how much|total|collection|collected).*(collect|received|paid)/i.test(command)) {
+  if (/(how much|total|collection|collected).*(collect|received|paid)/i.test(command) || /(कितना|कितने).*(कलेक्शन|जमा|मिला|पैसे|भुगतान)|कलेक्शन.*(दिखाओ|बताओ)|इस महीने.*(कितना|कितने).*(जमा|मिला|कलेक्शन)/i.test(command)) {
     return {
       action: 'show_collections',
       reply: 'I will calculate the current collection.',
@@ -113,7 +113,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/(show|list).*(expense|expenses)/i.test(command)) {
+  if (/(show|list).*(expense|expenses)/i.test(command) || /(खर्च|व्यय).*(दिखाओ|बताओ|दिखा)|दिखाओ.*(खर्च|व्यय)/i.test(command)) {
     return {
       action: 'show_expenses',
       reply: 'I will show the expenses.',
@@ -122,7 +122,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/delete|remove|erase/i.test(command) && /expense/i.test(command)) {
+  if ((/delete|remove|erase/i.test(command) || /हटाओ|मिटाओ|डिलीट/i.test(command)) && (/expense/i.test(command) || /खर्च|व्यय/i.test(command))) {
     const matching = expenses.find((item) =>
       amount !== null && Math.abs(Number(item.amount || 0) - amount) < 0.01
     );
@@ -138,13 +138,13 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/add|record|create|log/i.test(command) && /expense/i.test(command)) {
+  if ((/add|record|create|log/i.test(command) || /जोड़ो|जोड़ना|डालो|दर्ज|लिखो/i.test(command)) && (/expense/i.test(command) || /खर्च|व्यय/i.test(command))) {
     const category =
-      /electric/i.test(command) ? 'Electricity' :
-      /water/i.test(command) ? 'Water' :
-      /maintenance|repair/i.test(command) ? 'Maintenance' :
-      /salary|staff/i.test(command) ? 'Staff' :
-      /clean/i.test(command) ? 'Cleaning' :
+      /electric/i.test(command) || /बिजली/i.test(command) ? 'Electricity' :
+      /water/i.test(command) || /पानी/i.test(command) ? 'Water' :
+      /maintenance|repair/i.test(command) || /मेंटेनेंस|मरम्मत/i.test(command) ? 'Maintenance' :
+      /salary|staff/i.test(command) || /सैलरी|वेतन|स्टाफ/i.test(command) ? 'Staff' :
+      /clean/i.test(command) || /सफाई/i.test(command) ? 'Cleaning' :
       'Other';
 
     return {
@@ -163,7 +163,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/delete|remove|erase/i.test(command) && /property/i.test(command)) {
+  if ((/delete|remove|erase/i.test(command) || /हटाओ|मिटाओ|डिलीट/i.test(command)) && (/property/i.test(command) || /प्रॉपर्टी|संपत्ति/i.test(command))) {
     return {
       action: 'delete_property',
       reply: property
@@ -176,7 +176,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/add|create|register/i.test(command) && /property/i.test(command)) {
+  if ((/add|create|register/i.test(command) || /जोड़ो|बनाओ|जोड़ना|रजिस्टर/i.test(command)) && (/property/i.test(command) || /प्रॉपर्टी|संपत्ति/i.test(command))) {
     const match = command.match(/property(?: called| named)?\s+(.+?)(?:\s+(?:at|address|located)\s+(.+))?$/i);
     const name = clean(match?.[1] || command.replace(/.*property\s+/i, ''));
     const address = clean(match?.[2] || '');
@@ -194,7 +194,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/add|create/i.test(command) && /room/i.test(command)) {
+  if ((/add|create/i.test(command) || /जोड़ो|बनाओ|जोड़ना/i.test(command)) && (/room/i.test(command) || /कमरा|रूम/i.test(command))) {
     const roomNumber = clean(
       command.match(/room\s*([a-z0-9-]+)/i)?.[1] || room?.room_number || '',
     );
@@ -219,7 +219,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/add|create/i.test(command) && /bed/i.test(command)) {
+  if ((/add|create/i.test(command) || /जोड़ो|बनाओ|जोड़ना/i.test(command)) && (/bed/i.test(command) || /बेड/i.test(command))) {
     const bedNumber = clean(
       command.match(/bed\s*([a-z0-9-]+)/i)?.[1] || bed?.bed_number || '',
     );
@@ -234,7 +234,7 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/paid|payment|received/i.test(command) && tenant && amount !== null) {
+  if ((/paid|payment|received/i.test(command) || /दिया|भुगतान|जमा|पेमेंट/i.test(command)) && tenant && amount !== null) {
     const invoice = invoices
       .filter((item) => Number(item.tenant_id) === Number(tenant.id))
       .sort((a, b) => Number(b.id) - Number(a.id))
@@ -248,14 +248,14 @@ function fallbackParse(command, context) {
         tenant_id: tenant.id,
         invoice_id: invoice?.id ?? null,
         amount,
-        payment_method: /cash/i.test(command) ? 'Cash' : /bank/i.test(command) ? 'Bank Transfer' : 'UPI',
+        payment_method: /cash/i.test(command) || /नकद|कैश/i.test(command) ? 'Cash' : /bank/i.test(command) || /बैंक/i.test(command) ? 'Bank Transfer' : 'UPI',
         payment_date: null,
         payment_month: null,
       },
     };
   }
 
-  if (/add|create|register/i.test(command) && /tenant/i.test(command)) {
+  if ((/add|create|register/i.test(command) || /जोड़ो|बनाओ|जोड़ना|रजिस्टर/i.test(command)) && (/tenant/i.test(command) || /टेनेंट|किरायेदार/i.test(command))) {
     return {
       action: 'add_tenant',
       reply: tenant ? `I found ${tenant.name}.` : 'I need the tenant name, phone, property and rent.',
@@ -274,22 +274,22 @@ function fallbackParse(command, context) {
     };
   }
 
-  if (/dashboard|home/i.test(command)) {
+  if (/dashboard|home/i.test(command) || /डैशबोर्ड|होम/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening the dashboard.', requires_confirmation: false, params: { tab: 'dashboard' } };
   }
-  if (/properties/i.test(command)) {
+  if (/properties/i.test(command) || /प्रॉपर्टी|संपत्ति/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening properties.', requires_confirmation: false, params: { tab: 'properties' } };
   }
-  if (/tenants/i.test(command)) {
+  if (/tenants/i.test(command) || /टेनेंट|किरायेदार/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening tenants.', requires_confirmation: false, params: { tab: 'tenants' } };
   }
-  if (/payments/i.test(command)) {
+  if (/payments/i.test(command) || /पेमेंट|भुगतान/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening payments.', requires_confirmation: false, params: { tab: 'payments' } };
   }
-  if (/invoices/i.test(command)) {
+  if (/invoices/i.test(command) || /इनवॉइस|बिल/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening invoices.', requires_confirmation: false, params: { tab: 'invoices' } };
   }
-  if (/analytics|analysis/i.test(command)) {
+  if (/analytics|analysis/i.test(command) || /एनालिटिक्स|विश्लेषण/i.test(command)) {
     return { action: 'open_tab', reply: 'Opening analytics.', requires_confirmation: false, params: { tab: 'analytics' } };
   }
 
