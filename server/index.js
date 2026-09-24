@@ -463,6 +463,63 @@ app.get(
 );
 
 // =====================================================
+// AUTH - GUEST WORKSPACE
+// =====================================================
+
+app.post(
+  '/api/auth/guest',
+  asyncHandler(async (req, res) => {
+    const existingOwner = await getSessionOwner(req);
+
+    if (existingOwner) {
+      return res.json({
+        authenticated: true,
+        owner: {
+          id: existingOwner.id,
+          name: existingOwner.name,
+          email: existingOwner.email,
+          phone: existingOwner.phone || '',
+          created_at: existingOwner.created_at,
+        },
+      });
+    }
+
+    const guestToken = createToken();
+    const guestEmail =
+      'guest-' + guestToken.slice(0, 24) + '@guest.peacely.local';
+
+    const guestResult = await safeQuery(
+      `
+        INSERT INTO owners (
+          name,
+          email,
+          phone,
+          password_hash
+        )
+        VALUES (
+          'Guest Owner',
+          $1,
+          '',
+          $2
+        )
+        RETURNING id, name, email, phone, created_at
+      `,
+      [guestEmail, hashPassword(guestToken)],
+    );
+
+    const guestOwner = guestResult.rows[0];
+    const sessionToken = await createSession(guestOwner.id);
+    setSessionCookie(res, sessionToken);
+
+    return res.json({
+      authenticated: false,
+      guest: true,
+      owner: null,
+    });
+  }),
+);
+
+// =====================================================
 // AUTH - SIGNUP
 // =====================================================
 
