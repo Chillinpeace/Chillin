@@ -4174,6 +4174,54 @@ function VoiceAgentModal({
     setListening(false);
   };
 
+  const speakReply = async (text: string) => {
+    const spoken = String(text || '').trim();
+    if (!spoken) return;
+
+    try {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+
+      const response = await apiRequest<Blob>('/voice-agent/speak', {
+        method: 'POST',
+        body: JSON.stringify({
+          text: spoken,
+          language,
+        }),
+      });
+
+      const audioUrl = URL.createObjectURL(response);
+      const audio = new Audio(audioUrl);
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+      audio.onerror = () => {
+        URL.revokeObjectURL(audioUrl);
+        if ('speechSynthesis' in window) {
+          const fallback = new SpeechSynthesisUtterance(spoken);
+          fallback.lang = language;
+          fallback.rate = 0.95;
+          window.speechSynthesis.speak(fallback);
+        }
+      };
+      await audio.play();
+    } catch {
+      if ('speechSynthesis' in window) {
+        try {
+          window.speechSynthesis.cancel();
+          const fallback = new SpeechSynthesisUtterance(spoken);
+          fallback.lang = language;
+          fallback.rate = 0.95;
+          window.speechSynthesis.speak(fallback);
+        } catch {}
+      }
+    }
+  };
+
+  const setSpokenReply = (text: string) => {
+    setReply(text);
+    void speakReply(text);
+  };
+
   const runCommand = async (spokenText: string) => {
     const command = spokenText.trim();
     if (!command) return;
@@ -4183,7 +4231,7 @@ function VoiceAgentModal({
       try {
         const done = await onExecuteAction(pendingAction);
         setPendingAction(null);
-        setReply(done);
+        setSpokenReply(done);
       } catch (error) {
         setReply(error instanceof Error ? error.message : 'Unable to complete the action.');
       } finally {
@@ -4194,12 +4242,12 @@ function VoiceAgentModal({
 
     if (pendingAction && /^(no|cancel|stop|don't|dont)\b/i.test(command)) {
       setPendingAction(null);
-      setReply('Cancelled.');
+      setSpokenReply('Cancelled.');
       return;
     }
 
     setProcessing(true);
-    setReply('Understanding your command…');
+    setSpokenReply('Understanding your command…');
 
     try {
       const result = await apiRequest<{
@@ -4216,19 +4264,19 @@ function VoiceAgentModal({
 
       if (destructive) {
         setPendingAction(action);
-        setReply(action.reply + ' Say “yes, do it” to confirm or “cancel” to stop.');
+        setSpokenReply(action.reply + ' Say “yes, do it” to confirm or “cancel” to stop.');
         return;
       }
 
       if (action.action === 'unknown') {
-        setReply(action.reply);
+        setSpokenReply(action.reply);
         return;
       }
 
       const done = await onExecuteAction(action);
-      setReply(done);
+      setSpokenReply(done);
     } catch (error) {
-      setReply(error instanceof Error ? error.message : 'Unable to process that command.');
+      setSpokenReply(error instanceof Error ? error.message : 'Unable to process that command.');
     } finally {
       setProcessing(false);
     }
@@ -4244,7 +4292,7 @@ function VoiceAgentModal({
     const SpeechRecognitionCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
 
     if (!SpeechRecognitionCtor) {
-      setReply('Voice recognition is not supported in this browser. Please use Chrome on Android or another supported browser.');
+      setSpokenReply('Voice recognition is not supported in this browser. Please use Chrome on Android or another supported browser.');
       return;
     }
 
@@ -4289,7 +4337,7 @@ function VoiceAgentModal({
           : event?.error === 'no-speech'
             ? 'I did not hear anything. Tap the microphone and try again.'
             : 'Voice recognition could not start. Please try again.';
-      setReply(message);
+      setSpokenReply(message);
     };
 
     recognition.onend = () => setListening(false);
@@ -4298,7 +4346,7 @@ function VoiceAgentModal({
       recognition.start();
     } catch {
       setListening(false);
-      setReply('The microphone is already active. Please wait a moment and try again.');
+      setSpokenReply('The microphone is already active. Please wait a moment and try again.');
     }
   };
 
