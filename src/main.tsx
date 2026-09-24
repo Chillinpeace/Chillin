@@ -275,6 +275,12 @@ function App() {
   const [authenticated, setAuthenticated] =
     useState<boolean | null>(null);
 
+  const [guestMode, setGuestMode] =
+    useState(false);
+
+  const [guestAuthPrompt, setGuestAuthPrompt] =
+    useState(false);
+
   const [owner, setOwner] =
     useState<Owner | null>(null);
 
@@ -656,11 +662,13 @@ function App() {
         } else {
           setOwner(null);
           setAuthenticated(false);
+          setGuestMode(true);
           setLoading(false);
         }
       } catch {
         setOwner(null);
         setAuthenticated(false);
+        setGuestMode(true);
         setLoading(false);
       }
     };
@@ -700,6 +708,8 @@ function App() {
 
       setOwner(data.owner);
       setAuthenticated(true);
+      setGuestMode(false);
+      setGuestAuthPrompt(false);
       setAuthPassword('');
 
       await loadAllData();
@@ -782,6 +792,8 @@ function App() {
 
     setOwner(null);
     setAuthenticated(false);
+    setGuestMode(true);
+    setGuestAuthPrompt(false);
 
     setProperties([]);
     setRooms([]);
@@ -888,7 +900,21 @@ function App() {
 
   const openModal = (modal: Modal) => {
     setError('');
+
+    if (guestMode && modal === 'tenant') {
+      setGuestAuthPrompt(true);
+      setActiveModal('none');
+      return;
+    }
+
     setActiveModal(modal);
+  };
+
+  const continueToAuth = (mode: 'login' | 'signup') => {
+    setGuestAuthPrompt(false);
+    setGuestMode(false);
+    setAuthMode(mode);
+    setAuthError('');
   };
 
   const openVacantBedAssignment = (bed: VacancyBed) => {
@@ -916,6 +942,13 @@ function App() {
     setTenantDeposit('');
     setTenantMoveInDate(today());
     setError('');
+
+    if (guestMode) {
+      setGuestAuthPrompt(true);
+      setActiveModal('none');
+      return;
+    }
+
     setActiveModal('tenant');
   };
 
@@ -953,6 +986,16 @@ function App() {
     setError('');
 
     try {
+      if (guestMode) {
+        const createdPropertyId = -Date.now();
+        setProperties((current) => [...current, {
+          id: createdPropertyId, name: propName.trim(), address: propAddress.trim(),
+          property_type: propType, rent_cycle: rentCycle, room_count: 0, bed_count: 0,
+          occupied_bed_count: 0, tenant_count: 0, occupancy_rate: 0, monthly_revenue: 0,
+        }]);
+        resetForms(); closeModal(); setActiveTab('properties'); return;
+      }
+
       const created = await apiRequest<{
         property: Property;
       }>('/properties', {
@@ -1038,9 +1081,19 @@ function App() {
     setError('');
 
     try {
-      await apiRequest(`/beds/${bed.id}`, {
-        method: 'DELETE',
-      });
+      if (guestMode) {
+        setBeds((current) => current.filter((item) => item.id !== bed.id));
+        setRooms((current) => current.map((room) =>
+          room.id === bed.room_id ? { ...room, bed_count: Math.max(Number(room.bed_count || 0) - 1, 0) } : room,
+        ));
+        if (bed.property_id) {
+          setProperties((current) => current.map((property) =>
+            property.id === bed.property_id ? { ...property, bed_count: Math.max(Number(property.bed_count || 0) - 1, 0) } : property,
+          ));
+        }
+        return;
+      }
+      await apiRequest(`/beds/${bed.id}`, { method: 'DELETE' });
       await loadAllData();
     } catch (err) {
       setError(
@@ -1062,9 +1115,14 @@ function App() {
     setError('');
 
     try {
-      await apiRequest(`/properties/${property.id}`, {
-        method: 'DELETE',
-      });
+      if (guestMode) {
+        setProperties((current) => current.filter((item) => item.id !== property.id));
+        setRooms((current) => current.filter((item) => item.property_id !== property.id));
+        setBeds((current) => current.filter((item) => item.property_id !== property.id));
+        setManagedPropertyId(null);
+        return;
+      }
+      await apiRequest(`/properties/${property.id}`, { method: 'DELETE' });
       setManagedPropertyId(null);
       await loadAllData();
     } catch (err) {
@@ -1097,21 +1155,34 @@ function App() {
     setError('');
 
     try {
+      if (guestMode) {
+        const propertyId = Number(roomPropertyId);
+        const roomId = -Date.now();
+        const bedCountBySharing: Record<string, number> = {
+          Single: 1, Double: 2, Triple: 3, 'Four Sharing': 4, 'Five Sharing': 5, 'Six Sharing': 6,
+        };
+        const bedCount = bedCountBySharing[sharingType] || 1;
+        const createdRoom: Room = {
+          id: roomId, property_id: propertyId, room_number: roomNumber.trim(),
+          sharing_type: sharingType, room_type: roomType, floor_name: roomFloorName || 'Ground Floor',
+          per_day_rent: Number(roomPerDayRent) || 0, rent_amount: Number(roomRent) || 0,
+          bed_count: bedCount, occupied_bed_count: 0,
+        };
+        const createdBeds: Bed[] = Array.from({ length: bedCount }, (_, index) => ({
+          id: roomId - index - 1, room_id: roomId, bed_number: String(index + 1),
+          is_occupied: false, property_id: propertyId,
+        }));
+        setRooms((current) => [...current, createdRoom]);
+        setBeds((current) => [...current, ...createdBeds]);
+        setProperties((current) => current.map((property) =>
+          property.id === propertyId
+            ? { ...property, room_count: property.room_count + 1, bed_count: Number(property.bed_count || 0) + bedCount }
+            : property,
+        ));
+        resetForms(); closeModal(); setActiveTab('properties'); return;
+      }
+
       await apiRequest('/rooms', {
-        method: 'POST',
-        body: JSON.stringify({
-          property_id:
-            Number(roomPropertyId),
-          room_number:
-            roomNumber.trim(),
-          sharing_type: sharingType,
-          room_type: roomType,
-          floor_name: roomFloorName || 'Ground Floor',
-          per_day_rent: Number(roomPerDayRent) || 0,
-          rent_amount:
-            Number(roomRent) || 0,
-        }),
-      });
 
       resetForms();
       closeModal();
@@ -1147,14 +1218,25 @@ function App() {
     setError('');
 
     try {
+      if (guestMode) {
+        const roomId = Number(bedRoomId);
+        const room = rooms.find((item) => item.id === roomId);
+        if (!room) { setError('Could not find the selected room.'); return; }
+        const bedId = -Date.now();
+        setBeds((current) => [...current, {
+          id: bedId, room_id: roomId, bed_number: bedNumber.trim(),
+          is_occupied: false, property_id: room.property_id,
+        }]);
+        setRooms((current) => current.map((item) =>
+          item.id === roomId ? { ...item, bed_count: Number(item.bed_count || 0) + 1 } : item,
+        ));
+        setProperties((current) => current.map((property) =>
+          property.id === room.property_id ? { ...property, bed_count: Number(property.bed_count || 0) + 1 } : property,
+        ));
+        resetForms(); closeModal(); return;
+      }
+
       await apiRequest('/beds', {
-        method: 'POST',
-        body: JSON.stringify({
-          room_id: Number(bedRoomId),
-          bed_number:
-            bedNumber.trim(),
-        }),
-      });
 
       resetForms();
       closeModal();
@@ -2405,7 +2487,7 @@ function App() {
     );
   }
 
-  if (authenticated === false) {
+  if (authenticated === false && !guestMode) {
     return (
       <div className="mobile-shell auth-shell">
         <div className="auth-card glass-card">
@@ -2611,6 +2693,7 @@ function App() {
         onDeleteAccount={handleDeleteAccount}
         onAccountSettings={() => openModal('accountSettings')}
         onExpenses={() => openModal('expenses')}
+        onAuth={() => continueToAuth('login')}
       />
 
         <main className="content-area">
@@ -2642,6 +2725,20 @@ function App() {
         onAccountSettings={() => openModal('accountSettings')}
         onExpenses={() => openModal('expenses')}
       />
+
+      {guestMode && (
+        <div className="glass-card" style={{ margin: '12px 16px 0', padding: '12px 14px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div>
+              <strong>Preview mode</strong>
+              <div style={{ fontSize: '13px', marginTop: '4px', opacity: 0.78 }}>
+                Add properties, rooms and beds. Login or sign up is required to add tenants.
+              </div>
+            </div>
+            <button type="button" className="btn-primary" onClick={() => continueToAuth('login')}>Login / Sign up</button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="error-box page-error">
@@ -3538,6 +3635,20 @@ function App() {
             </form>
           )}
 
+          {guestAuthPrompt && (
+            <ModalOverlay onClose={() => setGuestAuthPrompt(false)}>
+              <ModalTitle
+                title="Login or sign up required"
+                subtitle="You can explore and set up properties, rooms and beds first. To add tenants and continue using Peacely, please log in or create a free account."
+              />
+              <div style={{ display: 'grid', gap: '10px' }}>
+                <button type="button" className="btn-primary full-btn" onClick={() => continueToAuth('login')}>Log In</button>
+                <button type="button" className="btn-secondary full-btn" onClick={() => continueToAuth('signup')}>Sign Up</button>
+                <button type="button" className="btn-secondary full-btn" onClick={() => setGuestAuthPrompt(false)}>Continue Exploring</button>
+              </div>
+            </ModalOverlay>
+          )}
+
           {activeModal === 'maintenance' && (
             <MaintenanceModal
               onClose={closeModal}
@@ -3603,12 +3714,14 @@ function Header({
   onDeleteAccount,
   onAccountSettings,
   onExpenses,
+  onAuth,
 }: {
   owner: Owner | null;
   onLogout: () => void;
   onDeleteAccount: () => void;
   onAccountSettings: () => void;
   onExpenses: () => void;
+  onAuth: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState<
@@ -3631,18 +3744,24 @@ function Header({
         </div>
 
         <div className="header-actions">
-          <button
-            className="hamburger-btn"
-            type="button"
-            aria-label="Open profile menu"
-            aria-expanded={menuOpen}
-            onClick={() => {
-              setMenuOpen(!menuOpen);
-              if (menuOpen) setMenuSection('none');
-            }}
-          >
-            <span></span><span></span><span></span>
-          </button>
+          {owner ? (
+            <button
+              className="hamburger-btn"
+              type="button"
+              aria-label="Open profile menu"
+              aria-expanded={menuOpen}
+              onClick={() => {
+                setMenuOpen(!menuOpen);
+                if (menuOpen) setMenuSection('none');
+              }}
+            >
+              <span></span><span></span><span></span>
+            </button>
+          ) : (
+            <button type="button" className="btn-primary" onClick={onAuth}>
+              Login / Sign up
+            </button>
+          )}
         </div>
       </header>
 
