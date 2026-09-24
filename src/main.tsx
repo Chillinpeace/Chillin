@@ -825,7 +825,11 @@ function App() {
           setAuthenticated(false);
           setGuestMode(true);
           setLoading(true);
-          await apiRequest<Property[]>('/properties');
+          // Establish the anonymous workspace first so every subsequent
+          // guest request uses the same server-side owner/session.
+          await apiRequest('/auth/guest', {
+            method: 'POST',
+          });
           await loadAllData();
         }
       } catch {
