@@ -863,6 +863,7 @@ function App() {
       setGuestMode(false);
       setGuestAuthPrompt(false);
       setAuthPassword('');
+      setAuthMode('intro');
 
       await loadAllData();
     } catch (err) {
@@ -920,8 +921,8 @@ function App() {
       setGuestMode(false);
       setGuestAuthPrompt(false);
       setAuthPassword('');
+      setAuthMode('intro');
 
-      await syncGuestDraftToAccount();
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -1061,7 +1062,6 @@ function App() {
 
   const continueToAuth = (mode: 'login' | 'signup') => {
     setGuestAuthPrompt(false);
-    setGuestMode(false);
     setAuthMode(mode);
     setAuthError('');
   };
@@ -1135,19 +1135,6 @@ function App() {
     setError('');
 
     try {
-      if (guestMode) {
-        const createdPropertyId = -Date.now();
-        const createdProperty: Property = {
-          id: createdPropertyId, name: propName.trim(), address: propAddress.trim(),
-          property_type: propType, rent_cycle: rentCycle, room_count: 0, bed_count: 0,
-          occupied_bed_count: 0, tenant_count: 0, occupancy_rate: 0, monthly_revenue: 0,
-        };
-        const nextProperties = [...properties, createdProperty];
-        setProperties(nextProperties);
-        writeGuestDraft(nextProperties, rooms, beds);
-        resetForms(); closeModal(); setActiveTab('properties'); return;
-      }
-
       const created = await apiRequest<{
         property: Property;
       }>('/properties', {
@@ -2697,7 +2684,7 @@ function App() {
     );
   }
 
-  if (authenticated === false && !guestMode && false) {
+  if (authMode !== 'intro') {
     return (
       <div className="mobile-shell auth-shell">
         <div className="auth-card glass-card">
