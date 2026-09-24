@@ -2744,20 +2744,6 @@ function App() {
         onAuth={() => continueToAuth('login')}
       />
 
-      {guestMode && (
-        <div className="glass-card" style={{ margin: '12px 16px 0', padding: '12px 14px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
-            <div>
-              <strong>Preview mode</strong>
-              <div style={{ fontSize: '13px', marginTop: '4px', opacity: 0.78 }}>
-                Add properties, rooms and beds. Login or sign up is required to add tenants.
-              </div>
-            </div>
-            <button type="button" className="btn-primary" onClick={() => continueToAuth('login')}>Login / Sign up</button>
-          </div>
-        </div>
-      )}
-
       {error && (
         <div className="error-box page-error">
           {error}
@@ -2974,9 +2960,9 @@ function App() {
         }
       />
 
-      {activeModal !== 'none' && (
+      {(activeModal !== 'none' || guestAuthPrompt) && (
         <ModalOverlay
-          onClose={closeModal}
+          onClose={guestAuthPrompt ? () => setGuestAuthPrompt(false) : closeModal}
         >
           {activeModal ===
             'property' && (
@@ -3654,7 +3640,7 @@ function App() {
           )}
 
           {guestAuthPrompt && (
-            <ModalOverlay onClose={() => setGuestAuthPrompt(false)}>
+            <>
               <ModalTitle
                 title="Login or sign up required"
                 subtitle="You can explore and set up properties, rooms and beds first. To add tenants and continue using Peacely, please log in or create a free account."
@@ -3664,7 +3650,7 @@ function App() {
                 <button type="button" className="btn-secondary full-btn" onClick={() => continueToAuth('signup')}>Sign Up</button>
                 <button type="button" className="btn-secondary full-btn" onClick={() => setGuestAuthPrompt(false)}>Continue Exploring</button>
               </div>
-            </ModalOverlay>
+            </>
           )}
 
           {activeModal === 'maintenance' && (
@@ -3775,11 +3761,7 @@ function Header({
             >
               <span></span><span></span><span></span>
             </button>
-          ) : (
-            <button type="button" className="btn-primary" onClick={onAuth}>
-              Login / Sign up
-            </button>
-          )}
+          ) : null}
         </div>
       </header>
 
