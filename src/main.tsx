@@ -2904,6 +2904,7 @@ function App() {
         onAccountSettings={() => openModal('accountSettings')}
         onExpenses={() => openModal('expenses')}
         onAuth={() => continueToAuth('login')}
+        onSignup={() => continueToAuth('signup')}
       />
 
         <main className="content-area">
