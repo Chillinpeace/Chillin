@@ -3748,20 +3748,18 @@ function Header({
         </div>
 
         <div className="header-actions">
-          {owner ? (
-            <button
-              className="hamburger-btn"
-              type="button"
-              aria-label="Open profile menu"
-              aria-expanded={menuOpen}
-              onClick={() => {
-                setMenuOpen(!menuOpen);
-                if (menuOpen) setMenuSection('none');
-              }}
-            >
-              <span></span><span></span><span></span>
-            </button>
-          ) : null}
+          <button
+            className="hamburger-btn"
+            type="button"
+            aria-label="Open profile menu"
+            aria-expanded={menuOpen}
+            onClick={() => {
+              setMenuOpen(!menuOpen);
+              if (menuOpen) setMenuSection('none');
+            }}
+          >
+            <span></span><span></span><span></span>
+          </button>
         </div>
       </header>
 
