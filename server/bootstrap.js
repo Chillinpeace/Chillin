@@ -8,6 +8,7 @@ import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
 import paymentAutomationRouter, { runPaymentAutomation } from './payment-automation.js';
 import { query } from './database.js';
 import adminRouter from './admin.js';
+import voiceAgentRouter from './voice-agent.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -138,6 +139,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', phase59Router);
     originalUse.call(this, '/api', nivaasiUpgradesRouter);
     originalUse.call(this, '/api', paymentAutomationRouter);
+    originalUse.call(this, '/api', voiceAgentRouter);
     phaseRoutersMounted = true;
   }
   return result;
