@@ -531,14 +531,18 @@ function App() {
       const sharing = String(room?.sharing_type || '').toLowerCase();
       const sharingCount =
         Number(sharing.match(/\b(\d+)\b/)?.[1] || 0) ||
-        ({ single: 1, double: 2, triple: 3, four: 4, five: 5, six: 6 } as Record<string, number>)[sharing] ||
+        ({ single: 1, double: 2, triple: 3, four: 4, five: 5, six: 6 } as Record<string, number>)[sharing.split(/\s+/)[0]] ||
         0;
 
       // Room creation already creates the beds required by its sharing type.
       // Only create guest-added custom beds that are not part of that automatic set.
+      const automaticBedNumber = normalized.startsWith('bed ')
+        ? Number(normalized.replace('bed ', ''))
+        : Number(normalized);
       const isAutomaticBed =
-        /^bed\s+\d+$/.test(normalized) &&
-        Number(normalized.replace('bed ', '')) <= sharingCount;
+        Number.isInteger(automaticBedNumber) &&
+        automaticBedNumber >= 1 &&
+        automaticBedNumber <= sharingCount;
 
       if (!isAutomaticBed && guestBedNumber) {
         await apiRequest('/beds', {
@@ -898,6 +902,8 @@ function App() {
 
       setOwner(data.owner);
       setAuthenticated(true);
+      setGuestMode(false);
+      setGuestAuthPrompt(false);
       setAuthPassword('');
 
       await syncGuestDraftToAccount();
