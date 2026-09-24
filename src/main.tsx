@@ -603,12 +603,12 @@ function App() {
 
     const results =
       await Promise.allSettled([
-        apiRequest<{ properties: Property[] }>('/properties'),
-        apiRequest<{ rooms: Room[] }>('/rooms'),
-        apiRequest<{ beds: Bed[] }>('/beds'),
-        apiRequest<{ tenants: Tenant[] }>('/tenants'),
-        apiRequest<{ payments: Payment[] }>('/payments'),
-        apiRequest<{ invoices: Invoice[] }>('/invoices'),
+        apiRequest<{ properties: Property[] } | Property[]>('/properties'),
+        apiRequest<{ rooms: Room[] } | Room[]>('/rooms'),
+        apiRequest<{ beds: Bed[] } | Bed[]>('/beds'),
+        apiRequest<{ tenants: Tenant[] } | Tenant[]>('/tenants'),
+        apiRequest<{ payments: Payment[] } | Payment[]>('/payments'),
+        apiRequest<{ invoices: Invoice[] } | Invoice[]>('/invoices'),
         apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
         apiRequest<{ expenses?: number; net?: number }>('/nivaasi-upgrades/finance'),
         apiRequest<{ expenses: Expense[] }>('/expenses'),
@@ -632,7 +632,9 @@ function App() {
 
     if (propertyResult.status === 'fulfilled') {
       setProperties(
-        propertyResult.value?.properties || [],
+        Array.isArray(propertyResult.value)
+          ? propertyResult.value
+          : propertyResult.value?.properties || [],
       );
     } else {
       setProperties([]);
@@ -648,7 +650,11 @@ function App() {
     }
 
     if (roomResult.status === 'fulfilled') {
-      setRooms(roomResult.value?.rooms || []);
+      setRooms(
+        Array.isArray(roomResult.value)
+          ? roomResult.value
+          : roomResult.value?.rooms || [],
+      );
     } else {
       setRooms([]);
 
@@ -662,7 +668,11 @@ function App() {
     }
 
     if (bedResult.status === 'fulfilled') {
-      setBeds(bedResult.value?.beds || []);
+      setBeds(
+        Array.isArray(bedResult.value)
+          ? bedResult.value
+          : bedResult.value?.beds || [],
+      );
     } else {
       setBeds([]);
 
@@ -677,7 +687,9 @@ function App() {
 
     if (tenantResult.status === 'fulfilled') {
       setTenants(
-        tenantResult.value?.tenants || [],
+        Array.isArray(tenantResult.value)
+          ? tenantResult.value
+          : tenantResult.value?.tenants || [],
       );
     } else {
       setTenants([]);
@@ -694,7 +706,9 @@ function App() {
 
     if (paymentResult.status === 'fulfilled') {
       setPayments(
-        paymentResult.value?.payments || [],
+        Array.isArray(paymentResult.value)
+          ? paymentResult.value
+          : paymentResult.value?.payments || [],
       );
     } else {
       setPayments([]);
@@ -711,7 +725,9 @@ function App() {
 
     if (invoiceResult.status === 'fulfilled') {
       setInvoices(
-        invoiceResult.value?.invoices || [],
+        Array.isArray(invoiceResult.value)
+          ? invoiceResult.value
+          : invoiceResult.value?.invoices || [],
       );
     } else {
       setInvoices([]);
