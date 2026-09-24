@@ -293,7 +293,7 @@ async function buildInvoicePdf(invoice) {
   doc.fillColor(green)
     .font('Helvetica-Bold')
     .fontSize(10.5)
-    .text('✓ Payment confirmed', cardX + 28, noteY, {
+    .text('Payment confirmed', cardX + 28, noteY, {
       width: cardW - 56,
       align: 'center',
     });
