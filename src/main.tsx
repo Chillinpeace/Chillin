@@ -603,12 +603,12 @@ function App() {
 
     const results =
       await Promise.allSettled([
-        apiRequest<Property[]>('/properties'),
-        apiRequest<Room[]>('/rooms'),
-        apiRequest<Bed[]>('/beds'),
-        apiRequest<Tenant[]>('/tenants'),
-        apiRequest<Payment[]>('/payments'),
-        apiRequest<Invoice[]>('/invoices'),
+        apiRequest<{ properties: Property[] }>('/properties'),
+        apiRequest<{ rooms: Room[] }>('/rooms'),
+        apiRequest<{ beds: Bed[] }>('/beds'),
+        apiRequest<{ tenants: Tenant[] }>('/tenants'),
+        apiRequest<{ payments: Payment[] }>('/payments'),
+        apiRequest<{ invoices: Invoice[] }>('/invoices'),
         apiRequest<PropertyLevel[]>('/nivaasi-upgrades/structure'),
         apiRequest<{ expenses?: number; net?: number }>('/nivaasi-upgrades/finance'),
         apiRequest<{ expenses: Expense[] }>('/expenses'),
@@ -632,7 +632,7 @@ function App() {
 
     if (propertyResult.status === 'fulfilled') {
       setProperties(
-        propertyResult.value || [],
+        propertyResult.value?.properties || [],
       );
     } else {
       setProperties([]);
@@ -648,7 +648,7 @@ function App() {
     }
 
     if (roomResult.status === 'fulfilled') {
-      setRooms(roomResult.value || []);
+      setRooms(roomResult.value?.rooms || []);
     } else {
       setRooms([]);
 
@@ -662,7 +662,7 @@ function App() {
     }
 
     if (bedResult.status === 'fulfilled') {
-      setBeds(bedResult.value || []);
+      setBeds(bedResult.value?.beds || []);
     } else {
       setBeds([]);
 
@@ -677,7 +677,7 @@ function App() {
 
     if (tenantResult.status === 'fulfilled') {
       setTenants(
-        tenantResult.value || [],
+        tenantResult.value?.tenants || [],
       );
     } else {
       setTenants([]);
@@ -694,7 +694,7 @@ function App() {
 
     if (paymentResult.status === 'fulfilled') {
       setPayments(
-        paymentResult.value || [],
+        paymentResult.value?.payments || [],
       );
     } else {
       setPayments([]);
@@ -711,7 +711,7 @@ function App() {
 
     if (invoiceResult.status === 'fulfilled') {
       setInvoices(
-        invoiceResult.value || [],
+        invoiceResult.value?.invoices || [],
       );
     } else {
       setInvoices([]);
@@ -1164,7 +1164,14 @@ function App() {
       if (created.property) {
         setProperties((current) => [
           ...current,
-          created.property,
+          {
+            ...created.property,
+            room_count: Number(created.property.room_count || 0),
+            bed_count: Number(created.property.bed_count || 0),
+            occupied_bed_count: Number(created.property.occupied_bed_count || 0),
+            tenant_count: Number(created.property.tenant_count || 0),
+            monthly_revenue: Number(created.property.monthly_revenue || 0),
+          },
         ]);
       }
 
