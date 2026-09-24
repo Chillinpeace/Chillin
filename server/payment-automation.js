@@ -234,7 +234,7 @@ async function buildInvoicePdf(invoice) {
     .font('Helvetica-Bold')
     .fontSize(29)
     .text(
-      `₹${num(invoice.paid_amount || invoice.amount).toLocaleString('en-IN')}`,
+      `₹${receiptAmount.toLocaleString('en-IN')}`,
       cardX + 28,
       amountY + 18,
       { width: cardW - 56, align: 'center' },
@@ -244,6 +244,10 @@ async function buildInvoicePdf(invoice) {
   const detailY = amountY + 74;
   const detailW = cardW - 48;
   const rowH = 34;
+
+  const receiptAmount = num(
+    invoice.receipt_paid_amount ?? invoice.paid_amount ?? invoice.amount,
+  );
 
   const rows = [
     ['Invoice', clean(invoice.invoice_number) || '-'],
@@ -847,7 +851,14 @@ router.get('/payment-automation/receipt/:token.pdf', async (req, res) => {
          WHERE pay.invoice_id=i.id
          ORDER BY pay.id DESC
          LIMIT 1
-       ) AS payment_method
+       ) AS payment_method,
+       (
+         SELECT pay.amount
+         FROM payments pay
+         WHERE pay.invoice_id=i.id
+         ORDER BY pay.id DESC
+         LIMIT 1
+       ) AS receipt_paid_amount
      FROM invoices i
      INNER JOIN tenants t ON t.id=i.tenant_id
      INNER JOIN properties p ON p.id=t.property_id
