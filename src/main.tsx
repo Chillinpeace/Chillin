@@ -1,6 +1,7 @@
 import React, {
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -198,6 +199,13 @@ type Modal =
   | 'expenses'
   | 'maintenance';
 
+interface VoiceAgentAction {
+  action: string;
+  reply: string;
+  requires_confirmation: boolean;
+  params: Record<string, unknown>;
+}
+
 const API = '/api';
 
 const money = (value: number) =>
@@ -279,6 +287,9 @@ function App() {
     useState(false);
 
   const [guestAuthPrompt, setGuestAuthPrompt] =
+    useState(false);
+
+  const [voiceOpen, setVoiceOpen] =
     useState(false);
 
   const [owner, setOwner] =
@@ -2377,6 +2388,216 @@ function App() {
       };
     }, [invoices, dashboardFinance]);
 
+  const executeVoiceAction = async (
+    voiceAction: VoiceAgentAction,
+  ): Promise<string> => {
+    const params = voiceAction.params || {};
+    const action = voiceAction.action;
+
+    const numberParam = (key: string) => {
+      const value = Number(params[key]);
+      return Number.isFinite(value) ? value : null;
+    };
+
+    const stringParam = (key: string) => String(params[key] ?? '').trim();
+
+    switch (action) {
+      case 'show_outstanding': {
+        const outstanding = tenants
+          .filter((tenant) => normalize(tenant.status) === 'active')
+          .map((tenant) => ({ tenant, pending: getTenantPending(tenant) }))
+          .filter((item) => item.pending > 0);
+        setActiveTab('tenants');
+        if (!outstanding.length) return 'All active tenants are currently clear. There are no outstanding dues.';
+        const preview = outstanding.slice(0, 8).map((item) => `${item.tenant.name}: ${money(item.pending)}`).join(' • ');
+        return `${outstanding.length} tenant${outstanding.length === 1 ? '' : 's'} have outstanding dues. ${preview}${outstanding.length > 8 ? ' • and more' : ''}`;
+      }
+
+      case 'show_collections': {
+        const now = new Date();
+        const monthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+        const current = payments.filter((payment) => String(payment.payment_date || '').startsWith(monthPrefix));
+        const collected = current.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+        setActiveTab('payments');
+        return `This month Peacely has recorded ${money(collected)} in ${current.length} payment records.`;
+      }
+
+      case 'show_expenses': {
+        setActiveTab('dashboard');
+        const total = expenses.reduce((sum, expense) => sum + Number(expense.amount || 0), 0);
+        return `You have ${expenses.length} expense records totaling ${money(total)}.`;
+      }
+
+      case 'open_tab': {
+        const tab = stringParam('tab') as Tab;
+        const allowed: Tab[] = ['dashboard', 'properties', 'rooms', 'tenants', 'payments', 'invoices', 'analytics'];
+        if (!allowed.includes(tab)) throw new Error('That Peacely section is not available.');
+        setActiveTab(tab);
+        return `Opening ${tab === 'dashboard' ? 'the dashboard' : tab}.`;
+      }
+
+      case 'add_property': {
+        const name = stringParam('name');
+        if (!name) throw new Error('Please say the property name.');
+        const result = await apiRequest<{ property: Property }>('/properties', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            address: stringParam('address'),
+            property_type: stringParam('property_type') || 'Gents',
+            rent_cycle: stringParam('rent_cycle') || '1st of every month',
+          }),
+        });
+        await loadAllData();
+        setActiveTab('properties');
+        return `Property “${result.property?.name || name}” was added successfully.`;
+      }
+
+      case 'add_room': {
+        const propertyId = numberParam('property_id');
+        const roomNumber = stringParam('room_number');
+        if (!propertyId || !roomNumber) throw new Error('I need the property and room number.');
+        await apiRequest('/rooms', {
+          method: 'POST',
+          body: JSON.stringify({
+            property_id: propertyId,
+            room_number: roomNumber,
+            sharing_type: stringParam('sharing_type') || 'Single',
+            room_type: stringParam('room_type') || 'Non AC',
+            floor_name: stringParam('floor_name') || 'Ground Floor',
+            per_day_rent: numberParam('per_day_rent') || 0,
+            rent_amount: numberParam('rent_amount') || 0,
+          }),
+        });
+        await loadAllData();
+        setActiveTab('rooms');
+        return `Room ${roomNumber} was added successfully.`;
+      }
+
+      case 'add_bed': {
+        const roomId = numberParam('room_id');
+        const bedNumber = stringParam('bed_number');
+        if (!roomId || !bedNumber) throw new Error('I need the room and bed number.');
+        await apiRequest('/beds', {
+          method: 'POST',
+          body: JSON.stringify({ room_id: roomId, bed_number: bedNumber }),
+        });
+        await loadAllData();
+        setActiveTab('rooms');
+        return `Bed ${bedNumber} was added successfully.`;
+      }
+
+      case 'add_tenant': {
+        const propertyId = numberParam('property_id');
+        const name = stringParam('name');
+        const phone = stringParam('phone');
+        if (!name || !phone || !propertyId) throw new Error('I need the tenant name, phone number and property.');
+        await apiRequest('/tenants', {
+          method: 'POST',
+          body: JSON.stringify({
+            name,
+            phone,
+            email: '',
+            gender: stringParam('gender'),
+            id_proof_type: '',
+            id_photo_front: '',
+            id_photo_back: '',
+            property_id: propertyId,
+            room_id: numberParam('room_id'),
+            bed_id: numberParam('bed_id'),
+            monthly_rent: numberParam('monthly_rent') || 0,
+            due_date: numberParam('due_date') || 5,
+            deposit_amount: numberParam('deposit_amount') || 0,
+            move_in_date: stringParam('move_in_date') || today(),
+          }),
+        });
+        await loadAllData();
+        setActiveTab('tenants');
+        return `${name} was added as a tenant successfully.`;
+      }
+
+      case 'record_payment': {
+        const tenantId = numberParam('tenant_id');
+        const amount = numberParam('amount');
+        if (!tenantId || !amount || amount <= 0) throw new Error('I need the tenant and payment amount.');
+
+        let invoiceId = numberParam('invoice_id');
+        if (!invoiceId) {
+          const candidate = invoices
+            .filter((invoice) =>
+              Number(invoice.tenant_id) === tenantId &&
+              Number(invoice.amount || 0) > Number(invoice.paid_amount || 0) &&
+              normalize(invoice.status) !== 'cancelled',
+            )
+            .sort((a, b) => Number(b.id) - Number(a.id))[0];
+          invoiceId = candidate?.id || null;
+        }
+        if (!invoiceId) throw new Error('I could not find an unpaid invoice for that tenant.');
+
+        const paymentMethod = stringParam('payment_method') || 'UPI';
+        await apiRequest('/payments', {
+          method: 'POST',
+          body: JSON.stringify({
+            tenant_id: tenantId,
+            amount,
+            payment_date: stringParam('payment_date') || today(),
+            payment_method: paymentMethod,
+            payment_month: stringParam('payment_month') || currentMonthName(),
+            invoice_id: invoiceId,
+          }),
+        });
+        await loadAllData();
+        const tenant = tenants.find((item) => Number(item.id) === tenantId);
+        return `Recorded ${money(amount)} from ${tenant?.name || 'the tenant'} by ${paymentMethod}.`;
+      }
+
+      case 'add_expense': {
+        const amount = numberParam('amount');
+        if (!amount || amount <= 0) throw new Error('I need the expense amount.');
+        await apiRequest('/expenses', {
+          method: 'POST',
+          body: JSON.stringify({
+            category: stringParam('category') || 'Other',
+            amount,
+            expense_date: stringParam('expense_date') || today(),
+            note: stringParam('note'),
+            property_id: numberParam('property_id'),
+          }),
+        });
+        await loadAllData();
+        return `Recorded a ${money(amount)} ${stringParam('category') || 'Other'} expense.`;
+      }
+
+      case 'delete_expense': {
+        const expenseId = numberParam('expense_id');
+        if (!expenseId) throw new Error('I need the exact expense to delete.');
+        await apiRequest(`/expenses/${expenseId}`, { method: 'DELETE' });
+        await loadAllData();
+        return 'The expense was deleted successfully.';
+      }
+
+      case 'delete_property': {
+        const propertyId = numberParam('property_id');
+        if (!propertyId) throw new Error('I need the property to delete.');
+        await apiRequest(`/properties/${propertyId}`, { method: 'DELETE' });
+        await loadAllData();
+        setActiveTab('properties');
+        return 'The property was deleted successfully.';
+      }
+
+      case 'send_reminder': {
+        const tenantId = numberParam('tenant_id');
+        const tenant = tenants.find((item) => Number(item.id) === tenantId);
+        if (!tenant) throw new Error('I could not identify that tenant.');
+        sendWhatsAppReminder(tenant);
+        return `Opened WhatsApp with a rent reminder for ${tenant.name}.`;
+      }
+
+      default:
+        throw new Error('I could not safely execute that command.');
+    }
+  };
+
   const sendWhatsAppReminder = (
     tenant: Tenant,
   ) => {
@@ -2842,6 +3063,7 @@ function App() {
         onExpenses={() => openModal('expenses')}
         onAuth={() => continueToAuth('login')}
         onSignup={() => continueToAuth('signup')}
+        onVoice={() => setVoiceOpen(true)}
       />
 
         <main className="content-area">
@@ -2874,7 +3096,69 @@ function App() {
         onExpenses={() => openModal('expenses')}
         onAuth={() => continueToAuth('login')}
         onSignup={() => continueToAuth('signup')}
+        onVoice={() => setVoiceOpen(true)}
       />
+
+      {voiceOpen && (
+        <VoiceAgentModal
+          onClose={() => setVoiceOpen(false)}
+          onExecuteAction={executeVoiceAction}
+          context={{
+            properties: properties.map((item) => ({
+              id: item.id,
+              name: item.name,
+              address: item.address,
+              property_type: item.property_type,
+            })),
+            rooms: rooms.map((item) => ({
+              id: item.id,
+              property_id: item.property_id,
+              room_number: item.room_number,
+              sharing_type: item.sharing_type,
+              room_type: item.room_type,
+              floor_name: item.floor_name,
+              rent_amount: item.rent_amount,
+            })),
+            beds: beds.map((item) => ({
+              id: item.id,
+              room_id: item.room_id,
+              bed_number: item.bed_number,
+              is_occupied: item.is_occupied,
+              tenant_id: item.tenant_id,
+              tenant_name: item.tenant_name,
+            })),
+            tenants: tenants.map((item) => ({
+              id: item.id,
+              name: item.name,
+              phone: item.phone,
+              property_id: item.property_id,
+              room_id: item.room_id,
+              bed_id: item.bed_id,
+              monthly_rent: item.monthly_rent,
+              status: item.status,
+            })),
+            invoices: invoices.map((item) => ({
+              id: item.id,
+              tenant_id: item.tenant_id,
+              invoice_number: item.invoice_number,
+              amount: item.amount,
+              paid_amount: item.paid_amount,
+              status: item.status,
+              month: item.month,
+              due_date: item.due_date,
+            })),
+            expenses: expenses.map((item) => ({
+              id: item.id,
+              property_id: item.property_id,
+              property_name: item.property_name,
+              category: item.category,
+              amount: item.amount,
+              expense_date: item.expense_date,
+              note: item.note,
+            })),
+          }}
+        />
+      )}
 
       {error && (
         <div className="error-box page-error">
@@ -3866,6 +4150,270 @@ function App() {
   );
 }
 
+function VoiceAgentModal({
+  onClose,
+  onExecuteAction,
+  context,
+}: {
+  onClose: () => void;
+  onExecuteAction: (action: VoiceAgentAction) => Promise<string>;
+  context: Record<string, unknown>;
+}) {
+  const [language, setLanguage] = useState('en-IN');
+  const [listening, setListening] = useState(false);
+  const [processing, setProcessing] = useState(false);
+  const [transcript, setTranscript] = useState('');
+  const [reply, setReply] = useState('Tap the microphone and tell Peacely what you want done.');
+  const [pendingAction, setPendingAction] = useState<VoiceAgentAction | null>(null);
+  const recognitionRef = useRef<any>(null);
+
+  const stopRecognition = () => {
+    try {
+      recognitionRef.current?.stop();
+    } catch {}
+    setListening(false);
+  };
+
+  const runCommand = async (spokenText: string) => {
+    const command = spokenText.trim();
+    if (!command) return;
+
+    if (pendingAction && /^(yes|yeah|yep|confirm|confirmed|do it|go ahead|okay|ok)\b/i.test(command)) {
+      setProcessing(true);
+      try {
+        const done = await onExecuteAction(pendingAction);
+        setPendingAction(null);
+        setReply(done);
+      } catch (error) {
+        setReply(error instanceof Error ? error.message : 'Unable to complete the action.');
+      } finally {
+        setProcessing(false);
+      }
+      return;
+    }
+
+    if (pendingAction && /^(no|cancel|stop|don't|dont)\b/i.test(command)) {
+      setPendingAction(null);
+      setReply('Cancelled.');
+      return;
+    }
+
+    setProcessing(true);
+    setReply('Understanding your command…');
+
+    try {
+      const result = await apiRequest<{
+        success: boolean;
+        action: VoiceAgentAction;
+        ai_enabled?: boolean;
+      }>('/voice-agent/command', {
+        method: 'POST',
+        body: JSON.stringify({ command, context }),
+      });
+
+      const action = result.action;
+      const destructive = action.action === 'delete_expense' || action.action === 'delete_property';
+
+      if (destructive) {
+        setPendingAction(action);
+        setReply(action.reply + ' Say “yes, do it” to confirm or “cancel” to stop.');
+        return;
+      }
+
+      if (action.action === 'unknown') {
+        setReply(action.reply);
+        return;
+      }
+
+      const done = await onExecuteAction(action);
+      setReply(done);
+    } catch (error) {
+      setReply(error instanceof Error ? error.message : 'Unable to process that command.');
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const startListening = () => {
+    if (processing) return;
+
+    const speechWindow = window as unknown as {
+      SpeechRecognition?: new () => any;
+      webkitSpeechRecognition?: new () => any;
+    };
+    const SpeechRecognitionCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
+
+    if (!SpeechRecognitionCtor) {
+      setReply('Voice recognition is not supported in this browser. Please use Chrome on Android or another supported browser.');
+      return;
+    }
+
+    stopRecognition();
+
+    const recognition = new SpeechRecognitionCtor();
+    recognitionRef.current = recognition;
+    recognition.lang = language;
+    recognition.continuous = false;
+    recognition.interimResults = true;
+    recognition.maxAlternatives = 1;
+
+    recognition.onstart = () => {
+      setListening(true);
+      setReply('Listening… speak naturally.');
+    };
+
+    recognition.onresult = (event: any) => {
+      let finalText = '';
+      let interimText = '';
+
+      for (let i = event.resultIndex; i < event.results.length; i += 1) {
+        const text = event.results[i][0]?.transcript || '';
+        if (event.results[i].isFinal) finalText += text;
+        else interimText += text;
+      }
+
+      const visible = (finalText || interimText).trim();
+      if (visible) setTranscript(visible);
+
+      if (finalText.trim()) {
+        setListening(false);
+        void runCommand(finalText.trim());
+      }
+    };
+
+    recognition.onerror = (event: any) => {
+      setListening(false);
+      const message =
+        event?.error === 'not-allowed'
+          ? 'Microphone permission was denied. Allow microphone access and try again.'
+          : event?.error === 'no-speech'
+            ? 'I did not hear anything. Tap the microphone and try again.'
+            : 'Voice recognition could not start. Please try again.';
+      setReply(message);
+    };
+
+    recognition.onend = () => setListening(false);
+
+    try {
+      recognition.start();
+    } catch {
+      setListening(false);
+      setReply('The microphone is already active. Please wait a moment and try again.');
+    }
+  };
+
+  useEffect(() => () => stopRecognition(), []);
+
+  const examples = [
+    '“Rahul paid 8,000 cash”',
+    '“Show me who has not paid”',
+    '“Add an expense of 2,000 for electricity”',
+    '“Open tenants”',
+  ];
+
+  return (
+    <div className="voice-agent-backdrop" onClick={onClose}>
+      <div className="voice-agent-card" onClick={(event) => event.stopPropagation()}>
+        <div className="voice-agent-top">
+          <div>
+            <div className="voice-agent-kicker">PEACELY VOICE AGENT</div>
+            <h2>Tell Peacely what to do</h2>
+            <p>Speak naturally. Peacely understands the command and uses the existing app actions.</p>
+          </div>
+          <button className="voice-agent-close" type="button" onClick={onClose} aria-label="Close voice agent">×</button>
+        </div>
+
+        <select
+          className="voice-language-select"
+          value={language}
+          onChange={(event) => setLanguage(event.target.value)}
+          disabled={listening || processing}
+        >
+          <option value="en-IN">English (India)</option>
+          <option value="hi-IN">Hindi</option>
+          <option value="kn-IN">Kannada</option>
+        </select>
+
+        <button
+          className={listening ? 'voice-mic-btn listening' : 'voice-mic-btn'}
+          type="button"
+          onClick={listening ? stopRecognition : startListening}
+          disabled={processing}
+          aria-label={listening ? 'Stop listening' : 'Start voice command'}
+        >
+          <span>{listening ? '■' : '🎙️'}</span>
+          <strong>{listening ? 'Listening…' : processing ? 'Working…' : 'Tap to speak'}</strong>
+        </button>
+
+        <div className="voice-transcript-box">
+          <span>You said</span>
+          <strong>{transcript || 'Your voice command will appear here.'}</strong>
+        </div>
+
+        <div className="voice-reply-box">
+          <span>Peacely</span>
+          <p>{reply}</p>
+        </div>
+
+        {pendingAction && (
+          <div className="voice-confirm-box">
+            <strong>Confirmation required</strong>
+            <p>{pendingAction.reply}</p>
+            <div className="voice-confirm-actions">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setPendingAction(null);
+                  setReply('Cancelled.');
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={processing}
+                onClick={async () => {
+                  setProcessing(true);
+                  try {
+                    const done = await onExecuteAction(pendingAction);
+                    setPendingAction(null);
+                    setReply(done);
+                  } catch (error) {
+                    setReply(error instanceof Error ? error.message : 'Unable to complete the action.');
+                  } finally {
+                    setProcessing(false);
+                  }
+                }}
+              >
+                Confirm
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="voice-examples">
+          <span>Try</span>
+          {examples.map((example) => (
+            <button
+              key={example}
+              type="button"
+              onClick={() => {
+                const command = example.replace(/[“”]/g, '');
+                setTranscript(command);
+                void runCommand(command);
+              }}
+            >
+              {example}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Header({
   owner,
   onLogout,
@@ -3874,6 +4422,7 @@ function Header({
   onExpenses,
   onAuth,
   onSignup,
+  onVoice,
 }: {
   owner: Owner | null;
   onLogout: () => void;
@@ -3882,6 +4431,7 @@ function Header({
   onExpenses: () => void;
   onAuth: () => void;
   onSignup: () => void;
+  onVoice: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState<
@@ -3904,6 +4454,17 @@ function Header({
         </div>
 
         <div className="header-actions">
+          {owner && (
+            <button
+              className="voice-header-btn"
+              type="button"
+              aria-label="Open Peacely Voice Agent"
+              title="Voice Agent"
+              onClick={onVoice}
+            >
+              <span>🎙️</span>
+            </button>
+          )}
           <button
             className="hamburger-btn"
             type="button"
