@@ -4168,12 +4168,32 @@ function VoiceAgentModal({
   const recognitionRef = useRef<any>(null);
   const conversationActiveRef = useRef(false);
   const processingRef = useRef(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const silenceTimerRef = useRef<number | null>(null);
+  const heardSpeechRef = useRef(false);
+  const audioChunksRef = useRef<Blob[]>([]);
 
   const stopRecognition = () => {
     conversationActiveRef.current = false;
     try {
-      recognitionRef.current?.stop();
+      recognitionRef.current?.abort?.();
     } catch {}
+    try {
+      mediaRecorderRef.current?.stop();
+    } catch {}
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+    mediaStreamRef.current = null;
+    if (silenceTimerRef.current !== null) {
+      window.clearTimeout(silenceTimerRef.current);
+      silenceTimerRef.current = null;
+    }
+    try {
+      audioContextRef.current?.close();
+    } catch {}
+    audioContextRef.current = null;
     setListening(false);
   };
 
@@ -4320,94 +4340,171 @@ function VoiceAgentModal({
     }
   };
 
-  const startListening = () => {
-    if (processingRef.current) return;
+  const startListening = async () => {
+    if (processingRef.current || listening) return;
 
     stopRecognition();
     conversationActiveRef.current = true;
+    setTranscript('');
+    setReply('Listening… speak naturally.');
 
-    const speechWindow = window as unknown as {
-      SpeechRecognition?: new () => any;
-      webkitSpeechRecognition?: new () => any;
-    };
-    const SpeechRecognitionCtor = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
-
-    if (!SpeechRecognitionCtor) {
-      setSpokenReply('Voice recognition is not supported in this browser. Please use Chrome on Android or another supported browser.');
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === 'undefined') {
+      setSpokenReply('Voice recording is not supported in this browser. Please use Chrome on Android.');
       return;
     }
 
-    const recognition = new SpeechRecognitionCtor();
-    recognitionRef.current = recognition;
-    recognition.lang = language;
-    // Siri-like half-duplex behavior: listen for one user utterance,
-    // then fully stop the microphone before Peacely speaks.
-    recognition.continuous = false;
-    recognition.interimResults = true;
-    recognition.maxAlternatives = 1;
-
-    recognition.onstart = () => {
-      setListening(true);
-      setReply('Listening… speak naturally.');
-    };
-
-    recognition.onresult = (event: any) => {
-      let finalText = '';
-      let interimText = '';
-
-      for (let i = event.resultIndex; i < event.results.length; i += 1) {
-        const text = event.results[i][0]?.transcript || '';
-        if (event.results[i].isFinal) finalText += text;
-        else interimText += text;
-      }
-
-      const visible = (finalText || interimText).trim();
-      if (visible) setTranscript(visible);
-
-      if (finalText.trim()) {
-        // Stop the microphone immediately before Peacely speaks.
-        // Keep the conversation session active so listening can resume
-        // only after the AI response has completely finished.
-        setListening(false);
-        // Abort immediately so no microphone capture remains while the
-        // AI voice response is playing. Keep the conversation session active.
-        try {
-          recognition.abort();
-        } catch {
-          try {
-            recognition.stop();
-          } catch {}
-        }
-        void runCommand(finalText.trim());
-      }
-    };
-
-    recognition.onerror = (event: any) => {
-      setListening(false);
-      const message =
-        event?.error === 'not-allowed'
-          ? 'Microphone permission was denied. Allow microphone access and try again.'
-          : event?.error === 'no-speech'
-            ? 'I did not hear anything. Tap the microphone and try again.'
-            : 'Voice recognition could not start. Please try again.';
-      setSpokenReply(message);
-    };
-
-    recognition.onend = () => {
-      setListening(false);
-      if (conversationActiveRef.current && !processingRef.current) {
-        restartConversationListening();
-      }
-    };
-
     try {
-      recognition.start();
-    } catch {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!conversationActiveRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+
+      const recorder = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+
+      mediaStreamRef.current = stream;
+      mediaRecorderRef.current = recorder;
+      audioChunksRef.current = [];
+      heardSpeechRef.current = false;
+
+      recorder.ondataavailable = (event: BlobEvent) => {
+        if (event.data?.size) audioChunksRef.current.push(event.data);
+      };
+
+      recorder.onstop = async () => {
+        mediaRecorderRef.current = null;
+        stream.getTracks().forEach((track) => track.stop());
+
+        if (silenceTimerRef.current !== null) {
+          window.clearTimeout(silenceTimerRef.current);
+          silenceTimerRef.current = null;
+        }
+
+        try {
+          audioContextRef.current?.close();
+        } catch {}
+        audioContextRef.current = null;
+
+        if (!audioChunksRef.current.length || !heardSpeechRef.current || !conversationActiveRef.current) {
+          if (conversationActiveRef.current && !processingRef.current) {
+            restartConversationListening();
+          }
+          return;
+        }
+
+        const blob = new Blob(audioChunksRef.current, {
+          type: recorder.mimeType || 'audio/webm',
+        });
+        audioChunksRef.current = [];
+
+        setListening(false);
+        setProcessing(true);
+        processingRef.current = true;
+        setReply('Understanding what you said…');
+
+        try {
+          const base64 = await new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const result = String(reader.result || '');
+              const comma = result.indexOf(',');
+              resolve(comma >= 0 ? result.slice(comma + 1) : result);
+            };
+            reader.onerror = () => reject(reader.error || new Error('Unable to read recording.'));
+            reader.readAsDataURL(blob);
+          });
+
+          const transcription = await apiRequest<{
+            success: boolean;
+            text: string;
+            languages?: Array<{ code?: string }>;
+          }>('/voice-agent/transcribe', {
+            method: 'POST',
+            body: JSON.stringify({
+              audio: base64,
+              mime_type: blob.type || 'audio/webm',
+            }),
+          });
+
+          const spokenText = String(transcription.text || '').trim();
+          if (!spokenText) throw new Error('I could not hear a clear command.');
+
+          setTranscript(spokenText);
+          await runCommand(spokenText);
+        } catch (error) {
+          setSpokenReply(error instanceof Error ? error.message : 'Unable to understand that voice command.');
+        } finally {
+          processingRef.current = false;
+          setProcessing(false);
+        }
+      };
+
+      recorder.start(250);
+      setListening(true);
+
+      const AudioContextCtor = window.AudioContext || (window as any).webkitAudioContext;
+      if (AudioContextCtor) {
+        const audioContext = new AudioContextCtor();
+        audioContextRef.current = audioContext;
+        const source = audioContext.createMediaStreamSource(stream);
+        const analyser = audioContext.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        const data = new Uint8Array(analyser.fftSize);
+        let lastVoiceAt = performance.now();
+
+        const monitor = () => {
+          if (mediaRecorderRef.current !== recorder || recorder.state !== 'recording') return;
+
+          analyser.getByteTimeDomainData(data);
+          let sum = 0;
+          for (let i = 0; i < data.length; i += 1) {
+            const sample = (data[i] - 128) / 128;
+            sum += sample * sample;
+          }
+          const rms = Math.sqrt(sum / data.length);
+          const now = performance.now();
+
+          if (rms > 0.025) {
+            heardSpeechRef.current = true;
+            lastVoiceAt = now;
+          }
+
+          if (heardSpeechRef.current && now - lastVoiceAt > 950) {
+            recorder.stop();
+            return;
+          }
+
+          window.requestAnimationFrame(monitor);
+        };
+
+        void audioContext.resume().catch(() => {});
+        window.requestAnimationFrame(monitor);
+      } else {
+        // Fallback for browsers without Web Audio: give the owner a bounded turn.
+        window.setTimeout(() => {
+          if (mediaRecorderRef.current === recorder && recorder.state === 'recording') recorder.stop();
+        }, 10000);
+      }
+    } catch (error) {
       setListening(false);
-      setSpokenReply('The microphone is already active. Please wait a moment and try again.');
+      conversationActiveRef.current = false;
+      const message =
+        error instanceof DOMException && error.name === 'NotAllowedError'
+          ? 'Microphone permission was denied. Allow microphone access and try again.'
+          : 'I could not access the microphone. Please try again.';
+      setSpokenReply(message);
     }
   };
-
   useEffect(() => () => stopRecognition(), []);
 
   const examples = [
@@ -4424,7 +4521,7 @@ function VoiceAgentModal({
           <div>
             <div className="voice-agent-kicker">PEACELY VOICE AGENT</div>
             <h2>Tell Peacely what to do</h2>
-            <p>Speak naturally. Peacely understands the command and uses the existing app actions.</p>
+            <p>Speak naturally in English, Hindi, Kannada, Hinglish, slang, or mixed languages. Peacely transcribes your voice with AI and understands the intent.</p>
           </div>
           <button className="voice-agent-close" type="button" onClick={onClose} aria-label="Close voice agent">×</button>
         </div>
@@ -4435,9 +4532,9 @@ function VoiceAgentModal({
           onChange={(event) => setLanguage(event.target.value)}
           disabled={listening || processing}
         >
-          <option value="en-IN">English (India)</option>
-          <option value="hi-IN">Hindi</option>
-          <option value="kn-IN">Kannada</option>
+          <option value="en-IN">Auto / English voice</option>
+          <option value="hi-IN">Hindi voice reply</option>
+          <option value="kn-IN">Kannada voice reply</option>
         </select>
 
         <button
