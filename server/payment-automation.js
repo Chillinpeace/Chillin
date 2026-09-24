@@ -660,7 +660,7 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <h1>${escapeHtml(invoice.property_name || 'Property')}</h1>
   <div class="muted">Tenant: ${escapeHtml(invoice.tenant_name)}</div>
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
-  <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(invoice.due_date)}</div>
+  <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(formatDate(invoice.due_date))}</div>
    ${hasUpi ? `<a class="pay" href="${upiLink}" style="text-decoration:none">Pay Now with UPI</a>` : `<button class="pay" type="button" onclick="document.getElementById('paymentOptions').scrollIntoView({behavior:'smooth',block:'center'})">Pay Now</button>`}
   <div id="paymentOptions">
   ${qr ? `
