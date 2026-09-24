@@ -805,15 +805,12 @@ function App() {
 
           await loadAllData();
         } else {
-          const draft = readGuestDraft();
           setOwner(null);
           setAuthenticated(false);
           setGuestMode(true);
-          setProperties(draft.properties);
-          setRooms(draft.rooms);
-          setBeds(draft.beds);
-          setPropertyLevels(draft.propertyLevels);
-          setLoading(false);
+          setLoading(true);
+          await apiRequest<Property[]>('/properties');
+          await loadAllData();
         }
       } catch {
         const draft = readGuestDraft();
@@ -867,7 +864,6 @@ function App() {
       setGuestAuthPrompt(false);
       setAuthPassword('');
 
-      await syncGuestDraftToAccount();
       await loadAllData();
     } catch (err) {
       setAuthError(
@@ -1059,12 +1055,6 @@ function App() {
 
   const openModal = (modal: Modal) => {
     setError('');
-
-    if (guestMode && modal === 'tenant') {
-      setGuestAuthPrompt(true);
-      setActiveModal('none');
-      return;
-    }
 
     setActiveModal(modal);
   };
@@ -2707,7 +2697,7 @@ function App() {
     );
   }
 
-  if (authenticated === false && !guestMode) {
+  if (authenticated === false && !guestMode && false) {
     return (
       <div className="mobile-shell auth-shell">
         <div className="auth-card glass-card">
@@ -3163,9 +3153,9 @@ function App() {
         }
       />
 
-      {(activeModal !== 'none' || guestAuthPrompt) && (
+      {activeModal !== 'none' && (
         <ModalOverlay
-          onClose={guestAuthPrompt ? () => setGuestAuthPrompt(false) : closeModal}
+          onClose={closeModal}
         >
           {activeModal ===
             'property' && (
@@ -3842,20 +3832,6 @@ function App() {
             </form>
           )}
 
-          {guestAuthPrompt && (
-            <>
-              <ModalTitle
-                title="Login or sign up required"
-                subtitle="You can explore and set up properties, rooms and beds first. To add tenants and continue using Peacely, please log in or create a free account."
-              />
-              <div style={{ display: 'grid', gap: '10px' }}>
-                <button type="button" className="btn-primary full-btn" onClick={() => continueToAuth('login')}>Log In</button>
-                <button type="button" className="btn-secondary full-btn" onClick={() => continueToAuth('signup')}>Sign Up</button>
-                <button type="button" className="btn-secondary full-btn" onClick={() => setGuestAuthPrompt(false)}>Continue Exploring</button>
-              </div>
-            </>
-          )}
-
           {activeModal === 'maintenance' && (
             <MaintenanceModal
               onClose={closeModal}
@@ -3922,6 +3898,7 @@ function Header({
   onAccountSettings,
   onExpenses,
   onAuth,
+  onSignup,
 }: {
   owner: Owner | null;
   onLogout: () => void;
@@ -3929,6 +3906,7 @@ function Header({
   onAccountSettings: () => void;
   onExpenses: () => void;
   onAuth: () => void;
+  onSignup: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [menuSection, setMenuSection] = useState<
@@ -3972,14 +3950,27 @@ function Header({
             <div className="profile-menu-header">
               <div className="avatar">{getInitials(owner?.name || 'Owner')}</div>
               <div>
-                <strong>{owner?.name || 'Owner'}</strong>
-                <span>{owner?.email || ''}</span>
+                <strong>{owner?.name || 'Guest Owner'}</strong>
+                <span>{owner?.email || 'Login or sign up to create an account'}</span>
               </div>
             </div>
 
-            <button className="profile-menu-item" type="button" onClick={() => { onAccountSettings(); setMenuOpen(false); }}>
+            {!owner && (
+              <>
+                <button className="profile-menu-item" type="button" onClick={() => { onAuth(); setMenuOpen(false); }}>
+                  <span>↪</span><span>Log In</span>
+                </button>
+                <button className="profile-menu-item" type="button" onClick={() => { onSignup(); setMenuOpen(false); }}>
+                  <span>✦</span><span>Sign Up</span>
+                </button>
+              </>
+            )}
+
+            {owner && (
+                          <button className="profile-menu-item" type="button" onClick={() => { onAccountSettings(); setMenuOpen(false); }}>
               <span>⚙️</span><span>Account Settings</span>
             </button>
+            )}
 
             <button className="profile-menu-item" type="button" onClick={() => { onExpenses(); setMenuOpen(false); }}>
               <span>💰</span><span>Expenses</span><span className="menu-chevron">›</span>
@@ -4079,20 +4070,24 @@ function Header({
               </div>
             )}
 
-            <div className="profile-menu-divider"></div>
-            <button className="profile-menu-item logout-menu-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
-              <span>↪</span><span>Logout</span>
-            </button>
-            <button
-              className="profile-menu-item delete-account-menu-item"
-              type="button"
-              onClick={() => {
-                setMenuOpen(false);
-                onDeleteAccount();
-              }}
-            >
-              <span>🗑️</span><span>Delete account</span>
-            </button>
+            {owner && (
+              <>
+                <div className="profile-menu-divider"></div>
+                <button className="profile-menu-item logout-menu-item" type="button" onClick={() => { setMenuOpen(false); onLogout(); }}>
+                  <span>↪</span><span>Logout</span>
+                </button>
+                <button
+                  className="profile-menu-item delete-account-menu-item"
+                  type="button"
+                  onClick={() => {
+                    setMenuOpen(false);
+                    onDeleteAccount();
+                  }}
+                >
+                  <span>🗑️</span><span>Delete account</span>
+                </button>
+              </>
+            )
           </aside>
         </div>
       )}
