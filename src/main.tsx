@@ -4183,15 +4183,24 @@ function VoiceAgentModal({
         window.speechSynthesis.cancel();
       }
 
-      const response = await apiRequest<Blob>('/voice-agent/speak', {
+      const response = await fetch(`${API}/voice-agent/speak`, {
         method: 'POST',
+        credentials: 'include',
+        headers: {
+          'Content-Type': 'application/json',
+        },
         body: JSON.stringify({
           text: spoken,
           language,
         }),
       });
 
-      const audioUrl = URL.createObjectURL(response);
+      if (!response.ok) {
+        throw new Error('AI voice response was unavailable.');
+      }
+
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
       const audio = new Audio(audioUrl);
       audio.onended = () => URL.revokeObjectURL(audioUrl);
       audio.onerror = () => {
@@ -4247,7 +4256,7 @@ function VoiceAgentModal({
     }
 
     setProcessing(true);
-    setSpokenReply('Understanding your command…');
+    setReply('Understanding your command…');
 
     try {
       const result = await apiRequest<{
