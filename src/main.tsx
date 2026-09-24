@@ -2724,6 +2724,7 @@ function App() {
         onDeleteAccount={handleDeleteAccount}
         onAccountSettings={() => openModal('accountSettings')}
         onExpenses={() => openModal('expenses')}
+        onAuth={() => continueToAuth('login')}
       />
 
       {guestMode && (
