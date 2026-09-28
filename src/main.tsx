@@ -7500,6 +7500,13 @@ function TenantDetails({
           >
             {verificationBusy ? 'Starting…' : '🔐 Verify with DigiLocker'}
           </button>
+          <button
+            type="button"
+            className="btn-secondary full-btn"
+            onClick={() => window.open(`/api/tenant-passport/${tenant.id}`, '_blank', 'noopener,noreferrer')}
+          >
+            🪪 Open Tenant Passport
+          </button>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
             <button type="button" className="btn-secondary full-btn" onClick={() => openTenantPdf('agreement')}>
               📄 Rental Agreement PDF
