@@ -4317,11 +4317,14 @@ function VoiceAgentModal({
       });
 
       const action = result.action;
-      const destructive = action.action === 'delete_expense' || action.action === 'delete_property';
+      const requiresConfirmation =
+        action.requires_confirmation ||
+        action.action === 'delete_expense' ||
+        action.action === 'delete_property';
 
-      if (destructive) {
+      if (requiresConfirmation) {
         setPendingAction(action);
-        setSpokenReply(action.reply + ' Say “yes, do it” to confirm or “cancel” to stop.');
+        setSpokenReply(action.reply || 'I can do that. Say “yes, do it” to confirm or “cancel” to stop.');
         return;
       }
 
