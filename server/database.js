@@ -867,13 +867,20 @@ export async function initializeDatabase() {
       `);
     }
 
-    await client.query(`
-      ALTER TABLE sessions
-      ADD CONSTRAINT sessions_owner_id_fkey
-      FOREIGN KEY (owner_id)
-      REFERENCES owners(id)
-      ON DELETE CASCADE;
-    `);
+    if (
+      !(await constraintExists(
+        client,
+        'sessions_owner_id_fkey',
+      ))
+    ) {
+      await client.query(`
+        ALTER TABLE sessions
+        ADD CONSTRAINT sessions_owner_id_fkey
+        FOREIGN KEY (owner_id)
+        REFERENCES owners(id)
+        ON DELETE CASCADE;
+      `);
+    }
 
     // =====================================================
     // 11. INDEXES
