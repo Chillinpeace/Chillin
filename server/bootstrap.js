@@ -11,6 +11,7 @@ import adminRouter from './admin.js';
 import voiceAgentRouter from './voice-agent.js';
 import tenantVerificationRouter from './tenant-verification.js';
 import sandboxRouter from './sandbox.js';
+import tenantPassportRouter from './tenant-passport.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -144,6 +145,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', voiceAgentRouter);
     originalUse.call(this, '/api', tenantVerificationRouter);
     originalUse.call(this, '/api', sandboxRouter);
+    originalUse.call(this, '/api', tenantPassportRouter);
     phaseRoutersMounted = true;
   }
   return result;
