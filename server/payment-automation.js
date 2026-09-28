@@ -1,7 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
-import { query } from './database.js';
+import { pool, query } from './database.js';
 
 const router = express.Router();
 const SESSION_COOKIE = 'peacely_session';
@@ -611,15 +611,35 @@ async function sendDueReminderIfNeeded(invoice, settings) {
   return true;
 }
 async function runPaymentAutomation() {
+  const client = await pool.connect();
+
   try {
-    await ensurePaymentColumns();
-    await processCompletedMoveOuts();
-    const created = await createDueInvoices();
-    console.log(`Payment automation cycle completed. Invoices created: ${created}`);
-    return { created };
+    // Prevent duplicate automation cycles when Railway runs multiple
+    // instances or a scheduled cycle overlaps the previous one.
+    const lock = await client.query(
+      'SELECT pg_try_advisory_lock($1) AS acquired',
+      [784231],
+    );
+
+    if (!lock.rows[0]?.acquired) {
+      console.log('Payment automation skipped: another cycle is already running.');
+      return { created: 0, skipped: true };
+    }
+
+    try {
+      await ensurePaymentColumns();
+      await processCompletedMoveOuts();
+      const created = await createDueInvoices();
+      console.log(`Payment automation cycle completed. Invoices created: ${created}`);
+      return { created };
+    } finally {
+      await client.query('SELECT pg_advisory_unlock($1)', [784231]);
+    }
   } catch (error) {
     console.error('Payment automation cycle failed:', error);
     return { created: 0, error: error.message };
+  } finally {
+    client.release();
   }
 }
 
