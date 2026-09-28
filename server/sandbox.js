@@ -271,6 +271,41 @@ router.post('/api/sandbox/reset', requireOwner, asyncHandler(async (req, res) =>
   });
 }));
 
+
+async function consumeProviderQuota(ownerId, provider, units = 1) {
+  const safeProvider = String(provider || '').trim().toLowerCase();
+  const amount = Math.max(Number(units) || 0, 0);
+  if (!safeProvider || amount <= 0) return { allowed: true, used: 0, limit: null };
+
+  const env = environmentName();
+  if (env === 'development') return { allowed: true, used: 0, limit: null };
+
+  const envKey = `PEACELY_${safeProvider.toUpperCase()}_DAILY_LIMIT`;
+  const configured = Number(process.env[envKey]);
+  const limit = Number.isFinite(configured) && configured > 0 ? configured : null;
+  if (!limit) return { allowed: true, used: 0, limit: null };
+
+  const result = await query(
+    `SELECT COALESCE(SUM((metadata->>'units')::numeric),0) AS used
+     FROM peacely_audit_log
+     WHERE owner_id=$1
+       AND action=$2
+       AND created_at >= CURRENT_DATE`,
+    [ownerId, `provider_usage.${safeProvider}`],
+  );
+
+  const used = Number(result.rows[0]?.used || 0);
+  if (used + amount > limit) {
+    return { allowed: false, used, limit };
+  }
+
+  await recordAudit(ownerId, `provider_usage.${safeProvider}`, 'provider', safeProvider, {
+    metadata: { units: amount, environment: env },
+  });
+
+  return { allowed: true, used: used + amount, limit };
+}
+
 async function recordAudit(ownerId, action, entityType = '', entityId = '', options = {}) {
   await query(
     `INSERT INTO peacely_audit_log
@@ -307,5 +342,5 @@ function asyncHandler(handler) {
   };
 }
 
-export { recordAudit };
+export { recordAudit, consumeProviderQuota };
 export default router;
