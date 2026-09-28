@@ -699,6 +699,25 @@ router.post('/voice-agent/command', async (req, res) => {
       action = fallbackParse(command, context);
     }
 
+    const confirmationActions = new Set([
+      'add_property',
+      'delete_property',
+      'add_room',
+      'add_bed',
+      'add_tenant',
+      'record_payment',
+      'add_expense',
+      'delete_expense',
+      'send_reminder',
+    ]);
+
+    if (confirmationActions.has(action.action)) {
+      action.requires_confirmation = true;
+      if (!/confirm|yes|proceed/i.test(String(action.reply || ''))) {
+        action.reply = String(action.reply || 'I can do that.') + ' Say “yes, do it” to confirm or “cancel” to stop.';
+      }
+    }
+
     return res.json({
       success: true,
       ai_enabled: aiEnabled,
