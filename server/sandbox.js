@@ -326,65 +326,7 @@ async function consumeProviderQuota(ownerId, provider, units = 1) {
   if (!limit) return { allowed: true, used: 0, limit: null };
 
   const result = await query(
-    `SELECT COALESCE(SUM(CASE WHEN (metadata->>'units') ~ '^[0-9]+(\\.[0-9]+)?
-     FROM peacely_audit_log
-     WHERE owner_id=$1
-       AND action=$2
-       AND created_at >= CURRENT_DATE`,
-    [ownerId, `provider_usage.${safeProvider}`],
-  );
-
-  const used = Number(result.rows[0]?.used || 0);
-  if (used + amount > limit) {
-    return { allowed: false, used, limit };
-  }
-
-  await recordAudit(ownerId, `provider_usage.${safeProvider}`, 'provider', safeProvider, {
-    metadata: { units: amount, environment: env },
-  });
-
-  return { allowed: true, used: used + amount, limit };
-}
-
-async function recordAudit(ownerId, action, entityType = '', entityId = '', options = {}) {
-  await query(
-    `INSERT INTO peacely_audit_log
-      (owner_id, actor_type, actor_id, action, entity_type, entity_id,
-       property_id, tenant_id, old_values, new_values, metadata, environment)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-    [
-      ownerId,
-      options.actorType || 'owner',
-      String(options.actorId || ownerId),
-      action,
-      entityType,
-      String(entityId || ''),
-      options.propertyId || null,
-      options.tenantId || null,
-      options.oldValues ? JSON.stringify(options.oldValues) : null,
-      options.newValues ? JSON.stringify(options.newValues) : null,
-      options.metadata ? JSON.stringify(options.metadata) : null,
-      environmentName(),
-    ],
-  );
-}
-
-function asyncHandler(handler) {
-  return async (req, res, next) => {
-    try {
-      await handler(req, res, next);
-    } catch (error) {
-      console.error('Sandbox route error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ success: false, error: error?.message || 'Sandbox error.' });
-      }
-    }
-  };
-}
-
-export { recordAudit, consumeProviderQuota };
-export default router;
- THEN (metadata->>'units')::numeric ELSE 0 END),0) AS used
+    `SELECT COALESCE(SUM((metadata->>'units')::numeric),0) AS used
      FROM peacely_audit_log
      WHERE owner_id=$1
        AND action=$2
