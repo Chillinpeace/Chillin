@@ -157,10 +157,10 @@ router.post('/api/agreements/:agreementId/sign', async (req, res) => {
   if (!agreement) return res.status(404).json({ success:false, error:'Agreement not found.' });
 
   const mode = esignMode();
-  if (mode === 'live' && !process.env.PEACELY_ESIGN_PROVIDER_URL) {
+  if (mode === 'live') {
     return res.status(503).json({
       success:false,
-      error:'Production e-sign is not configured. Connect an authorized e-sign provider before signing live agreements.',
+      error:'Production e-sign is not connected yet. Peacely will not simulate or claim a legal signature until an authorized provider adapter is configured.',
     });
   }
 
@@ -173,14 +173,19 @@ router.post('/api/agreements/:agreementId/sign', async (req, res) => {
     `UPDATE peacely_agreements
      SET ${column}=CURRENT_TIMESTAMP,
          provider_reference=CASE WHEN $2 <> '' THEN $2 ELSE provider_reference END,
-         status=CASE
-           WHEN owner_signed_at IS NOT NULL AND tenant_signed_at IS NOT NULL THEN 'signed'
-           ELSE 'awaiting_signature'
-         END,
+         status='awaiting_signature',
          updated_at=CURRENT_TIMESTAMP
      WHERE id=$1`,
     [agreementId,reference],
   );
+
+  const signedState = await query(
+    `SELECT owner_signed_at,tenant_signed_at FROM peacely_agreements WHERE id=$1`,
+    [agreementId],
+  );
+  if (signedState.rows[0]?.owner_signed_at && signedState.rows[0]?.tenant_signed_at) {
+    await query(`UPDATE peacely_agreements SET status='signed',updated_at=CURRENT_TIMESTAMP WHERE id=$1`, [agreementId]);
+  }
 
   const latest = await query(
     `SELECT id,template_type,title,status,provider,provider_reference,
@@ -201,7 +206,7 @@ router.post('/api/agreements/:agreementId/sign', async (req, res) => {
     agreement: latest.rows[0],
     message: mode === 'mock'
       ? 'Sandbox signature recorded. This is a test event and is not a legal e-signature.'
-      : 'Signature request sent to the configured e-sign provider.',
+      : 'Signature request was not sent; the live provider adapter is not connected.',
   });
 });
 
