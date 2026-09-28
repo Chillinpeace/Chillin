@@ -6,6 +6,8 @@ type Tenant = {
   phone?: string;
   property_id: number;
   property_name?: string;
+  room_id?: number;
+  bed_id?: number;
   room_number?: string;
   bed_number?: string;
   monthly_rent?: number;
