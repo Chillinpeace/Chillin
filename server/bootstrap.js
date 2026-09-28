@@ -9,6 +9,7 @@ import paymentAutomationRouter, { runPaymentAutomation } from './payment-automat
 import { query } from './database.js';
 import adminRouter from './admin.js';
 import voiceAgentRouter from './voice-agent.js';
+import tenantVerificationRouter from './tenant-verification.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -140,6 +141,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', nivaasiUpgradesRouter);
     originalUse.call(this, '/api', paymentAutomationRouter);
     originalUse.call(this, '/api', voiceAgentRouter);
+    originalUse.call(this, '/api', tenantVerificationRouter);
     phaseRoutersMounted = true;
   }
   return result;
