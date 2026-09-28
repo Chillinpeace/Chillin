@@ -20,6 +20,7 @@ import propertyPassportRouter from './property-passport.js';
 import damageEvidenceRouter from './damage-evidence.js';
 import maintenanceWorkflowRouter from './maintenance-workflow.js';
 import tenantComplianceRouter from './tenant-compliance.js';
+import ownerHandoverRouter from './owner-handover.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -162,6 +163,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', damageEvidenceRouter);
     originalUse.call(this, '/api', maintenanceWorkflowRouter);
     originalUse.call(this, '/api', tenantComplianceRouter);
+    originalUse.call(this, '/api', ownerHandoverRouter);
     phaseRoutersMounted = true;
   }
   return result;
