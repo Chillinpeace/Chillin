@@ -14,6 +14,7 @@ import sandboxRouter from './sandbox.js';
 import tenantPassportRouter from './tenant-passport.js';
 import agreementsRouter from './agreements.js';
 import moveInRouter from './move-in.js';
+import moveOutRouter from './move-out.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -150,6 +151,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', tenantPassportRouter);
     originalUse.call(this, '/api', agreementsRouter);
     originalUse.call(this, '/api', moveInRouter);
+    originalUse.call(this, '/api', moveOutRouter);
     phaseRoutersMounted = true;
   }
   return result;
