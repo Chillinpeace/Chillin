@@ -230,6 +230,10 @@ async function buildInvoicePdf(invoice) {
       align: 'center',
     });
 
+  const receiptAmount = num(
+    invoice.receipt_paid_amount ?? invoice.paid_amount ?? invoice.amount,
+  );
+
   doc.fillColor(text)
     .font('Helvetica-Bold')
     .fontSize(29)
@@ -244,10 +248,6 @@ async function buildInvoicePdf(invoice) {
   const detailY = amountY + 74;
   const detailW = cardW - 48;
   const rowH = 34;
-
-  const receiptAmount = num(
-    invoice.receipt_paid_amount ?? invoice.paid_amount ?? invoice.amount,
-  );
 
   const rows = [
     ['Invoice', clean(invoice.invoice_number) || '-'],
