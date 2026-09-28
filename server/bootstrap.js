@@ -7,7 +7,6 @@ import financialPdfRouter from './financial-pdf.js';
 import nivaasiUpgradesRouter from './nivaasi-upgrades.js';
 import paymentAutomationRouter, { runPaymentAutomation } from './payment-automation.js';
 import { query } from './database.js';
-import adminRouter from './admin.js';
 import voiceAgentRouter from './voice-agent.js';
 import tenantVerificationRouter from './tenant-verification.js';
 import sandboxRouter from './sandbox.js';
