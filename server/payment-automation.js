@@ -366,16 +366,26 @@ async function markInvoicePaidManually(ownerId, invoiceId) {
     return { invoice, alreadyPaid: true };
   }
 
-  await query(
+  const transition = await query(
     `UPDATE invoices
      SET paid_amount=amount,
          status='Paid',
          paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP),
          payment_link_status='manual_owner_confirmed',
          updated_at=CURRENT_TIMESTAMP
-     WHERE id=$1 AND paid_amount < amount`,
+     WHERE id=$1
+       AND paid_amount < amount
+       AND LOWER(COALESCE(status,'')) <> 'cancelled'
+     RETURNING id`,
     [invoiceId],
   );
+
+  // The UPDATE is the idempotency gate. If another request already
+  // completed the transition, do not create another payment record.
+  if (!transition.rows.length) {
+    const latest = await loadInvoice(invoiceId);
+    return { invoice: latest, alreadyPaid: true };
+  }
 
   const existing = await query(
     'SELECT id FROM payments WHERE invoice_id=$1 AND LOWER(COALESCE(payment_method,\'\'))=LOWER($2) ORDER BY id DESC LIMIT 1',
