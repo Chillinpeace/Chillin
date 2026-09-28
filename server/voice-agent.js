@@ -1,6 +1,7 @@
 import express from 'express';
 import crypto from 'crypto';
 import { query } from './database.js';
+import { consumeProviderQuota } from './sandbox.js';
 
 const router = express.Router();
 const SESSION_COOKIE = 'peacely_session';
@@ -497,6 +498,9 @@ router.post('/voice-agent/transcribe', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Audio is empty.' });
     }
 
+    const quota = await consumeProviderQuota(owner.id, 'ai', 1);
+    if (!quota.allowed) return res.status(429).json({ success: false, error: 'Daily AI voice limit reached for this environment.' });
+
     const audio = Buffer.from(audioBase64, 'base64');
     if (!audio.length) {
       return res.status(400).json({ success: false, error: 'Audio is empty.' });
@@ -608,6 +612,9 @@ router.post('/voice-agent/speak', async (req, res) => {
           ? 'Kannada'
           : 'Indian English';
 
+    const quota = await consumeProviderQuota(owner.id, 'ai', 1);
+    if (!quota.allowed) return res.status(429).json({ success: false, error: 'Daily AI voice limit reached for this environment.' });
+
     const response = await fetch('https://api.openai.com/v1/audio/speech', {
       method: 'POST',
       headers: {
@@ -689,7 +696,14 @@ router.post('/voice-agent/command', async (req, res) => {
 
     if (aiEnabled) {
       try {
-        action = await askOpenAI(command, context);
+        const quota = await consumeProviderQuota(owner.id, 'ai', 1);
+        if (!quota.allowed) {
+          aiEnabled = false;
+          action = fallbackParse(command, context);
+          action.reply = 'The daily AI limit has been reached, so I used Peacely’s built-in command parser. ' + action.reply;
+        } else {
+          action = await askOpenAI(command, context);
+        }
       } catch (error) {
         console.error('Peacely Voice Agent AI failed:', error);
         action = fallbackParse(command, context);
