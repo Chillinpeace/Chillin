@@ -144,8 +144,8 @@ let phaseRoutersMounted = false;
 express.application.use = function patchedUse(...args) {
   const result = originalUse.apply(this, args);
   if (!phaseRoutersMounted) {
-    // Admin routes must be first so protected owner routers cannot intercept them.
-    originalUse.call(this, '/api', adminRouter);
+    // Admin is mounted by server/index.js before this bootstrap hook runs.
+    // Mount the remaining feature routers exactly once.
     originalUse.call(this, '/api', expenseRouter);
     originalUse.call(this, '/api', financialPdfRouter);
     originalUse.call(this, '/api', phase7OperationsRouter);
