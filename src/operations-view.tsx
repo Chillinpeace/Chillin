@@ -363,6 +363,34 @@ export default function OperationsView({
     } finally { setSaving(false); }
   };
 
+  const addPropertyCompliance = async () => {
+    if (!propertyId || !propertyComplianceTitle.trim()) {
+      setError('Select a property and enter a compliance item title.');
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request('/property-compliance', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(propertyId),
+          title: propertyComplianceTitle.trim(),
+          category: propertyComplianceCategory,
+          status: propertyComplianceStatus,
+          expiry_date: propertyComplianceExpiry || null,
+          notes: propertyComplianceNotes.trim(),
+        }),
+      });
+      setPropertyComplianceTitle('');
+      setPropertyComplianceExpiry('');
+      setPropertyComplianceNotes('');
+      await loadPropertyOperations(Number(propertyId));
+      setMessage('Property compliance item added.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to add property compliance.');
+    } finally { setSaving(false); }
+  };
+
   const updateCompliance = async (item: any, status: string) => {
     setSaving(true); setError('');
     try {
@@ -634,6 +662,38 @@ export default function OperationsView({
                   <div><span>Vacant</span><strong>{propertyPassport.occupancy?.vacant || 0}</strong></div>
                 </div>
               </Card>
+              <Card>
+                <h3>Property Compliance</h3>
+                <p style={{ margin: '6px 0 12px', color: 'var(--text-muted)' }}>
+                  Track licences, safety records and other property evidence with expiry dates.
+                </p>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <input
+                    className="modal-input"
+                    placeholder="Compliance item title"
+                    value={propertyComplianceTitle}
+                    onChange={(e) => setPropertyComplianceTitle(e.target.value)}
+                  />
+                  <select className="modal-input" value={propertyComplianceCategory} onChange={(e) => setPropertyComplianceCategory(e.target.value)}>
+                    <option value="property">Property</option>
+                    <option value="safety">Safety</option>
+                    <option value="licence">Licence</option>
+                    <option value="document">Document</option>
+                    <option value="other">Other</option>
+                  </select>
+                  <select className="modal-input" value={propertyComplianceStatus} onChange={(e) => setPropertyComplianceStatus(e.target.value)}>
+                    <option value="attention">Attention</option>
+                    <option value="critical">Critical</option>
+                    <option value="up_to_date">Up to date</option>
+                  </select>
+                  <input className="modal-input" type="date" value={propertyComplianceExpiry} onChange={(e) => setPropertyComplianceExpiry(e.target.value)} />
+                  <input className="modal-input" placeholder="Notes" value={propertyComplianceNotes} onChange={(e) => setPropertyComplianceNotes(e.target.value)} />
+                  <button className="btn-secondary full-btn" type="button" onClick={addPropertyCompliance} disabled={saving}>
+                    Add Property Compliance
+                  </button>
+                </div>
+              </Card>
+
               <Card>
                 <h3>Compliance Radar</h3>
                 <div className="finance-panel" style={{ marginTop: 10 }}>
