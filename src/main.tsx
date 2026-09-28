@@ -3367,14 +3367,14 @@ function App() {
             }
           />
         )}
-      </main>
-
         {activeTab === 'operations' && (
           <OperationsView
             tenants={tenants}
             properties={properties}
           />
         )}
+
+      </main>
 
       <BottomNav
         activeTab={
