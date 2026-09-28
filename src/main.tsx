@@ -6,6 +6,7 @@ import React, {
 } from 'react';
 import ReactDOM from 'react-dom/client';
 import './style.css';
+import OperationsView from './operations-view';
 
 interface Owner {
   id: number;
@@ -182,7 +183,8 @@ type Tab =
   | 'tenants'
   | 'payments'
   | 'invoices'
-  | 'analytics';
+  | 'analytics'
+  | 'operations';
 
 type Modal =
   | 'none'
@@ -3366,6 +3368,13 @@ function App() {
           />
         )}
       </main>
+
+        {activeTab === 'operations' && (
+          <OperationsView
+            tenants={tenants}
+            properties={properties}
+          />
+        )}
 
       <BottomNav
         activeTab={
@@ -7717,6 +7726,11 @@ function BottomNav({
       'analytics',
       '📊',
       'Analytics',
+    ],
+    [
+      'operations',
+      '🛡️',
+      'Operations',
     ],
   ];
 
