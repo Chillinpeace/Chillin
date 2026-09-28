@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import { query } from './database.js';
+import { recordAudit } from './sandbox.js';
 
 const router = express.Router();
 const SESSION_COOKIE = 'peacely_session';
@@ -106,6 +107,7 @@ router.get('/tenant-verification/status', async (req, res) => {
   if (!owner) return res.status(401).json({ success:false, error:'Authentication required.' });
   await ensureVerificationSchema();
   const configured = Boolean(process.env.DIGILOCKER_CLIENT_ID && process.env.DIGILOCKER_CLIENT_SECRET);
+  await recordAudit(owner.id, 'tenant-verification.status.viewed', 'tenant_verification', '', { metadata: { configured } });
   res.json({
     success:true,
     configured,
@@ -133,6 +135,7 @@ router.post('/tenant-verification/start', async (req, res) => {
   );
 
   const configured = Boolean(process.env.DIGILOCKER_CLIENT_ID && process.env.DIGILOCKER_CLIENT_SECRET);
+  await recordAudit(owner.id, 'tenant-verification.started', 'tenant_verification', String(tenantId), { tenantId, metadata: { source: 'digilocker', status: configured ? 'consent_required' : 'requester_approval_required' } });
   res.json({
     success:true,
     configured,
@@ -161,6 +164,7 @@ router.post('/tenant-verification/manual', async (req, res) => {
     [owner.id,tenantId,source,status,clean(req.body?.reference_id),clean(req.body?.masked_document)],
   );
 
+  await recordAudit(owner.id, 'tenant-verification.manual', 'tenant_verification', String(tenantId), { tenantId, metadata: { source, status, reference_id_present: Boolean(clean(req.body?.reference_id)), masked_document_present: Boolean(clean(req.body?.masked_document)) } });
   res.json({ success:true, status });
 });
 
