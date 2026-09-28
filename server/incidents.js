@@ -55,11 +55,71 @@ router.post('/api/incidents',async(req,res)=>{
     const severities=new Set(['low','medium','high','critical']);
     const type=types.has(String(req.body?.incident_type))?String(req.body.incident_type):'other';
     const severity=severities.has(String(req.body?.severity))?String(req.body.severity):'medium';
+
+    const tenantId = req.body?.tenant_id ? Number(req.body.tenant_id) : null;
+    const propertyId = req.body?.property_id ? Number(req.body.property_id) : null;
+    const roomId = req.body?.room_id ? Number(req.body.room_id) : null;
+    const bedId = req.body?.bed_id ? Number(req.body.bed_id) : null;
+
+    if ([tenantId, propertyId, roomId, bedId].some(v => v !== null && (!Number.isInteger(v) || v <= 0))) {
+      return res.status(400).json({success:false,error:'Invalid incident resource ID.'});
+    }
+
+    // Every linked resource must belong to the authenticated owner.
+    if (tenantId !== null) {
+      const t = await query(
+        `SELECT t.id,t.property_id,t.room_id,t.bed_id
+         FROM tenants t
+         INNER JOIN properties p ON p.id=t.property_id
+         WHERE t.id=$1 AND p.owner_id=$2 LIMIT 1`,
+        [tenantId,o.id],
+      );
+      if (!t.rows[0]) return res.status(404).json({success:false,error:'Tenant not found.'});
+      if (propertyId !== null && propertyId !== Number(t.rows[0].property_id)) {
+        return res.status(400).json({success:false,error:'Tenant does not belong to the selected property.'});
+      }
+      if (roomId !== null && roomId !== Number(t.rows[0].room_id)) {
+        return res.status(400).json({success:false,error:'Tenant does not belong to the selected room.'});
+      }
+      if (bedId !== null && bedId !== Number(t.rows[0].bed_id)) {
+        return res.status(400).json({success:false,error:'Tenant does not belong to the selected bed.'});
+      }
+    }
+
+    if (propertyId !== null) {
+      const p = await query(
+        'SELECT id FROM properties WHERE id=$1 AND owner_id=$2 LIMIT 1',
+        [propertyId,o.id],
+      );
+      if (!p.rows[0]) return res.status(404).json({success:false,error:'Property not found.'});
+    }
+    if (roomId !== null) {
+      const room = await query(
+        `SELECT r.id FROM rooms r INNER JOIN properties p ON p.id=r.property_id
+         WHERE r.id=$1 AND p.owner_id=$2 AND ($3::integer IS NULL OR r.property_id=$3) LIMIT 1`,
+        [roomId,o.id,propertyId],
+      );
+      if (!room.rows[0]) return res.status(404).json({success:false,error:'Room not found.'});
+    }
+    if (bedId !== null) {
+      const bed = await query(
+        `SELECT b.id FROM beds b
+         INNER JOIN rooms r ON r.id=b.room_id
+         INNER JOIN properties p ON p.id=r.property_id
+         WHERE b.id=$1 AND p.owner_id=$2
+           AND ($3::integer IS NULL OR r.property_id=$3)
+           AND ($4::integer IS NULL OR b.room_id=$4)
+         LIMIT 1`,
+        [bedId,o.id,propertyId,roomId],
+      );
+      if (!bed.rows[0]) return res.status(404).json({success:false,error:'Bed not found.'});
+    }
+
     const r=await query(`INSERT INTO peacely_incidents
       (owner_id,tenant_id,property_id,room_id,bed_id,incident_type,severity,title,description,status)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,'reported')
       RETURNING *`,[
-        o.id,req.body?.tenant_id||null,req.body?.property_id||null,req.body?.room_id||null,req.body?.bed_id||null,
+        o.id,tenantId,propertyId,roomId,bedId,
         type,severity,title,String(req.body?.description||'')]);
     await recordAudit(o.id,'incident.created','incident',String(r.rows[0].id),{
       tenantId:r.rows[0].tenant_id,propertyId:r.rows[0].property_id,
