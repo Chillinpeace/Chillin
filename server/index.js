@@ -420,16 +420,43 @@ async function createSession(ownerId) {
 app.get(
   '/api/health',
   asyncHandler(async (req, res) => {
-    const result = await safeQuery(
-      'SELECT NOW() AS now',
-    );
+    try {
+      const result = await safeQuery('SELECT NOW() AS now');
+      return res.status(200).json({
+        success: true,
+        status: 'ok',
+        database: 'connected',
+        environment: process.env.PEACELY_ENV || (process.env.NODE_ENV === 'production' ? 'production' : 'development'),
+        time: result.rows[0].now,
+      });
+    } catch (error) {
+      return res.status(503).json({
+        success: false,
+        status: 'degraded',
+        database: 'disconnected',
+        error: 'Database unavailable.',
+      });
+    }
+  }),
+);
 
-    res.json({
-      success: true,
-      status: 'ok',
-      database: 'connected',
-      time: result.rows[0].now,
-    });
+app.get(
+  '/api/readiness',
+  asyncHandler(async (_req, res) => {
+    try {
+      await safeQuery('SELECT 1');
+      return res.status(200).json({
+        success: true,
+        ready: true,
+        database: 'connected',
+      });
+    } catch {
+      return res.status(503).json({
+        success: false,
+        ready: false,
+        database: 'disconnected',
+      });
+    }
   }),
 );
 
@@ -5227,21 +5254,34 @@ async function startServer() {
   try {
     await initializeDatabase();
 
-    app.listen(
+    const server = app.listen(
       PORT,
       '0.0.0.0',
       () => {
-        console.log(
-          `Peacely server running on port ${PORT}`,
-        );
+        console.log(`Peacely server running on port ${PORT}`);
       },
     );
-  } catch (error) {
-    console.error(
-      'Failed to start Peacely server:',
-      error,
-    );
 
+    const shutdown = async (signal) => {
+      console.log(`Peacely received ${signal}; shutting down gracefully.`);
+      server.close(async () => {
+        try {
+          await pool.end();
+          console.log('Peacely database pool closed.');
+        } catch (error) {
+          console.error('Database pool shutdown error:', error);
+        } finally {
+          process.exit(0);
+        }
+      });
+
+      setTimeout(() => process.exit(1), 10000).unref();
+    };
+
+    process.once('SIGTERM', () => shutdown('SIGTERM'));
+    process.once('SIGINT', () => shutdown('SIGINT'));
+  } catch (error) {
+    console.error('Failed to start Peacely server:', error);
     process.exit(1);
   }
 }
