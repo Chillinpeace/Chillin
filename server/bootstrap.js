@@ -17,6 +17,7 @@ import moveInRouter from './move-in.js';
 import moveOutRouter from './move-out.js';
 import incidentRouter from './incidents.js';
 import propertyPassportRouter from './property-passport.js';
+import damageEvidenceRouter from './damage-evidence.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -156,6 +157,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', moveOutRouter);
     originalUse.call(this, '/api', incidentRouter);
     originalUse.call(this, '/api', propertyPassportRouter);
+    originalUse.call(this, '/api', damageEvidenceRouter);
     phaseRoutersMounted = true;
   }
   return result;
