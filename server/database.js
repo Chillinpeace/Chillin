@@ -551,25 +551,33 @@ export async function initializeDatabase() {
     // =====================================================
 
     /*
-      Sessions are disposable login records.
-
-      Older Peacely versions created this table with
-      incompatible columns. Recreating ONLY this table
-      is safe because it contains no PG/tenant/business data.
+      Sessions contain live login state. Never drop/recreate this table
+      during startup because a Railway deployment/restart would log out
+      every owner and can invalidate active application sessions.
     */
 
     await client.query(`
-      DROP TABLE IF EXISTS sessions CASCADE;
-    `);
-
-    await client.query(`
-      CREATE TABLE sessions (
+      CREATE TABLE IF NOT EXISTS sessions (
         id SERIAL PRIMARY KEY,
         owner_id INTEGER NOT NULL,
         token_hash VARCHAR(128) UNIQUE NOT NULL,
         expires_at TIMESTAMPTZ NOT NULL,
         created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
       );
+    `);
+
+    await client.query(`
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS owner_id INTEGER;
+
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS token_hash VARCHAR(128);
+
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+
+      ALTER TABLE sessions
+      ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP;
     `);
 
     // =====================================================
