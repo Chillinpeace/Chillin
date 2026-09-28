@@ -7305,6 +7305,39 @@ function TenantDetails({
   onReassign: (tenant: Tenant) => void;
 }) {
   const [fullScreenImage, setFullScreenImage] = useState<{ src: string; label: string } | null>(null);
+  const [verificationBusy, setVerificationBusy] = useState(false);
+  const [verificationMessage, setVerificationMessage] = useState('');
+
+  const startDigiLockerVerification = async () => {
+    setVerificationBusy(true);
+    setVerificationMessage('');
+    try {
+      const response = await fetch('/api/tenant-verification/start', {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tenant_id: tenant.id }),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) throw new Error(data?.error || 'Unable to start verification.');
+      setVerificationMessage(data?.message || 'Verification flow started.');
+      if (!data?.configured && data?.onboarding_url) {
+        window.open(data.onboarding_url, '_blank', 'noopener,noreferrer');
+      }
+    } catch (error) {
+      setVerificationMessage(error instanceof Error ? error.message : 'Unable to start verification.');
+    } finally {
+      setVerificationBusy(false);
+    }
+  };
+
+  const openTenantPdf = (kind: 'agreement' | 'police') => {
+    window.open(
+      `/api/tenant-documents/${tenant.id}/${kind === 'agreement' ? 'agreement' : 'police-verification'}.pdf`,
+      '_blank',
+      'noopener,noreferrer',
+    );
+  };
 
   return (
     <div className="tenant-detail">
@@ -7450,6 +7483,36 @@ function TenantDetails({
       <button type="button" className="btn-secondary full-btn" onClick={() => onReassign(tenant)}>
         Change Room / Bed
       </button>
+
+      <div className="detail-section" style={{ marginTop: '14px' }}>
+        <div className="section-heading">
+          <div>
+            <h3>Identity & Documents</h3>
+            <p>Consent-based DigiLocker verification and automatic document generation.</p>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gap: '8px' }}>
+          <button
+            type="button"
+            className="btn-secondary full-btn"
+            onClick={startDigiLockerVerification}
+            disabled={verificationBusy}
+          >
+            {verificationBusy ? 'Starting…' : '🔐 Verify with DigiLocker'}
+          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+            <button type="button" className="btn-secondary full-btn" onClick={() => openTenantPdf('agreement')}>
+              📄 Rental Agreement PDF
+            </button>
+            <button type="button" className="btn-secondary full-btn" onClick={() => openTenantPdf('police')}>
+              👮 Police Verification PDF
+            </button>
+          </div>
+          {verificationMessage && (
+            <div className="small-empty">{verificationMessage}</div>
+          )}
+        </div>
+      </div>
 
       <div className="finance-panel">
         <div>
