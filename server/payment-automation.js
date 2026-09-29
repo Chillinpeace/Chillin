@@ -143,7 +143,42 @@ async function ownerOwnsInvoice(ownerId, invoiceId) {
   return Boolean(result.rows.length);
 }
 
-function cashfreeMode() {\n  const explicit = clean(process.env.PEACELY_CASHFREE_MODE).toLowerCase();\n  if (explicit === 'sandbox' || explicit === 'live' || explicit === 'mock') return explicit;\n  const env = clean(process.env.PEACELY_ENV || process.env.NODE_ENV).toLowerCase();\n  return env === 'production' ? 'live' : 'sandbox';\n}\nfunction cashfreeCredentials() {\n  return { clientId: clean(process.env.PEACELY_CASHFREE_CLIENT_ID || process.env.CASHFREE_CLIENT_ID), clientSecret: clean(process.env.PEACELY_CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET) };\n}\nfunction cashfreeBaseUrl() { return cashfreeMode() === 'live' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg'; }\nfunction cashfreeConfigured() { const c=cashfreeCredentials(); return cashfreeMode() !== 'mock' && Boolean(c.clientId && c.clientSecret); }\nasync function createCashfreeOrderForInvoice(invoiceId, paymentToken = '') {\n  await ensurePaymentColumns();\n  const invoice = await loadInvoice(invoiceId);\n  if (!invoice) throw new Error('Invoice not found.');\n  if (['cancelled','paid'].includes(clean(invoice.status).toLowerCase()) || num(invoice.amount) <= num(invoice.paid_amount)) throw new Error('Invoice is already paid or cannot be paid.');\n  if (!cashfreeConfigured()) throw new Error('Cashfree is not configured for this environment.');\n  const existing = await query('SELECT cashfree_order_id,cashfree_payment_session_id FROM invoices WHERE id=$1 LIMIT 1',[invoiceId]);\n  if (clean(existing.rows[0]?.cashfree_order_id) && clean(existing.rows[0]?.cashfree_payment_session_id)) return {order_id:existing.rows[0].cashfree_order_id,payment_session_id:existing.rows[0].cashfree_payment_session_id,mode:cashfreeMode(),reused:true};\n  const token = paymentToken || await createPaymentToken(invoiceId);\n  const phone = normalizePhone(invoice.phone);\n  if (!/^91[6-9][0-9]{9}$/.test(phone)) throw new Error('A valid Indian tenant phone number is required for Cashfree checkout.');\n  const orderId = clean(existing.rows[0]?.cashfree_order_id) || 'PEA-' + invoiceId + '-' + crypto.randomBytes(8).toString('hex');\n  const payload = {order_amount:Number(num(invoice.amount).toFixed(2)),order_currency:'INR',order_id:orderId,customer_details:{customer_id:'tenant_'+invoice.tenant_id,customer_phone:phone.slice(-10),customer_name:clean(invoice.tenant_name).slice(0,100)||'Peacely Tenant'},order_meta:{return_url:baseUrl()+'/api/payment-automation/pay/'+token+'?cashfree_return=1&order_id={order_id}',notify_url:baseUrl()+'/api/webhooks/cashfree'},order_note:('Peacely rent '+clean(invoice.invoice_number)).slice(0,200),order_tags:{peacely_invoice_id:String(invoice.id)}};\n  if (clean(invoice.email)) payload.customer_details.customer_email=clean(invoice.email).slice(0,100);\n  const credentials=cashfreeCredentials();\n  const response=await fetch(cashfreeBaseUrl()+'/orders',{method:'POST',headers:{'x-client-id':credentials.clientId,'x-client-secret':credentials.clientSecret,'x-api-version':'2025-01-01','Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)});\n  const responseText=await response.text(); let data=null; try{data=responseText?JSON.parse(responseText):null;}catch{}\n  if(!response.ok){console.error('Cashfree order creation failed:',response.status,data||responseText.slice(0,500));throw new Error('Cashfree could not create the payment order. Please try again.');}\n  const paymentSessionId=clean(data?.payment_session_id); const returnedOrderId=clean(data?.order_id)||orderId;\n  if(!paymentSessionId) throw new Error('Cashfree did not return a payment session.');\n  await query(`UPDATE invoices SET cashfree_order_id=$1,cashfree_payment_session_id=$2,payment_provider='cashfree',payment_link_status='cashfree_created',payment_link_created_at=COALESCE(payment_link_created_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=$3 AND LOWER(COALESCE(status,'')) NOT IN ('paid','cancelled')`,[returnedOrderId,paymentSessionId,invoiceId]);\n  return {order_id:returnedOrderId,payment_session_id:paymentSessionId,mode:cashfreeMode(),reused:false};\n}\n\nasync function createPaymentToken(invoiceId) {
+function cashfreeMode() {
+  const explicit = clean(process.env.PEACELY_CASHFREE_MODE).toLowerCase();
+  if (explicit === 'sandbox' || explicit === 'live' || explicit === 'mock') return explicit;
+  const env = clean(process.env.PEACELY_ENV || process.env.NODE_ENV).toLowerCase();
+  return env === 'production' ? 'live' : 'sandbox';
+}
+function cashfreeCredentials() {
+  return { clientId: clean(process.env.PEACELY_CASHFREE_CLIENT_ID || process.env.CASHFREE_CLIENT_ID), clientSecret: clean(process.env.PEACELY_CASHFREE_SECRET_KEY || process.env.CASHFREE_CLIENT_SECRET) };
+}
+function cashfreeBaseUrl() { return cashfreeMode() === 'live' ? 'https://api.cashfree.com/pg' : 'https://sandbox.cashfree.com/pg'; }
+function cashfreeConfigured() { const c=cashfreeCredentials(); return cashfreeMode() !== 'mock' && Boolean(c.clientId && c.clientSecret); }
+async function createCashfreeOrderForInvoice(invoiceId, paymentToken = '') {
+  await ensurePaymentColumns();
+  const invoice = await loadInvoice(invoiceId);
+  if (!invoice) throw new Error('Invoice not found.');
+  if (['cancelled','paid'].includes(clean(invoice.status).toLowerCase()) || num(invoice.amount) <= num(invoice.paid_amount)) throw new Error('Invoice is already paid or cannot be paid.');
+  if (!cashfreeConfigured()) throw new Error('Cashfree is not configured for this environment.');
+  const existing = await query('SELECT cashfree_order_id,cashfree_payment_session_id FROM invoices WHERE id=$1 LIMIT 1',[invoiceId]);
+  if (clean(existing.rows[0]?.cashfree_order_id) && clean(existing.rows[0]?.cashfree_payment_session_id)) return {order_id:existing.rows[0].cashfree_order_id,payment_session_id:existing.rows[0].cashfree_payment_session_id,mode:cashfreeMode(),reused:true};
+  const token = paymentToken || await createPaymentToken(invoiceId);
+  const phone = normalizePhone(invoice.phone);
+  if (!/^91[6-9][0-9]{9}$/.test(phone)) throw new Error('A valid Indian tenant phone number is required for Cashfree checkout.');
+  const orderId = clean(existing.rows[0]?.cashfree_order_id) || 'PEA-' + invoiceId + '-' + crypto.randomBytes(8).toString('hex');
+  const payload = {order_amount:Number(num(invoice.amount).toFixed(2)),order_currency:'INR',order_id:orderId,customer_details:{customer_id:'tenant_'+invoice.tenant_id,customer_phone:phone.slice(-10),customer_name:clean(invoice.tenant_name).slice(0,100)||'Peacely Tenant'},order_meta:{return_url:baseUrl()+'/api/payment-automation/pay/'+token+'?cashfree_return=1&order_id={order_id}',notify_url:baseUrl()+'/api/webhooks/cashfree'},order_note:('Peacely rent '+clean(invoice.invoice_number)).slice(0,200),order_tags:{peacely_invoice_id:String(invoice.id)}};
+  if (clean(invoice.email)) payload.customer_details.customer_email=clean(invoice.email).slice(0,100);
+  const credentials=cashfreeCredentials();
+  const response=await fetch(cashfreeBaseUrl()+'/orders',{method:'POST',headers:{'x-client-id':credentials.clientId,'x-client-secret':credentials.clientSecret,'x-api-version':'2025-01-01','Content-Type':'application/json',Accept:'application/json'},body:JSON.stringify(payload)});
+  const responseText=await response.text(); let data=null; try{data=responseText?JSON.parse(responseText):null;}catch{}
+  if(!response.ok){console.error('Cashfree order creation failed:',response.status,data||responseText.slice(0,500));throw new Error('Cashfree could not create the payment order. Please try again.');}
+  const paymentSessionId=clean(data?.payment_session_id); const returnedOrderId=clean(data?.order_id)||orderId;
+  if(!paymentSessionId) throw new Error('Cashfree did not return a payment session.');
+  await query(`UPDATE invoices SET cashfree_order_id=$1,cashfree_payment_session_id=$2,payment_provider='cashfree',payment_link_status='cashfree_created',payment_link_created_at=COALESCE(payment_link_created_at,CURRENT_TIMESTAMP),updated_at=CURRENT_TIMESTAMP WHERE id=$3 AND LOWER(COALESCE(status,'')) NOT IN ('paid','cancelled')`,[returnedOrderId,paymentSessionId,invoiceId]);
+  return {order_id:returnedOrderId,payment_session_id:paymentSessionId,mode:cashfreeMode(),reused:false};
+}
+
+async function createPaymentToken(invoiceId) {
   const existing = await query(
     'SELECT payment_token FROM invoices WHERE id=$1 LIMIT 1',
     [invoiceId],
