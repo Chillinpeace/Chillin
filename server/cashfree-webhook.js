@@ -171,7 +171,9 @@ router.post('/api/webhooks/cashfree', async (req, res) => {
              paid_at=COALESCE(paid_at,CURRENT_TIMESTAMP),
              payment_link_status='cashfree_paid',
              updated_at=CURRENT_TIMESTAMP
-         WHERE id=$1 AND LOWER(COALESCE(status,'')) <> 'cancelled'
+         WHERE id=$1
+           AND LOWER(COALESCE(status,'')) <> 'cancelled'
+           AND NOT (LOWER(COALESCE(status,''))='paid' AND COALESCE(paid_amount,0) >= amount)
          RETURNING id`,
         [invoice.id],
       );
@@ -200,15 +202,19 @@ router.post('/api/webhooks/cashfree', async (req, res) => {
 
       await client.query('COMMIT');
 
-      await recordAudit(invoice.owner_id, 'payment.cashfree.webhook_processed', 'invoice', String(invoice.id), {
-        tenantId: invoice.tenant_id,
-        metadata: {
-          order_id: event.orderId,
-          payment_id: event.paymentId,
-          event_type: event.eventType,
-          payment_status: event.paymentStatus,
-        },
-      });
+      try {
+        await recordAudit(invoice.owner_id, 'payment.cashfree.webhook_processed', 'invoice', String(invoice.id), {
+          tenantId: invoice.tenant_id,
+          metadata: {
+            order_id: event.orderId,
+            payment_id: event.paymentId,
+            event_type: event.eventType,
+            payment_status: event.paymentStatus,
+          },
+        });
+      } catch (auditError) {
+        console.error('Cashfree webhook audit logging failed:', auditError);
+      }
 
       return res.status(200).json({ success: true, processed: true });
     }
