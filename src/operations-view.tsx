@@ -117,7 +117,7 @@ export default function OperationsView({
   tenants: Tenant[];
   properties: Property[];
 }) {
-  const [section, setSection] = useState<'tenant' | 'property' | 'handover' | 'maintenance' | 'incidents'>('tenant');
+  const [section, setSection] = useState<'tenant' | 'property' | 'handover' | 'maintenance' | 'incidents' | 'whatsapp'>('tenant');
   const [tenantId, setTenantId] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const [passport, setPassport] = useState<Passport | null>(null);
@@ -131,6 +131,11 @@ export default function OperationsView({
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [error, setError] = useState('');
+  const [whatsappStatus, setWhatsappStatus] = useState<any>(null);
+  const [whatsappNotifications, setWhatsappNotifications] = useState<any[]>([]);
+  const [whatsappMessage, setWhatsappMessage] = useState('');
+  const [whatsappTemplate, setWhatsappTemplate] = useState('');
+  const [whatsappLanguage, setWhatsappLanguage] = useState('en');
 
   const [incidentTitle, setIncidentTitle] = useState('');
   const [incidentType, setIncidentType] = useState('other');
@@ -448,6 +453,36 @@ export default function OperationsView({
     } finally { setSaving(false); }
   };
 
+  const loadWhatsApp = async () => {
+    setLoading(true); setError('');
+    try {
+      const [status, history] = await Promise.all([
+        request<any>('/whatsapp/status'),
+        request<{ notifications: any[] }>('/whatsapp/notifications?limit=50'),
+      ]);
+      setWhatsappStatus(status);
+      setWhatsappNotifications(history.notifications || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load WhatsApp status.');
+    } finally { setLoading(false); }
+  };
+
+  const sendWhatsApp = async () => {
+    if (!tenantId) { setError('Select a tenant first.'); return; }
+    if (!whatsappMessage.trim() && !whatsappTemplate.trim()) { setError('Enter a message or approved template name.'); return; }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const result = await request<any>('/whatsapp/send', {
+        method: 'POST',
+        body: JSON.stringify({ tenant_id: Number(tenantId), message: whatsappMessage.trim(), template_name: whatsappTemplate.trim(), language_code: whatsappLanguage, type: 'manual_whatsapp' }),
+      });
+      setWhatsappMessage('');
+      await loadWhatsApp();
+      setMessage(result.mode === 'mock' ? 'WhatsApp message simulated successfully. No external message was sent.' : 'WhatsApp message accepted by the provider.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to send WhatsApp message.');
+    } finally { setSaving(false); }
+  };
   const loadIncidents = async () => {
     setLoading(true);
     setError('');
@@ -483,6 +518,7 @@ export default function OperationsView({
     if (section === 'incidents') loadIncidents();
     if (section === 'maintenance') loadMaintenance();
     if (section === 'handover') loadHandovers(Number(propertyId));
+    if (section === 'whatsapp') loadWhatsApp();
   }, [section]);
 
   useEffect(() => {
@@ -909,6 +945,7 @@ export default function OperationsView({
           ['handover', '🔄 Handover'],
           ['maintenance', '🔧 Maintenance'],
           ['incidents', '🚨 Incidents'],
+          ['whatsapp', '💬 WhatsApp'],
         ].map(([key, label]) => (
           <button
             key={key}
