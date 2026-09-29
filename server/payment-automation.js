@@ -818,6 +818,8 @@ router.post('/payment-automation/pay/:token/cashfree-order', async (req, res) =>
     .replace(/'/g, '&#039;');
 
   const hasUpi = clean(invoice.upi_id);
+  const cashfreeAvailable = cashfreeConfigured();
+  const cashfreeModeLabel = cashfreeMode() === 'live' ? 'production' : 'sandbox';
   const upiLink = hasUpi
     ? 'upi://pay?pa=' + encodeURIComponent(invoice.upi_id) + '&pn=' + encodeURIComponent(invoice.owner_name || 'Owner') + '&am=' + encodeURIComponent(num(invoice.amount).toFixed(2)) + '&cu=INR'
     : '';
@@ -841,6 +843,28 @@ h1{margin:0 0 6px}.muted{color:#687386}.amount{font-size:34px;font-weight:700;ma
   <div class="amount">₹${num(invoice.amount).toLocaleString('en-IN')}</div>
   <div class="muted">Invoice ${escapeHtml(invoice.invoice_number)} · Due ${escapeHtml(formatDate(invoice.due_date))}</div>
    ${hasUpi ? `<a class="pay" href="${upiLink}" style="text-decoration:none">Pay Now with UPI</a>` : `<button class="pay" type="button" onclick="document.getElementById('paymentOptions').scrollIntoView({behavior:'smooth',block:'center'})">Pay Now</button>`}
+  ${cashfreeAvailable && clean(invoice.status).toLowerCase() !== 'paid' ? `
+    <button class="pay" id="cashfreePay" type="button">Pay Securely with Cashfree</button>
+    <div id="cashfreeMessage" class="muted" style="text-align:center"></div>
+    <script src="https://sdk.cashfree.com/js/v3/cashfree.js"></script>
+    <script>
+    (function(){
+      const btn=document.getElementById("cashfreePay");
+      const msg=document.getElementById("cashfreeMessage");
+      btn.addEventListener("click",async()=>{
+        btn.disabled=true; btn.textContent="Opening secure checkout…";
+        try {
+          const r=await fetch("/api/payment-automation/pay/${token}/cashfree-order",{method:"POST"});
+          const d=await r.json();
+          if(!r.ok) throw new Error(d.error||"Unable to start payment.");
+          const cf=Cashfree({mode:"${cashfreeModeLabel}"});
+          const result=await cf.checkout({paymentSessionId:d.payment_session_id,redirectTarget:"_self"});
+          if(result&&result.error){msg.textContent=result.error.message||"Cashfree checkout could not open.";btn.disabled=false;btn.textContent="Pay Securely with Cashfree";}
+        } catch(e) { msg.textContent=e.message||"Unable to start payment.";btn.disabled=false;btn.textContent="Pay Securely with Cashfree"; }
+      });
+    })();
+    </script>
+  ` : ''}
   <div id="paymentOptions">
   ${qr ? `
     <div class="detail" style="text-align:center">
