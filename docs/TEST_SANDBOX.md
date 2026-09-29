@@ -87,5 +87,20 @@ Provider status:
 
 - `GET /api/whatsapp/status`
 - `POST /api/whatsapp/send`
+- `GET /api/webhooks/whatsapp` — Meta webhook verification challenge.
+- `POST /api/webhooks/whatsapp` — signed Meta delivery-status webhook.
+
+Webhook configuration:
+
+- `META_WHATSAPP_VERIFY_TOKEN` (or `WHATSAPP_VERIFY_TOKEN`) — webhook verification token.
+- `META_WHATSAPP_APP_SECRET` (or `WHATSAPP_APP_SECRET`) — used for `X-Hub-Signature-256` verification.
+- `PEACELY_WHATSAPP_WEBHOOK_ALLOW_UNSIGNED=true` may be used only in non-live development/testing when you intentionally need unsigned webhook simulation.
+
+Delivery statuses are tracked as `sent → delivered → read` or `failed`. Webhook events are idempotent and owner-scoped through the notification/provider message ID. Peacely does not replace a later delivery state with an older state.
+
+Sandbox delivery testing:
+
+- `POST /api/sandbox/whatsapp` now requires an existing owner-scoped WhatsApp notification via `notification_id` or `message_id`.
+- Simulate `sent`, `delivered`, `read`, or `failed`; the notification history is updated exactly as a provider lifecycle event would be.
 
 The send endpoint is owner-scoped to the selected tenant and writes a notification record with the provider message ID/status. Mock sends return a simulated provider ID and never call Meta.
