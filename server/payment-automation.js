@@ -676,7 +676,11 @@ router.get('/payment-automation/status', auth, async (req, res) => {
 
   res.json({
     success: true,
-    provider: 'Owner Direct UPI',
+    provider: cashfreeConfigured() ? 'Cashfree + Owner Direct UPI' : 'Owner Direct UPI',
+    cashfree: {
+      configured: cashfreeConfigured(),
+      mode: cashfreeMode(),
+    },
     automatic: Boolean(paymentDetails && (
       clean(paymentDetails.upi_id) ||
       clean(paymentDetails.phone) ||
