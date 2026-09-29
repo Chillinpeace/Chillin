@@ -61,7 +61,7 @@ function extractEvent(body) {
   };
 }
 
-router.post('/api/webhooks/cashfree', async (req, res) => {
+router.post('/webhooks/cashfree', async (req, res) => {
   const rawBody = String(req.rawBody || '');
   const signature = clean(req.headers['x-webhook-signature']);
   const timestamp = clean(req.headers['x-webhook-timestamp']);
