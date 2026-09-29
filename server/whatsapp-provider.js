@@ -336,40 +336,88 @@ router.get('/webhooks/whatsapp', async (req, res) => {
 });
 
 router.post('/webhooks/whatsapp', async (req, res) => {
-  if (!verifyWebhookSignature(req) && !webhookUnsignedAllowed()) return res.status(401).json({ success: false, error: 'Invalid WhatsApp webhook signature.' });
-  const body = req.body || {};
-  if (body.object !== 'whatsapp_business_account') return res.status(404).json({ success: false, error: 'Unsupported webhook object.' });
+  if (!verifyWebhookSignature(req) && !webhookUnsignedAllowed()) {
+    return res.status(401).json({ success: false, error: 'Invalid WhatsApp webhook signature.' });
+  }
 
-  let processed = 0, duplicates = 0, unmatched = 0;
+  const body = req.body || {};
+  if (body.object !== 'whatsapp_business_account') {
+    return res.status(404).json({ success: false, error: 'Unsupported webhook object.' });
+  }
+
+  let processed = 0;
+  let duplicates = 0;
+  let unmatched = 0;
+  const inboundResults = [];
+
   for (const entry of Array.isArray(body.entry) ? body.entry : []) {
     for (const change of Array.isArray(entry?.changes) ? entry.changes : []) {
       const value = change?.value || {};
-      for (const status of Array.isArray(value.statuses) ? value.statuses : []) {
-        const providerMessageId = clean(status?.id);
-        const deliveryStatus = clean(status?.status).toLowerCase();
-        if (!providerMessageId || !deliveryStatus) continue;
-        const inboundResults = [];
+
       for (const message of Array.isArray(value.messages) ? value.messages : []) {
         const providerMessageId = clean(message?.id);
         const fromPhone = clean(message?.from);
         const messageType = clean(message?.type) || 'unknown';
-        const messageText = messageType === 'text' ? clean(message?.text?.body) : messageType === 'button' ? clean(message?.button?.text) : messageType === 'interactive' ? clean(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title) : '';
+        const messageText =
+          messageType === 'text'
+            ? clean(message?.text?.body)
+            : messageType === 'button'
+              ? clean(message?.button?.text)
+              : messageType === 'interactive'
+                ? clean(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title)
+                : '';
+
         const eventKey = ['inbound', providerMessageId, clean(message?.timestamp), fromPhone].join('|');
-        const inbound = await recordInboundMessage({ eventKey, providerMessageId, fromPhone, messageType, messageText, metadata: { display_phone_number: clean(value?.metadata?.display_phone_number), phone_number_id: clean(value?.metadata?.phone_number_id), contact_name: clean(value?.contacts?.[0]?.profile?.name) }, receivedAt: message?.timestamp ? Number(message.timestamp) * 1000 : null });
+        const inbound = await recordInboundMessage({
+          eventKey,
+          providerMessageId,
+          fromPhone,
+          messageType,
+          messageText,
+          metadata: {
+            display_phone_number: clean(value?.metadata?.display_phone_number),
+            phone_number_id: clean(value?.metadata?.phone_number_id),
+            contact_name: clean(value?.contacts?.[0]?.profile?.name),
+          },
+          receivedAt: message?.timestamp ? Number(message.timestamp) * 1000 : null,
+        });
         inboundResults.push(inbound);
       }
 
-      const errors = Array.isArray(status?.errors) ? status.errors : [];
-        const errorText = errors.map((item) => clean(item?.title || item?.message || item?.code)).filter(Boolean).join('; ');
+      for (const status of Array.isArray(value.statuses) ? value.statuses : []) {
+        const providerMessageId = clean(status?.id);
+        const deliveryStatus = clean(status?.status).toLowerCase();
+        if (!providerMessageId || !deliveryStatus) continue;
+
+        const errors = Array.isArray(status?.errors) ? status.errors : [];
+        const errorText = errors
+          .map((item) => clean(item?.title || item?.message || item?.code))
+          .filter(Boolean)
+          .join('; ');
         const eventKey = [providerMessageId, deliveryStatus, clean(status?.timestamp), clean(entry?.id)].join('|');
-        const result = await applyWhatsAppStatus({ providerMessageId, status: deliveryStatus, errorText, eventAt: status?.timestamp ? Number(status.timestamp) * 1000 : null, eventKey });
+
+        const result = await applyWhatsAppStatus({
+          providerMessageId,
+          status: deliveryStatus,
+          errorText,
+          eventAt: status?.timestamp ? Number(status.timestamp) * 1000 : null,
+          eventKey,
+        });
+
         if (result.duplicate) duplicates += 1;
         else if (result.reason === 'unmatched_message') unmatched += 1;
         else if (result.processed) processed += 1;
       }
     }
   }
-  return res.status(200).json({ success: true, processed, duplicates, unmatched, inbound: inboundResults });
+
+  return res.status(200).json({
+    success: true,
+    processed,
+    duplicates,
+    unmatched,
+    inbound: inboundResults,
+  });
 });
 
 router.get('/whatsapp/status', auth, async (req, res) => {
