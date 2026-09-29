@@ -124,6 +124,7 @@ export default function OperationsView({
   const [moveIn, setMoveIn] = useState<any>(null);
   const [moveOut, setMoveOut] = useState<any>(null);
   const [tenantCompliance, setTenantCompliance] = useState<any>(null);
+  const [damageEvidence, setDamageEvidence] = useState<any>(null);
   const [propertyPassport, setPropertyPassport] = useState<any>(null);
   const [incidents, setIncidents] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -140,6 +141,16 @@ export default function OperationsView({
   const [complianceStatus, setComplianceStatus] = useState('pending');
   const [complianceExpiry, setComplianceExpiry] = useState('');
   const [complianceNotes, setComplianceNotes] = useState('');
+
+  const [evidenceCategory, setEvidenceCategory] = useState('room');
+  const [evidenceUrl, setEvidenceUrl] = useState('');
+  const [evidenceFileName, setEvidenceFileName] = useState('');
+  const [evidenceMimeType, setEvidenceMimeType] = useState('');
+  const [evidenceNote, setEvidenceNote] = useState('');
+  const [evidenceStage, setEvidenceStage] = useState<'move_in' | 'move_out'>('move_in');
+  const [damageCategory, setDamageCategory] = useState('general');
+  const [damageDescription, setDamageDescription] = useState('');
+  const [damageCost, setDamageCost] = useState('');
 
   const [settlement, setSettlement] = useState({
     rent_outstanding: '',
@@ -162,16 +173,18 @@ export default function OperationsView({
     setLoading(true);
     setError('');
     try {
-      const [p, mi, mo, c] = await Promise.all([
+      const [p, mi, mo, c, d] = await Promise.all([
         request<{ passport: Passport }>(`/tenant-passport/${id}`),
         request<any>(`/move-in/${id}`),
         request<any>(`/move-out/${id}`),
         request<any>(`/tenant-compliance/${id}`),
+        request<any>(`/damage-evidence/${id}`),
       ]);
       setPassport(p.passport);
       setMoveIn(mi);
       setMoveOut(mo);
       setTenantCompliance(c);
+      setDamageEvidence(d);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load tenant operations.');
     } finally {
@@ -212,6 +225,7 @@ export default function OperationsView({
       setMoveIn(null);
       setMoveOut(null);
       setTenantCompliance(null);
+      setDamageEvidence(null);
     }
   }, [tenantId]);
 
@@ -262,6 +276,93 @@ export default function OperationsView({
       setMessage('Move-in completed.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to complete move-in.');
+    } finally { setSaving(false); }
+  };
+
+  const addEvidence = async () => {
+    if (!tenantId || !evidenceUrl.trim()) {
+      setError('Select a tenant and provide an approved storage URL.');
+      return;
+    }
+    const reportId = evidenceStage === 'move_in' ? moveInReport?.id : moveOutReport?.id;
+    if (!reportId) {
+      setError(`Start the ${evidenceStage === 'move_in' ? 'move-in' : 'move-out'} workflow first.`);
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request(`/move-${evidenceStage === 'move_in' ? 'in' : 'out'}/${reportId}/evidence`, {
+        method: 'POST',
+        body: JSON.stringify({
+          category: evidenceCategory,
+          file_url: evidenceUrl.trim(),
+          file_name: evidenceFileName.trim(),
+          mime_type: evidenceMimeType.trim(),
+          note: evidenceNote.trim(),
+        }),
+      });
+      setEvidenceUrl('');
+      setEvidenceFileName('');
+      setEvidenceMimeType('');
+      setEvidenceNote('');
+      await loadTenantOperations(Number(tenantId));
+      setMessage('Evidence added to the tenant timeline.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to add evidence.');
+    } finally { setSaving(false); }
+  };
+
+  const createDamageReport = async () => {
+    if (!tenantId || !damageDescription.trim()) {
+      setError('Select a tenant and describe the observed damage.');
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request('/damage-evidence', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(tenantId),
+          category: damageCategory,
+          description: damageDescription.trim(),
+          estimated_cost: Number(damageCost) || 0,
+          move_in_report_id: moveInReport?.id || null,
+          move_out_report_id: moveOutReport?.id || null,
+        }),
+      });
+      setDamageDescription('');
+      setDamageCost('');
+      await loadTenantOperations(Number(tenantId));
+      setMessage('Damage report created.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to create damage report.');
+    } finally { setSaving(false); }
+  };
+
+  const updateDamageDecision = async (report: any, decision: string) => {
+    setSaving(true); setError('');
+    try {
+      await request(`/damage-evidence/${report.id}/decision`, {
+        method: 'PATCH',
+        body: JSON.stringify({
+          owner_decision: decision,
+          owner_decision_note: report.owner_decision_note || '',
+        }),
+      });
+      await loadTenantOperations(Number(tenantId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to update damage decision.');
+    } finally { setSaving(false); }
+  };
+
+  const acknowledgeDamage = async (report: any) => {
+    if (!window.confirm('Record tenant acknowledgement for this damage report?')) return;
+    setSaving(true); setError('');
+    try {
+      await request(`/damage-evidence/${report.id}/acknowledge`, { method: 'POST' });
+      await loadTenantOperations(Number(tenantId));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to record acknowledgement.');
     } finally { setSaving(false); }
   };
 
@@ -598,6 +699,103 @@ export default function OperationsView({
                     </button>
                   </>
                 ) : <div className="small-empty">No move-out report yet.</div>}
+              </Card>
+
+              <Card>
+                <h3>Evidence & Damage</h3>
+                <p style={{ margin: '6px 0 12px', color: 'var(--text-muted)' }}>
+                  Add evidence references and record observed damage. Evidence comparison is observational and does not determine legal liability.
+                </p>
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <select className="modal-input" value={evidenceStage} onChange={(e) => setEvidenceStage(e.target.value as 'move_in' | 'move_out')}>
+                    <option value="move_in">Move-in evidence</option>
+                    <option value="move_out">Move-out evidence</option>
+                  </select>
+                  <select className="modal-input" value={evidenceCategory} onChange={(e) => setEvidenceCategory(e.target.value)}>
+                    <option value="room">Room</option>
+                    <option value="bed">Bed</option>
+                    <option value="mattress">Mattress</option>
+                    <option value="wardrobe">Wardrobe</option>
+                    <option value="fan">Fan</option>
+                    <option value="ac">AC</option>
+                    <option value="lights">Lights</option>
+                    <option value="switches">Switches</option>
+                    <option value="walls">Walls</option>
+                    <option value="door">Door</option>
+                    <option value="windows">Windows</option>
+                    <option value="bathroom">Bathroom</option>
+                    <option value="fixtures">Fixtures</option>
+                    <option value="general">General</option>
+                  </select>
+                  <input className="modal-input" placeholder="Approved storage URL" value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} />
+                  <input className="modal-input" placeholder="File name (optional)" value={evidenceFileName} onChange={(e) => setEvidenceFileName(e.target.value)} />
+                  <input className="modal-input" placeholder="MIME type (optional)" value={evidenceMimeType} onChange={(e) => setEvidenceMimeType(e.target.value)} />
+                  <textarea className="modal-input" rows={2} placeholder="Evidence note" value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} />
+                  <button className="btn-secondary full-btn" type="button" onClick={addEvidence} disabled={saving}>Add Evidence</button>
+                </div>
+
+                <div style={{ marginTop: 14 }}>
+                  <strong>Move-in vs Move-out comparison</strong>
+                  {(damageEvidence?.comparison || []).map((item: any) => (
+                    <div className="history-row" key={item.category}>
+                      <div>
+                        <strong>{String(item.category).replace(/_/g, ' ')}</strong>
+                        <span>Move-in: {item.move_in_evidence?.length || 0} · Move-out: {item.move_out_evidence?.length || 0}</span>
+                      </div>
+                      <Pill value={item.requires_review ? 'review' : 'tracked'} />
+                    </div>
+                  ))}
+                  {!damageEvidence?.comparison?.length && <div className="small-empty">No evidence comparison yet.</div>}
+                </div>
+
+                <div style={{ marginTop: 14 }}>
+                  <strong>Damage report</strong>
+                  <div style={{ display: 'grid', gap: 8, marginTop: 8 }}>
+                    <select className="modal-input" value={damageCategory} onChange={(e) => setDamageCategory(e.target.value)}>
+                      <option value="general">General</option>
+                      <option value="room">Room</option>
+                      <option value="bed">Bed</option>
+                      <option value="bathroom">Bathroom</option>
+                      <option value="furniture">Furniture</option>
+                      <option value="electrical">Electrical</option>
+                      <option value="other">Other</option>
+                    </select>
+                    <textarea className="modal-input" rows={3} placeholder="Describe the observed damage" value={damageDescription} onChange={(e) => setDamageDescription(e.target.value)} />
+                    <input className="modal-input" type="number" min="0" placeholder="Estimated cost" value={damageCost} onChange={(e) => setDamageCost(e.target.value)} />
+                    <button className="btn-secondary full-btn" type="button" onClick={createDamageReport} disabled={saving}>Create Damage Report</button>
+                  </div>
+                </div>
+
+                {(damageEvidence?.damage_reports || []).map((report: any) => (
+                  <div className="history-row" key={report.id}>
+                    <div>
+                      <strong>{report.category}</strong>
+                      <span>{report.description}</span>
+                      <span>Estimated: {money(report.estimated_cost)}{report.tenant_acknowledged_at ? ' · Acknowledged' : ''}</span>
+                    </div>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                      <select
+                        className="modal-input"
+                        style={{ minWidth: 140, margin: 0, padding: '7px 9px' }}
+                        value={report.owner_decision}
+                        onChange={(e) => updateDamageDecision(report, e.target.value)}
+                        disabled={saving}
+                      >
+                        <option value="pending">Pending</option>
+                        <option value="charge_tenant">Charge tenant</option>
+                        <option value="owner_absorbs">Owner absorbs</option>
+                        <option value="insurance">Insurance</option>
+                        <option value="disputed">Disputed</option>
+                        <option value="no_charge">No charge</option>
+                      </select>
+                      {!report.tenant_acknowledged_at && (
+                        <button className="btn-secondary" type="button" onClick={() => acknowledgeDamage(report)} disabled={saving}>
+                          Record Acknowledgement
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </Card>
 
               <Card>
