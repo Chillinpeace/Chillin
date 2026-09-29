@@ -78,12 +78,30 @@ function modeAllowsText() {
 
 async function ensureWhatsAppSchema() {
   await query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      owner_id INTEGER NOT NULL,
+      tenant_id INTEGER,
+      invoice_id INTEGER,
+      channel VARCHAR(30) NOT NULL DEFAULT 'whatsapp',
+      type VARCHAR(50) NOT NULL DEFAULT 'manual',
+      recipient VARCHAR(255) DEFAULT '',
+      message TEXT NOT NULL,
+      status VARCHAR(30) NOT NULL DEFAULT 'queued',
+      provider_message_id VARCHAR(255),
+      provider_status VARCHAR(40) DEFAULT '',
+      provider_error TEXT DEFAULT '',
+      sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    );
     ALTER TABLE notifications
       ADD COLUMN IF NOT EXISTS provider_message_id VARCHAR(255),
       ADD COLUMN IF NOT EXISTS provider_status VARCHAR(40) DEFAULT '',
       ADD COLUMN IF NOT EXISTS provider_error TEXT DEFAULT '';
     CREATE INDEX IF NOT EXISTS idx_notifications_provider_message_id
       ON notifications(provider_message_id);
+    CREATE INDEX IF NOT EXISTS idx_notifications_owner_created
+      ON notifications(owner_id, created_at DESC);
   `);
 }
 
