@@ -270,7 +270,7 @@ async function applyWhatsAppStatusForSandbox(ownerId, notificationId, messageId,
 
   const currentRank = ranks[String(current.rows[0].provider_status || '').toLowerCase()] || 0;
   const incomingRank = ranks[outcome] || 0;
-  if (incomingRank < currentRank || (currentRank === 99 && incomingRank !== 99)) return { processed: true, ignored: true };
+  if (currentRank === 99 || incomingRank < currentRank) return { processed: true, ignored: true };
 
   await query(
     "UPDATE notifications SET provider_status=$1,status=CASE WHEN $1='failed' THEN 'failed' ELSE $1 END,provider_error=CASE WHEN $1='failed' THEN 'Simulated delivery failure.' ELSE '' END,sent_at=CASE WHEN $1 IN ('sent','delivered','read') THEN COALESCE(sent_at,CURRENT_TIMESTAMP) ELSE sent_at END WHERE id=$2 AND owner_id=$3",
