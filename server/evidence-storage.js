@@ -62,7 +62,7 @@ async function requireOwner(req, res, next) {
 }
 
 async function ensureStorageSchema() {
-  await query('ALTER TABLE peacely_evidence ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''''; CREATE INDEX IF NOT EXISTS idx_evidence_owner_id ON peacely_evidence(owner_id,id);');
+  await query(`ALTER TABLE peacely_evidence ADD COLUMN IF NOT EXISTS storage_path TEXT DEFAULT ''; CREATE INDEX IF NOT EXISTS idx_evidence_owner_id ON peacely_evidence(owner_id,id);`);
 }
 
 function storageMode() {
