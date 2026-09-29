@@ -238,6 +238,31 @@ router.post('/api/sandbox/verification', requireOwner, asyncHandler(async (req, 
   return res.json({ success: true, result });
 }));
 
+async function applyWhatsAppStatusForSandbox(ownerId, notificationId, messageId, outcome, eventKey) {
+  const ranks = { sent: 1, delivered: 2, read: 3, failed: 99 };
+  const current = await query(
+    "SELECT provider_status FROM notifications WHERE id=$1 AND owner_id=$2 AND provider_message_id=$3 AND channel='whatsapp' LIMIT 1",
+    [notificationId, ownerId, messageId],
+  );
+  if (!current.rows.length) return { processed: false, reason: 'notification_not_found' };
+
+  const event = await query(
+    "INSERT INTO peacely_whatsapp_webhook_events (event_key,provider_message_id,status,owner_id,notification_id,error_text) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(event_key) DO NOTHING RETURNING id",
+    [eventKey, messageId, outcome, ownerId, notificationId, outcome === 'failed' ? 'Simulated delivery failure.' : ''],
+  );
+  if (!event.rows.length) return { processed: true, duplicate: true };
+
+  const currentRank = ranks[String(current.rows[0].provider_status || '').toLowerCase()] || 0;
+  const incomingRank = ranks[outcome] || 0;
+  if (incomingRank < currentRank || (currentRank === 99 && incomingRank !== 99)) return { processed: true, ignored: true };
+
+  await query(
+    "UPDATE notifications SET provider_status=$1,status=CASE WHEN $1='failed' THEN 'failed' ELSE $1 END,provider_error=CASE WHEN $1='failed' THEN 'Simulated delivery failure.' ELSE '' END,sent_at=CASE WHEN $1 IN ('sent','delivered','read') THEN COALESCE(sent_at,CURRENT_TIMESTAMP) ELSE sent_at END WHERE id=$2 AND owner_id=$3",
+    [outcome, notificationId, ownerId],
+  );
+  return { processed: true, status: outcome };
+}
+
 router.post('/api/sandbox/whatsapp', requireOwner, asyncHandler(async (req, res) => {
   if (!assertSimulationAllowed(res, 'whatsapp')) return;
   const outcomes = new Set(['sent', 'delivered', 'read', 'failed']);
@@ -247,6 +272,27 @@ router.post('/api/sandbox/whatsapp', requireOwner, asyncHandler(async (req, res)
   }
 
   const messageId = `TEST-WA-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+  if (!notificationId && !messageId) {
+    return res.status(400).json({ success: false, error: 'notification_id or message_id is required for delivery simulation.' });
+  }
+
+  let notification = null;
+  if (notificationId) {
+    const notificationResult = await query(
+      "SELECT id,provider_message_id,tenant_id FROM notifications WHERE id=$1 AND owner_id=$2 AND channel='whatsapp' LIMIT 1",
+      [notificationId, req.owner.id],
+    );
+    notification = notificationResult.rows[0] || null;
+  } else {
+    const notificationResult = await query(
+      "SELECT id,provider_message_id,tenant_id FROM notifications WHERE provider_message_id=$1 AND owner_id=$2 AND channel='whatsapp' LIMIT 1",
+      [messageId, req.owner.id],
+    );
+    notification = notificationResult.rows[0] || null;
+  }
+  if (!notification) return res.status(404).json({ success: false, error: 'WhatsApp notification not found for this owner.' });
+  messageId = notification.provider_message_id;
+
   const result = {
     provider: providerMode('whatsapp'),
     environment: environmentName(),
@@ -258,11 +304,15 @@ router.post('/api/sandbox/whatsapp', requireOwner, asyncHandler(async (req, res)
     timestamp: new Date().toISOString(),
   };
 
+  const eventKey = `sandbox|${messageId}|${outcome}|${Date.now()}`;
+  const webhookResult = await applyWhatsAppStatusForSandbox(req.owner.id, notification.id, messageId, outcome, eventKey);
+
   await recordAudit(req.owner.id, 'sandbox.whatsapp.simulated', 'message', messageId, {
-    metadata: { outcome, result },
+    tenantId: notification.tenant_id,
+    metadata: { outcome, result, notification_id: notification.id, webhook_result: webhookResult },
   });
 
-  return res.json({ success: true, result });
+  return res.json({ success: true, result: { ...result, notification_id: notification.id, webhook_result: webhookResult } });
 }));
 
 router.post('/api/sandbox/ai', requireOwner, asyncHandler(async (req, res) => {
