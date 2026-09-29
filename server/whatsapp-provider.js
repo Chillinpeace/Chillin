@@ -322,6 +322,8 @@ router.get('/whatsapp/status', auth, async (req, res) => {
     configured: configured(),
     phone_number_id_configured: Boolean(c.phoneNumberId),
     access_token_configured: Boolean(c.accessToken),
+    webhook_verify_token_configured: Boolean(webhookVerifyToken()),
+    webhook_app_secret_configured: Boolean(webhookAppSecret()),
     graph_api_version: graphApiVersion(),
     text_messages_allowed: mode() !== 'live' || modeAllowsText(),
     automation_enabled: clean(process.env.PEACELY_WHATSAPP_AUTOMATION_ENABLED).toLowerCase() === 'true',
