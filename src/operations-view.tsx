@@ -163,7 +163,6 @@ export default function OperationsView({
   const [evidenceNote, setEvidenceNote] = useState('');
   const [evidenceStage, setEvidenceStage] = useState<'move_in' | 'move_out'>('move_in');
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
-  const [evidenceUploadMode, setEvidenceUploadMode] = useState<'local' | 'external'>('local');
   const [damageCategory, setDamageCategory] = useState('general');
   const [damageDescription, setDamageDescription] = useState('');
   const [damageCost, setDamageCost] = useState('');
@@ -571,7 +570,6 @@ export default function OperationsView({
 
       setEvidenceFile(null);
       setEvidenceNote('');
-      setEvidenceUploadMode(result.storage_mode || 'local');
       const input = document.getElementById('peacely-evidence-file') as HTMLInputElement | null;
       if (input) input.value = '';
       await loadTenantOperations(Number(tenantId));
