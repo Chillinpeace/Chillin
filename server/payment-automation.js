@@ -2,7 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import { pool, query } from './database.js';
-import { sendWhatsAppMessage, whatsappMode } from './whatsapp-provider.js';
+import { sendWhatsAppMessage } from './whatsapp-provider.js';
 
 const router = express.Router();
 const SESSION_COOKIE = 'peacely_session';
