@@ -23,6 +23,7 @@ import ownerHandoverRouter from './owner-handover.js';
 import auditTrailRouter from './audit-trail.js';
 import evidenceStorageRouter from './evidence-storage.js';
 import cashfreeWebhookRouter from './cashfree-webhook.js';
+import whatsappProviderRouter from './whatsapp-provider.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -169,6 +170,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', auditTrailRouter);
     originalUse.call(this, '/api', evidenceStorageRouter);
     originalUse.call(this, '/api', cashfreeWebhookRouter);
+    originalUse.call(this, '/api', whatsappProviderRouter);
     phaseRoutersMounted = true;
   }
   return result;
