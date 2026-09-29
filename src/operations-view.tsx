@@ -902,7 +902,7 @@ export default function OperationsView({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8, marginBottom: 12 }}>
         {[
           ['tenant', '🪪 Tenant'],
           ['property', '🏠 Property'],
