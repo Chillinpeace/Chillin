@@ -133,6 +133,7 @@ export default function OperationsView({
   const [error, setError] = useState('');
   const [whatsappStatus, setWhatsappStatus] = useState<any>(null);
   const [whatsappNotifications, setWhatsappNotifications] = useState<any[]>([]);
+  const [whatsappInbound, setWhatsappInbound] = useState<any[]>([]);
   const [whatsappMessage, setWhatsappMessage] = useState('');
   const [whatsappTemplate, setWhatsappTemplate] = useState('');
   const [whatsappLanguage, setWhatsappLanguage] = useState('en');
@@ -456,12 +457,14 @@ export default function OperationsView({
   const loadWhatsApp = async () => {
     setLoading(true); setError('');
     try {
-      const [status, history] = await Promise.all([
+      const [status, history, inbound] = await Promise.all([
         request<any>('/whatsapp/status'),
         request<{ notifications: any[] }>('/whatsapp/notifications?limit=50'),
+        request<{ messages: any[] }>('/whatsapp/inbound?limit=50'),
       ]);
       setWhatsappStatus(status);
       setWhatsappNotifications(history.notifications || []);
+      setWhatsappInbound(inbound.messages || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load WhatsApp status.');
     } finally { setLoading(false); }
@@ -1659,6 +1662,21 @@ export default function OperationsView({
               </div>
               <button className="btn-primary full-btn" type="button" onClick={sendWhatsApp} disabled={saving || !tenantId}>{saving ? 'Sending…' : 'Send WhatsApp'}</button>
             </div>
+          </Card>
+          <Card>
+            <div className="section-heading"><div><h3>Tenant Inbox</h3><p>Inbound WhatsApp messages matched to your tenants. Peacely only classifies intent here; sensitive actions still require owner approval.</p></div><button className="btn-secondary" type="button" onClick={loadWhatsApp} disabled={loading}>Refresh</button></div>
+            {whatsappInbound.map((item) => (
+              <div className="history-row" key={item.id}>
+                <div>
+                  <strong>{item.tenant_name || item.from_phone || 'Unmatched sender'}</strong>
+                  <span>{item.property_name || 'Unmatched property'} · {dateText(item.received_at || item.created_at)}</span>
+                  <span>{item.message_text || ('Incoming ' + (item.message_type || 'message') + ' message')}</span>
+                  <span>Intent: {String(item.intent || 'unknown').replace(/_/g, ' ')} · {item.intent_confidence || 'low'} confidence</span>
+                </div>
+                <Pill value={item.status || 'received'} />
+              </div>
+            ))}
+            {!whatsappInbound.length && <div className="small-empty">No inbound tenant messages yet.</div>}
           </Card>
           <Card>
             <div className="section-heading"><div><h3>Message History</h3><p>Owner-scoped WhatsApp notification records.</p></div><button className="btn-secondary" type="button" onClick={loadWhatsApp} disabled={loading}>Refresh</button></div>
