@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs/promises';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { pool, query, initializeDatabase } from './database.js';
@@ -879,6 +880,19 @@ app.delete(
       }
 
       await client.query('COMMIT');
+
+      // Local evidence is development/staging storage only. Remove the owner's
+      // files after the database transaction succeeds; a failed DB transaction
+      // must never delete files prematurely.
+      if (String(process.env.PEACELY_EVIDENCE_STORAGE_MODE || '').toLowerCase() === 'local' ||
+          (!process.env.PEACELY_EVIDENCE_STORAGE_MODE &&
+           String(process.env.PEACELY_ENV || (process.env.NODE_ENV === 'production' ? 'production' : 'development')).toLowerCase() !== 'production')) {
+        const evidenceRoot = path.join(__dirname, '..', 'storage', 'evidence', String(ownerId));
+        await fs.rm(evidenceRoot, { recursive: true, force: true }).catch((error) => {
+          console.error('Account evidence cleanup failed:', error);
+        });
+      }
+
       clearSessionCookie(res);
 
       return res.json({
