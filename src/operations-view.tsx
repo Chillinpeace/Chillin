@@ -162,6 +162,8 @@ export default function OperationsView({
   const [evidenceMimeType, setEvidenceMimeType] = useState('');
   const [evidenceNote, setEvidenceNote] = useState('');
   const [evidenceStage, setEvidenceStage] = useState<'move_in' | 'move_out'>('move_in');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [evidenceUploadMode, setEvidenceUploadMode] = useState<'local' | 'external'>('local');
   const [damageCategory, setDamageCategory] = useState('general');
   const [damageDescription, setDamageDescription] = useState('');
   const [damageCost, setDamageCost] = useState('');
@@ -526,6 +528,56 @@ export default function OperationsView({
       setMessage('Move-in completed.');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to complete move-in.');
+    } finally { setSaving(false); }
+  };
+
+  const uploadEvidenceFile = async () => {
+    if (!tenantId || !evidenceFile) {
+      setError('Select a tenant and choose a file.');
+      return;
+    }
+    const reportId = evidenceStage === 'move_in' ? moveInReport?.id : moveOutReport?.id;
+    if (!reportId) {
+      setError(`Start the ${evidenceStage === 'move_in' ? 'move-in' : 'move-out'} workflow first.`);
+      return;
+    }
+    if (evidenceFile.size > 2 * 1024 * 1024) {
+      setError('Evidence files are limited to 2 MB in the current development/staging storage mode.');
+      return;
+    }
+
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => reject(new Error('Unable to read the selected file.'));
+        reader.readAsDataURL(evidenceFile);
+      });
+
+      const result = await request<any>('/evidence-storage/upload', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(tenantId),
+          report_id: Number(reportId),
+          stage: evidenceStage,
+          category: evidenceCategory,
+          file_name: evidenceFile.name,
+          mime_type: evidenceFile.type,
+          data_url: dataUrl,
+          note: evidenceNote.trim(),
+        }),
+      });
+
+      setEvidenceFile(null);
+      setEvidenceNote('');
+      setEvidenceUploadMode(result.storage_mode || 'local');
+      const input = document.getElementById('peacely-evidence-file') as HTMLInputElement | null;
+      if (input) input.value = '';
+      await loadTenantOperations(Number(tenantId));
+      setMessage('Evidence uploaded and added to the timeline.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to upload evidence.');
     } finally { setSaving(false); }
   };
 
@@ -1068,11 +1120,27 @@ export default function OperationsView({
                     <option value="fixtures">Fixtures</option>
                     <option value="general">General</option>
                   </select>
-                  <input className="modal-input" placeholder="Approved storage URL" value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} />
-                  <input className="modal-input" placeholder="File name (optional)" value={evidenceFileName} onChange={(e) => setEvidenceFileName(e.target.value)} />
-                  <input className="modal-input" placeholder="MIME type (optional)" value={evidenceMimeType} onChange={(e) => setEvidenceMimeType(e.target.value)} />
+                  <input
+                    id="peacely-evidence-file"
+                    className="modal-input"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,video/mp4,video/webm,application/pdf"
+                    onChange={(e) => setEvidenceFile(e.target.files?.[0] || null)}
+                  />
+                  <div className="small-empty">
+                    {evidenceFile ? `${evidenceFile.name} · ${Math.ceil(evidenceFile.size / 1024)} KB` : 'Upload a photo, short video or PDF. Current development/staging limit: 2 MB.'}
+                  </div>
+                  <button className="btn-primary full-btn" type="button" onClick={uploadEvidenceFile} disabled={saving || !evidenceFile}>
+                    Upload Evidence File
+                  </button>
+                  <div style={{ borderTop: '1px solid var(--card-border)', paddingTop: 10, marginTop: 4 }}>
+                    <strong>External storage reference</strong>
+                    <input className="modal-input" style={{ marginTop: 8 }} placeholder="Approved storage URL" value={evidenceUrl} onChange={(e) => setEvidenceUrl(e.target.value)} />
+                    <input className="modal-input" placeholder="File name (optional)" value={evidenceFileName} onChange={(e) => setEvidenceFileName(e.target.value)} />
+                    <input className="modal-input" placeholder="MIME type (optional)" value={evidenceMimeType} onChange={(e) => setEvidenceMimeType(e.target.value)} />
+                    <button className="btn-secondary full-btn" type="button" onClick={addEvidence} disabled={saving}>Add URL Evidence</button>
+                  </div>
                   <textarea className="modal-input" rows={2} placeholder="Evidence note" value={evidenceNote} onChange={(e) => setEvidenceNote(e.target.value)} />
-                  <button className="btn-secondary full-btn" type="button" onClick={addEvidence} disabled={saving}>Add Evidence</button>
                 </div>
 
                 <div style={{ marginTop: 14 }}>
