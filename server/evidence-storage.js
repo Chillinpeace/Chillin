@@ -12,6 +12,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const STORAGE_ROOT = path.join(__dirname, '..', 'storage', 'evidence');
 const MAX_BYTES = 2 * 1024 * 1024;
+const RETENTION_DAYS = Math.max(Number(process.env.PEACELY_EVIDENCE_RETENTION_DAYS || 0), 0);
 
 const allowedTypes = new Map([
   ['image/jpeg', 'jpg'],
@@ -72,6 +73,23 @@ function storageMode() {
   return env === 'production' ? 'external' : 'local';
 }
 
+function hasValidSignature(mimeType, buffer) {
+  if (mimeType === 'image/jpeg') return buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+  if (mimeType === 'image/png') return buffer.length >= 8 && buffer.subarray(0, 8).equals(Buffer.from([137,80,78,71,13,10,26,10]));
+  if (mimeType === 'application/pdf') return buffer.subarray(0, 5).toString('ascii') === '%PDF-';
+  if (mimeType === 'video/webm') return buffer.length >= 4 && buffer.subarray(0, 4).toString('ascii') === '1A45';
+  if (mimeType === 'video/mp4') return buffer.length >= 12 && buffer.subarray(4, 8).toString('ascii') === 'ftyp';
+  return false;
+}
+
+async function deleteStoredFile(storagePath) {
+  if (!storagePath) return;
+  const root = path.resolve(STORAGE_ROOT);
+  const absolutePath = path.resolve(STORAGE_ROOT, storagePath);
+  if (!absolutePath.startsWith(root + path.sep)) throw new Error('Invalid storage path.');
+  await fs.rm(absolutePath, { force: true });
+}
+
 function decodeDataUrl(value) {
   const input = clean(value);
   const match = input.match(/^data:([^;]+);base64,([A-Za-z0-9+/=\r\n]+)$/);
@@ -80,6 +98,7 @@ function decodeDataUrl(value) {
   if (!allowedTypes.has(mimeType)) return null;
   const buffer = Buffer.from(match[2].replace(/\s/g, ''), 'base64');
   if (!buffer.length || buffer.length > MAX_BYTES) return null;
+  if (!hasValidSignature(mimeType, buffer)) return null;
   return { mimeType, buffer };
 }
 
@@ -96,6 +115,62 @@ async function resolveReport(ownerId, reportId, stage) {
   );
   return result.rows[0] || null;
 }
+
+router.get('/api/evidence-storage/health', requireOwner, async (req, res) => {
+  try {
+    await ensureStorageSchema();
+    const mode = storageMode();
+    if (mode !== 'local') {
+      return res.json({
+        success: true,
+        storage_mode: mode,
+        writable: false,
+        configured: false,
+        message: 'External durable storage adapter is not configured.',
+      });
+    }
+    await fs.mkdir(path.join(STORAGE_ROOT, String(req.owner.id)), { recursive: true });
+    return res.json({
+      success: true,
+      storage_mode: mode,
+      writable: true,
+      configured: true,
+      retention_days: RETENTION_DAYS || null,
+    });
+  } catch (error) {
+    return res.status(503).json({ success: false, error: 'Evidence storage is unavailable.' });
+  }
+});
+
+router.delete('/api/evidence-storage/:evidenceId', requireOwner, async (req, res) => {
+  try {
+    await ensureStorageSchema();
+    const evidenceId = Number(req.params.evidenceId);
+    if (!Number.isInteger(evidenceId) || evidenceId <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid evidence id.' });
+    }
+
+    const current = await query(
+      'SELECT id,tenant_id,property_id,storage_path FROM peacely_evidence WHERE id=$1 AND owner_id=$2 LIMIT 1',
+      [evidenceId, req.owner.id],
+    );
+    if (!current.rows[0]) return res.status(404).json({ success: false, error: 'Evidence not found.' });
+
+    if (storageMode() === 'local') await deleteStoredFile(current.rows[0].storage_path);
+
+    await query('DELETE FROM peacely_evidence WHERE id=$1 AND owner_id=$2', [evidenceId, req.owner.id]);
+    await recordAudit(req.owner.id, 'evidence.deleted', 'evidence', String(evidenceId), {
+      tenantId: current.rows[0].tenant_id,
+      propertyId: current.rows[0].property_id,
+      metadata: { retention_delete: false },
+    });
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error('Evidence delete error:', error);
+    return res.status(500).json({ success: false, error: 'Unable to delete evidence.' });
+  }
+});
 
 router.post('/api/evidence-storage/upload', requireOwner, async (req, res) => {
   try {
