@@ -115,6 +115,16 @@ async function ensureWhatsAppSchema() {
     );
     CREATE INDEX IF NOT EXISTS idx_wa_webhook_events_message
       ON peacely_whatsapp_webhook_events(provider_message_id);
+    CREATE TABLE IF NOT EXISTS peacely_whatsapp_inbound (
+      id BIGSERIAL PRIMARY KEY, event_key VARCHAR(500) NOT NULL UNIQUE, owner_id INTEGER,
+      tenant_id INTEGER, property_id INTEGER, provider_message_id VARCHAR(255) DEFAULT '',
+      from_phone VARCHAR(30) NOT NULL DEFAULT '', message_type VARCHAR(40) NOT NULL DEFAULT 'text',
+      message_text TEXT DEFAULT '', intent VARCHAR(60) NOT NULL DEFAULT 'unknown',
+      intent_confidence VARCHAR(20) NOT NULL DEFAULT 'low', status VARCHAR(30) NOT NULL DEFAULT 'received',
+      raw_metadata JSONB DEFAULT '{}'::jsonb, received_at TIMESTAMPTZ, created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_wa_inbound_owner_created ON peacely_whatsapp_inbound(owner_id, created_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_wa_inbound_tenant_created ON peacely_whatsapp_inbound(tenant_id, created_at DESC);
   `);
 }
 
@@ -180,6 +190,45 @@ async function applyWhatsAppStatus({ providerMessageId, status, errorText = '', 
   }
 
   return { processed: true, notification_id: notification.id, status: normalizedStatus };
+}
+
+function normalizeInboundPhone(value) {
+  let phone = String(value || '').replace(/[^0-9]/g, '');
+  if (phone.startsWith('91') && phone.length === 12) return phone;
+  if (phone.length === 10) return '91' + phone;
+  return phone;
+}
+
+function classifyInboundMessage(message) {
+  const text = clean(message).toLowerCase();
+  if (!text) return { intent: 'unknown', confidence: 'low' };
+  if (/(ac|air.?condition|fan|light|switch|geyser|water|plumb|leak|broken|repair|maintenance|not working|काम नहीं|खराब|लीक|मरम्मत|ಕೆಲಸ ಮಾಡುತ್ತಿಲ್ಲ|ರಿಪೇರಿ)/i.test(text)) return { intent: 'maintenance_request', confidence: 'high' };
+  if (/(rent|payment|paid|pay|upi|receipt|भाड़ा|किराया|पेमेंट|भुगतान|पैसे|ಬಾಡಿಗೆ|ಪಾವತಿ)/i.test(text)) return { intent: 'payment_question', confidence: 'medium' };
+  if (/(agreement|contract|document|कॉन्ट्रैक्ट|एग्रीमेंट|दस्तावेज|ಒಪ್ಪಂದ|ಡಾಕ್ಯುಮೆಂಟ್)/i.test(text)) return { intent: 'agreement_question', confidence: 'medium' };
+  if (/(move.?out|vacate|notice|छोड़|खाली|ನೋಟಿಸ್|ಖಾಲಿ)/i.test(text)) return { intent: 'move_out_request', confidence: 'medium' };
+  if (/(help|owner|manager|complaint|issue|problem|मदद|शिकायत|समस्या|ಸಹಾಯ|ದೂರು|ಸಮಸ್ಯೆ)/i.test(text)) return { intent: 'support_request', confidence: 'low' };
+  return { intent: 'unknown', confidence: 'low' };
+}
+
+async function resolveInboundTenant(phone) {
+  const normalized = normalizeInboundPhone(phone);
+  if (!normalized) return { status: 'unmatched', tenant: null };
+  const alternate = normalized.startsWith('91') ? normalized.slice(2) : normalized;
+  const result = await query("SELECT t.id AS tenant_id,t.name,t.phone,t.property_id,p.owner_id,p.name AS property_name FROM tenants t INNER JOIN properties p ON p.id=t.property_id WHERE regexp_replace(COALESCE(t.phone,''),'[^0-9]','','g') IN ($1,$2) LIMIT 20", [normalized, alternate]);
+  if (result.rows.length === 1) return { status: 'matched', tenant: result.rows[0] };
+  if (!result.rows.length) return { status: 'unmatched', tenant: null };
+  return { status: 'ambiguous', tenant: null };
+}
+
+async function recordInboundMessage({ eventKey, providerMessageId, fromPhone, messageType, messageText, metadata, receivedAt }) {
+  await ensureWhatsAppSchema();
+  const resolved = await resolveInboundTenant(fromPhone);
+  const classification = classifyInboundMessage(messageText);
+  const tenant = resolved.tenant;
+  const result = await query("INSERT INTO peacely_whatsapp_inbound (event_key,owner_id,tenant_id,property_id,provider_message_id,from_phone,message_type,message_text,intent,intent_confidence,status,raw_metadata,received_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb,$13) ON CONFLICT(event_key) DO NOTHING RETURNING id", [eventKey, tenant?.owner_id || null, tenant?.tenant_id || null, tenant?.property_id || null, clean(providerMessageId), normalizeInboundPhone(fromPhone), clean(messageType) || 'text', clean(messageText), classification.intent, classification.confidence, resolved.status, JSON.stringify(metadata || {}), receivedAt ? new Date(receivedAt) : null]);
+  if (!result.rows.length) return { duplicate: true, status: resolved.status };
+  if (tenant) await query("INSERT INTO peacely_audit_log (owner_id,actor_type,actor_id,action,entity_type,entity_id,tenant_id,property_id,metadata,environment) VALUES($1,'system','meta-whatsapp','whatsapp.inbound_received','whatsapp_inbound',$2,$3,$4,$5::jsonb,$6)", [tenant.owner_id, String(result.rows[0].id), tenant.tenant_id, tenant.property_id, JSON.stringify({ provider_message_id: providerMessageId, intent: classification.intent, confidence: classification.confidence }), mode() === 'live' ? 'production' : 'development']).catch((error) => console.error('WhatsApp inbound audit failed:', error));
+  return { duplicate: false, inbound_id: result.rows[0].id, status: resolved.status, tenant_id: tenant?.tenant_id || null, owner_id: tenant?.owner_id || null, intent: classification.intent, confidence: classification.confidence };
 }
 
 async function tenantForOwner(ownerId, tenantId) {
@@ -299,7 +348,18 @@ router.post('/webhooks/whatsapp', async (req, res) => {
         const providerMessageId = clean(status?.id);
         const deliveryStatus = clean(status?.status).toLowerCase();
         if (!providerMessageId || !deliveryStatus) continue;
-        const errors = Array.isArray(status?.errors) ? status.errors : [];
+        const inboundResults = [];
+      for (const message of Array.isArray(value.messages) ? value.messages : []) {
+        const providerMessageId = clean(message?.id);
+        const fromPhone = clean(message?.from);
+        const messageType = clean(message?.type) || 'unknown';
+        const messageText = messageType === 'text' ? clean(message?.text?.body) : messageType === 'button' ? clean(message?.button?.text) : messageType === 'interactive' ? clean(message?.interactive?.button_reply?.title || message?.interactive?.list_reply?.title) : '';
+        const eventKey = ['inbound', providerMessageId, clean(message?.timestamp), fromPhone].join('|');
+        const inbound = await recordInboundMessage({ eventKey, providerMessageId, fromPhone, messageType, messageText, metadata: { display_phone_number: clean(value?.metadata?.display_phone_number), phone_number_id: clean(value?.metadata?.phone_number_id), contact_name: clean(value?.contacts?.[0]?.profile?.name) }, receivedAt: message?.timestamp ? Number(message.timestamp) * 1000 : null });
+        inboundResults.push(inbound);
+      }
+
+      const errors = Array.isArray(status?.errors) ? status.errors : [];
         const errorText = errors.map((item) => clean(item?.title || item?.message || item?.code)).filter(Boolean).join('; ');
         const eventKey = [providerMessageId, deliveryStatus, clean(status?.timestamp), clean(entry?.id)].join('|');
         const result = await applyWhatsAppStatus({ providerMessageId, status: deliveryStatus, errorText, eventAt: status?.timestamp ? Number(status.timestamp) * 1000 : null, eventKey });
@@ -309,7 +369,7 @@ router.post('/webhooks/whatsapp', async (req, res) => {
       }
     }
   }
-  return res.status(200).json({ success: true, processed, duplicates, unmatched });
+  return res.status(200).json({ success: true, processed, duplicates, unmatched, inbound: inboundResults });
 });
 
 router.get('/whatsapp/status', auth, async (req, res) => {
