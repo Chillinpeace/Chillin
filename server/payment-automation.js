@@ -824,7 +824,29 @@ router.post('/payment-automation/invoices/:id/mark-paid', auth, async (req, res)
   }
 });
 
-router.post('/payment-automation/pay/:token/cashfree-order', async (req, res) => {\n  const token=clean(req.params.token); if(!token) return res.status(404).json({success:false,error:'Payment request not found.'});\n  await ensurePaymentColumns();\n  const result=await query('SELECT id FROM invoices WHERE payment_token=$1 LIMIT 1',[token]);\n  if(!result.rows.length) return res.status(404).json({success:false,error:'Payment request not found.'});\n  try{return res.json({success:true,provider:'cashfree',...(await createCashfreeOrderForInvoice(result.rows[0].id,token))});}\n  catch(error){return res.status(400).json({success:false,error:error.message||'Unable to create Cashfree payment.'});}\n});\n\nrouter.get('/payment-automation/pay/:token', async (req, res) => {
+router.post('/payment-automation/pay/:token/cashfree-order', async (req, res) => {
+  const token = clean(req.params.token);
+  if (!token) return res.status(404).json({ success: false, error: 'Payment request not found.' });
+
+  await ensurePaymentColumns();
+  const result = await query(
+    'SELECT id FROM invoices WHERE payment_token=$1 LIMIT 1',
+    [token],
+  );
+  if (!result.rows.length) {
+    return res.status(404).json({ success: false, error: 'Payment request not found.' });
+  }
+
+  try {
+    const order = await createCashfreeOrderForInvoice(result.rows[0].id, token);
+    return res.json({ success: true, provider: 'cashfree', ...order });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      error: error.message || 'Unable to create Cashfree payment.',
+    });
+  }
+});\n\nrouter.get('/payment-automation/pay/:token', async (req, res) => {
   const token = clean(req.params.token);
   if (!token) return res.status(404).end();
 
