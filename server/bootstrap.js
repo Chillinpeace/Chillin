@@ -21,6 +21,7 @@ import maintenanceWorkflowRouter from './maintenance-workflow.js';
 import tenantComplianceRouter from './tenant-compliance.js';
 import ownerHandoverRouter from './owner-handover.js';
 import auditTrailRouter from './audit-trail.js';
+import evidenceStorageRouter from './evidence-storage.js';
 
 const { Client } = pg;
 const originalQuery = Client.prototype.query;
@@ -165,6 +166,7 @@ express.application.use = function patchedUse(...args) {
     originalUse.call(this, '/api', tenantComplianceRouter);
     originalUse.call(this, '/api', ownerHandoverRouter);
     originalUse.call(this, '/api', auditTrailRouter);
+    originalUse.call(this, '/api', evidenceStorageRouter);
     phaseRoutersMounted = true;
   }
   return result;
