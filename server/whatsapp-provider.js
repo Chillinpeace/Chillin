@@ -216,6 +216,24 @@ router.get('/whatsapp/status', auth, async (req, res) => {
   });
 });
 
+router.get('/whatsapp/notifications', auth, async (req, res) => {
+  await ensureWhatsAppSchema();
+  const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+  const result = await query(
+    `SELECT n.id,n.tenant_id,n.invoice_id,n.channel,n.type,n.recipient,n.message,n.status,
+            n.provider_message_id,n.provider_status,n.provider_error,n.sent_at,n.created_at,
+            t.name AS tenant_name
+     FROM notifications n
+     LEFT JOIN tenants t ON t.id=n.tenant_id
+     WHERE n.owner_id=$1
+       AND n.channel='whatsapp'
+     ORDER BY n.created_at DESC
+     LIMIT $2`,
+    [req.whatsappOwner.id, limit],
+  );
+  return res.json({ success: true, notifications: result.rows });
+});
+
 router.post('/whatsapp/send', auth, async (req, res) => {
   await ensureWhatsAppSchema();
 
