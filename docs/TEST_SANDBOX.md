@@ -86,6 +86,8 @@ Operational controls:
 Provider status:
 
 - `GET /api/whatsapp/status`
+- `GET /api/whatsapp/notifications?limit=50`
+- `GET /api/whatsapp/inbound?limit=50` — owner-scoped tenant inbox.
 - `POST /api/whatsapp/send`
 - `GET /api/webhooks/whatsapp` — Meta webhook verification challenge.
 - `POST /api/webhooks/whatsapp` — signed Meta delivery-status webhook.
@@ -104,3 +106,8 @@ Sandbox delivery testing:
 - Simulate `sent`, `delivered`, `read`, or `failed`; the notification history is updated exactly as a provider lifecycle event would be.
 
 The send endpoint is owner-scoped to the selected tenant and writes a notification record with the provider message ID/status. Mock sends return a simulated provider ID and never call Meta.
+
+
+## Inbound tenant messages
+
+Meta inbound messages are stored in `peacely_whatsapp_inbound` after signature verification. Peacely resolves the sender phone to exactly one owner tenant; unmatched or ambiguous senders are retained without assigning them to an owner. Text messages receive a conservative intent classification such as maintenance_request, payment_question, agreement_question, move_out_request, support_request, or unknown. Classification does not execute an action automatically.
