@@ -163,7 +163,7 @@ async function applyWhatsAppStatus({ providerMessageId, status, errorText = '', 
 
   const currentRank = webhookStatusRank[clean(notification.provider_status).toLowerCase()] ?? 0;
   const incomingRank = webhookStatusRank[normalizedStatus];
-  if (incomingRank < currentRank || (currentRank === 99 && incomingRank !== 99)) {
+  if (currentRank === 99 || incomingRank < currentRank) {
     return { processed: true, ignored: true, notification_id: notification.id };
   }
 
