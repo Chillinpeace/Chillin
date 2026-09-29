@@ -151,6 +151,10 @@ export default function OperationsView({
   const [damageCategory, setDamageCategory] = useState('general');
   const [damageDescription, setDamageDescription] = useState('');
   const [damageCost, setDamageCost] = useState('');
+  const [agreements, setAgreements] = useState<any[]>([]);
+  const [agreementProviderMode, setAgreementProviderMode] = useState('mock');
+  const [agreementTemplate, setAgreementTemplate] = useState('pg');
+  const [agreementTitle, setAgreementTitle] = useState('Peacely PG Agreement');
 
   const [settlement, setSettlement] = useState({
     rent_outstanding: '',
@@ -173,18 +177,21 @@ export default function OperationsView({
     setLoading(true);
     setError('');
     try {
-      const [p, mi, mo, c, d] = await Promise.all([
+      const [p, mi, mo, c, d, a] = await Promise.all([
         request<{ passport: Passport }>(`/tenant-passport/${id}`),
         request<any>(`/move-in/${id}`),
         request<any>(`/move-out/${id}`),
         request<any>(`/tenant-compliance/${id}`),
         request<any>(`/damage-evidence/${id}`),
+        request<any>(`/agreements/${id}`),
       ]);
       setPassport(p.passport);
       setMoveIn(mi);
       setMoveOut(mo);
       setTenantCompliance(c);
       setDamageEvidence(d);
+      setAgreements(a.agreements || []);
+      setAgreementProviderMode(a.provider_mode || 'mock');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to load tenant operations.');
     } finally {
@@ -226,6 +233,8 @@ export default function OperationsView({
       setMoveOut(null);
       setTenantCompliance(null);
       setDamageEvidence(null);
+      setAgreements([]);
+      setAgreementProviderMode('mock');
     }
   }, [tenantId]);
 
@@ -363,6 +372,44 @@ export default function OperationsView({
       await loadTenantOperations(Number(tenantId));
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unable to record acknowledgement.');
+    } finally { setSaving(false); }
+  };
+
+  const createAgreement = async () => {
+    if (!tenantId) {
+      setError('Select a tenant first.');
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request('/agreements', {
+        method: 'POST',
+        body: JSON.stringify({
+          tenant_id: Number(tenantId),
+          template_type: agreementTemplate,
+          title: agreementTitle.trim() || 'Peacely Agreement',
+        }),
+      });
+      await loadTenantOperations(Number(tenantId));
+      setMessage('Agreement draft created.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to create agreement.');
+    } finally { setSaving(false); }
+  };
+
+  const signAgreement = async (agreement: any, party: 'owner' | 'tenant') => {
+    const label = party === 'owner' ? 'owner' : 'tenant';
+    if (!window.confirm('Record the ' + label + ' signature in the current ' + agreementProviderMode + ' environment?')) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const result = await request<any>(`/agreements/${agreement.id}/sign`, {
+        method: 'POST',
+        body: JSON.stringify({ party }),
+      });
+      await loadTenantOperations(Number(tenantId));
+      setMessage(result.message || 'Signature status updated.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to update agreement signature.');
     } finally { setSaving(false); }
   };
 
@@ -699,6 +746,57 @@ export default function OperationsView({
                     </button>
                   </>
                 ) : <div className="small-empty">No move-out report yet.</div>}
+              </Card>
+
+              <Card>
+                <div className="section-heading">
+                  <div>
+                    <h3>Agreement & E-Sign</h3>
+                    <p>Create an agreement draft and track both signature parties.</p>
+                  </div>
+                  <Pill value={agreementProviderMode} />
+                </div>
+                {agreementProviderMode === 'mock' && (
+                  <div className="small-empty" style={{ marginBottom: 10 }}>
+                    Test mode: signatures are simulated and are not legal e-signatures.
+                  </div>
+                )}
+                {agreementProviderMode === 'live' && (
+                  <div className="small-empty" style={{ marginBottom: 10 }}>
+                    Live e-sign is not connected. Peacely will fail closed instead of claiming a legal signature.
+                  </div>
+                )}
+                <div style={{ display: 'grid', gap: 8 }}>
+                  <select className="modal-input" value={agreementTemplate} onChange={(e) => setAgreementTemplate(e.target.value)}>
+                    <option value="pg">PG Agreement</option>
+                    <option value="rental">Rental Agreement</option>
+                    <option value="custom">Custom Agreement</option>
+                  </select>
+                  <input className="modal-input" value={agreementTitle} onChange={(e) => setAgreementTitle(e.target.value)} placeholder="Agreement title" />
+                  <button className="btn-primary full-btn" type="button" onClick={createAgreement} disabled={saving}>Create Agreement Draft</button>
+                </div>
+                <div style={{ marginTop: 14 }}>
+                  {(agreements || []).map((agreement: any) => (
+                    <div className="history-row" key={agreement.id}>
+                      <div>
+                        <strong>{agreement.title}</strong>
+                        <span>{String(agreement.template_type || '').toUpperCase()} · Created {dateText(agreement.created_at)}</span>
+                        <span>Owner: {agreement.owner_signed_at ? 'Signed' : 'Pending'} · Tenant: {agreement.tenant_signed_at ? 'Signed' : 'Pending'}</span>
+                        {agreement.provider_reference ? <span>Reference: {agreement.provider_reference}</span> : null}
+                      </div>
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                        <Pill value={agreement.status} />
+                        {agreement.status !== 'signed' && (
+                          <>
+                            {!agreement.owner_signed_at && <button className="btn-secondary" type="button" onClick={() => signAgreement(agreement, 'owner')} disabled={saving}>Sign as Owner</button>}
+                            {!agreement.tenant_signed_at && <button className="btn-secondary" type="button" onClick={() => signAgreement(agreement, 'tenant')} disabled={saving}>Sign as Tenant</button>}
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                  {!agreements.length && <div className="small-empty">No agreements created for this tenant yet.</div>}
+                </div>
               </Card>
 
               <Card>
