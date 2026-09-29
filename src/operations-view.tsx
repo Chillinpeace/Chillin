@@ -117,7 +117,7 @@ export default function OperationsView({
   tenants: Tenant[];
   properties: Property[];
 }) {
-  const [section, setSection] = useState<'tenant' | 'property' | 'maintenance' | 'incidents'>('tenant');
+  const [section, setSection] = useState<'tenant' | 'property' | 'handover' | 'maintenance' | 'incidents'>('tenant');
   const [tenantId, setTenantId] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const [passport, setPassport] = useState<Passport | null>(null);
@@ -177,6 +177,16 @@ export default function OperationsView({
     other_charges: '',
   });
 
+  const [handovers, setHandovers] = useState<any[]>([]);
+  const [selectedHandover, setSelectedHandover] = useState<any>(null);
+  const [handoverAcknowledgements, setHandoverAcknowledgements] = useState<any[]>([]);
+  const [handoverCurrentOwnerName, setHandoverCurrentOwnerName] = useState('');
+  const [handoverCurrentOwnerContact, setHandoverCurrentOwnerContact] = useState('');
+  const [handoverNewOwnerName, setHandoverNewOwnerName] = useState('');
+  const [handoverNewOwnerContact, setHandoverNewOwnerContact] = useState('');
+  const [handoverDate, setHandoverDate] = useState(new Date().toISOString().slice(0, 10));
+  const [handoverNotes, setHandoverNotes] = useState('');
+
   const selectedTenant = useMemo(
     () => tenants.find((t) => Number(t.id) === Number(tenantId)) || null,
     [tenants, tenantId],
@@ -224,6 +234,118 @@ export default function OperationsView({
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadHandovers = async (id = Number(propertyId)) => {
+    if (!id) {
+      setHandovers([]);
+      setSelectedHandover(null);
+      setHandoverAcknowledgements([]);
+      return;
+    }
+    setLoading(true); setError('');
+    try {
+      const result = await request<{ handovers: any[] }>(`/owner-handover?property_id=${id}`);
+      setHandovers(result.handovers || []);
+      if (selectedHandover && !result.handovers?.some((item) => Number(item.id) === Number(selectedHandover.id))) {
+        setSelectedHandover(null);
+        setHandoverAcknowledgements([]);
+      }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load owner handovers.');
+    } finally { setLoading(false); }
+  };
+
+  const loadHandoverDetail = async (id: number) => {
+    setLoading(true); setError('');
+    try {
+      const result = await request<{ handover: any; acknowledgements: any[] }>(`/owner-handover/${id}`);
+      setSelectedHandover(result.handover);
+      setHandoverAcknowledgements(result.acknowledgements || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load handover details.');
+    } finally { setLoading(false); }
+  };
+
+  const createHandover = async () => {
+    if (!propertyId || !handoverNewOwnerName.trim()) {
+      setError('Select a property and enter the new owner/manager name.');
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const result = await request<any>('/owner-handover', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(propertyId),
+          current_owner_name: handoverCurrentOwnerName.trim(),
+          current_owner_contact: handoverCurrentOwnerContact.trim(),
+          new_owner_name: handoverNewOwnerName.trim(),
+          new_owner_contact: handoverNewOwnerContact.trim(),
+          handover_date: handoverDate,
+          notes: handoverNotes.trim(),
+        }),
+      });
+      setSelectedHandover(result.handover);
+      setHandoverAcknowledgements([]);
+      await loadHandovers(Number(propertyId));
+      setMessage('Owner handover created with a fresh property snapshot.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to create owner handover.');
+    } finally { setSaving(false); }
+  };
+
+  const acknowledgeHandover = async (party: 'current_owner' | 'new_owner') => {
+    if (!selectedHandover) return;
+    const defaultName = party === 'current_owner'
+      ? selectedHandover.current_owner_name
+      : selectedHandover.new_owner_name;
+    const name = window.prompt(
+      party === 'current_owner' ? 'Confirm current owner name' : 'Confirm new owner / manager name',
+      defaultName || '',
+    );
+    if (!name?.trim()) return;
+    const note = window.prompt('Optional acknowledgement note', '') ?? '';
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request(`/owner-handover/${selectedHandover.id}/acknowledge`, {
+        method: 'POST',
+        body: JSON.stringify({
+          party,
+          acknowledged_by: name.trim(),
+          note: note.trim(),
+        }),
+      });
+      await loadHandoverDetail(Number(selectedHandover.id));
+      await loadHandovers(Number(propertyId));
+      setMessage(party === 'current_owner'
+        ? 'Current owner acknowledgement recorded.'
+        : 'New owner/manager acknowledgement recorded.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to record acknowledgement.');
+    } finally { setSaving(false); }
+  };
+
+  const updateHandoverStatus = async (status: string) => {
+    if (!selectedHandover) return;
+    if (status === 'completed' && !window.confirm('Complete this handover? The backend will require both acknowledgement records.')) return;
+    setSaving(true); setError(''); setMessage('');
+    try {
+      const result = await request<any>(`/owner-handover/${selectedHandover.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      setSelectedHandover(result.handover);
+      await loadHandovers(Number(propertyId));
+      setMessage(`Handover marked ${status.replace(/_/g, ' ')}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to update handover status.');
+    } finally { setSaving(false); }
+  };
+
+  const printHandoverReport = () => {
+    if (!selectedHandover) return;
+    window.print();
   };
 
   const loadMaintenance = async () => {
@@ -359,7 +481,12 @@ export default function OperationsView({
   useEffect(() => {
     if (section === 'incidents') loadIncidents();
     if (section === 'maintenance') loadMaintenance();
+    if (section === 'handover') loadHandovers(Number(propertyId));
   }, [section]);
+
+  useEffect(() => {
+    if (section === 'handover' && propertyId) loadHandovers(Number(propertyId));
+  }, [propertyId, section]);
 
   const startMoveIn = async () => {
     if (!tenantId) return;
@@ -725,10 +852,11 @@ export default function OperationsView({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 12 }}>
         {[
           ['tenant', '🪪 Tenant'],
           ['property', '🏠 Property'],
+          ['handover', '🔄 Handover'],
           ['maintenance', '🔧 Maintenance'],
           ['incidents', '🚨 Incidents'],
         ].map(([key, label]) => (
@@ -1128,6 +1256,195 @@ export default function OperationsView({
                   <div className="detail-item"><span>Incidents</span><strong>{propertyPassport.operations?.incidents?.length || 0}</strong></div>
                   <div className="detail-item"><span>Expenses</span><strong>{money(propertyPassport.financials?.total_expenses)}</strong></div>
                 </div>
+              </Card>
+            </>
+          )}
+        </>
+      )}
+
+
+      {section === 'handover' && (
+        <>
+          <Card>
+            <div className="section-heading">
+              <div>
+                <h3>Owner Handover</h3>
+                <p>Create a point-in-time property snapshot, record both sides' acknowledgement, and close the handover with an audit trail.</p>
+              </div>
+              <Pill value={selectedHandover?.status || 'not_started'} />
+            </div>
+
+            <div style={{ display: 'grid', gap: 8 }}>
+              <select
+                className="modal-input"
+                value={propertyId}
+                onChange={(e) => {
+                  setPropertyId(e.target.value);
+                  setSelectedHandover(null);
+                  setHandoverAcknowledgements([]);
+                }}
+              >
+                <option value="">Select property</option>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>{property.name}</option>
+                ))}
+              </select>
+
+              <input className="modal-input" placeholder="Current owner name" value={handoverCurrentOwnerName} onChange={(e) => setHandoverCurrentOwnerName(e.target.value)} />
+              <input className="modal-input" placeholder="Current owner contact" value={handoverCurrentOwnerContact} onChange={(e) => setHandoverCurrentOwnerContact(e.target.value)} />
+              <input className="modal-input" placeholder="New owner / manager name" value={handoverNewOwnerName} onChange={(e) => setHandoverNewOwnerName(e.target.value)} />
+              <input className="modal-input" placeholder="New owner / manager contact" value={handoverNewOwnerContact} onChange={(e) => setHandoverNewOwnerContact(e.target.value)} />
+              <input className="modal-input" type="date" value={handoverDate} onChange={(e) => setHandoverDate(e.target.value)} />
+              <textarea className="modal-input" rows={3} placeholder="Handover notes" value={handoverNotes} onChange={(e) => setHandoverNotes(e.target.value)} />
+              <button className="btn-primary full-btn" type="button" onClick={createHandover} disabled={saving || !propertyId || !handoverNewOwnerName.trim()}>
+                Create Handover & Capture Snapshot
+              </button>
+            </div>
+          </Card>
+
+          <Card>
+            <div className="section-heading">
+              <div>
+                <h3>Handover Records</h3>
+                <p>Select a record to review its property, tenants, finances, operations and compliance snapshot.</p>
+              </div>
+              {propertyId && <button className="btn-secondary" type="button" onClick={() => loadHandovers(Number(propertyId))} disabled={loading}>Refresh</button>}
+            </div>
+
+            {!propertyId ? (
+              <div className="small-empty">Select a property to load handover records.</div>
+            ) : loading ? (
+              <div className="small-empty">Loading handovers…</div>
+            ) : !handovers.length ? (
+              <div className="small-empty">No handovers recorded for this property.</div>
+            ) : (
+              handovers.map((handover) => (
+                <button
+                  key={handover.id}
+                  type="button"
+                  className="history-row"
+                  style={{ width: '100%', textAlign: 'left', border: 0, background: 'transparent', cursor: 'pointer' }}
+                  onClick={() => loadHandoverDetail(Number(handover.id))}
+                >
+                  <div>
+                    <strong>{handover.new_owner_name || 'New owner / manager'}</strong>
+                    <span>{dateText(handover.handover_date)} · Created {dateText(handover.created_at)}</span>
+                  </div>
+                  <Pill value={handover.status || 'draft'} />
+                </button>
+              ))
+            )}
+          </Card>
+
+          {selectedHandover && (
+            <>
+              <Card>
+                <div className="section-heading">
+                  <div>
+                    <h3>Handover Snapshot</h3>
+                    <p>Captured when this handover was created. This is a record of the property state at that point in time.</p>
+                  </div>
+                  <button className="btn-secondary" type="button" onClick={printHandoverReport}>Print / Save PDF</button>
+                </div>
+
+                <div className="detail-grid">
+                  <div className="detail-item"><span>Property</span><strong>{selectedHandover.property_snapshot?.property?.name || selectedProperty?.name || '-'}</strong></div>
+                  <div className="detail-item"><span>Handover date</span><strong>{dateText(selectedHandover.handover_date)}</strong></div>
+                  <div className="detail-item"><span>Current owner</span><strong>{selectedHandover.current_owner_name || '-'}</strong></div>
+                  <div className="detail-item"><span>New owner / manager</span><strong>{selectedHandover.new_owner_name || '-'}</strong></div>
+                  <div className="detail-item"><span>Rooms</span><strong>{selectedHandover.property_snapshot?.structure?.room_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Beds</span><strong>{selectedHandover.property_snapshot?.structure?.bed_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Occupied beds</span><strong>{selectedHandover.property_snapshot?.structure?.occupied_beds ?? 0}</strong></div>
+                  <div className="detail-item"><span>Vacant beds</span><strong>{selectedHandover.property_snapshot?.structure?.vacant_beds ?? 0}</strong></div>
+                  <div className="detail-item"><span>Active tenants</span><strong>{selectedHandover.tenant_snapshot?.active_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Collected</span><strong>{money(selectedHandover.financial_snapshot?.collected_total)}</strong></div>
+                  <div className="detail-item"><span>Outstanding</span><strong>{money(selectedHandover.financial_snapshot?.outstanding_total)}</strong></div>
+                  <div className="detail-item"><span>Expenses</span><strong>{money(selectedHandover.financial_snapshot?.expense_total)}</strong></div>
+                </div>
+
+                {selectedHandover.notes && (
+                  <div className="small-empty" style={{ marginTop: 10 }}>
+                    <strong>Notes:</strong> {selectedHandover.notes}
+                  </div>
+                )}
+              </Card>
+
+              <Card>
+                <h3>Operational Snapshot</h3>
+                <div className="detail-grid" style={{ marginTop: 10 }}>
+                  <div className="detail-item"><span>Maintenance</span><strong>{selectedHandover.maintenance_snapshot?.maintenance_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Open maintenance</span><strong>{selectedHandover.maintenance_snapshot?.open_maintenance_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Incidents</span><strong>{selectedHandover.maintenance_snapshot?.incident_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Open incidents</span><strong>{selectedHandover.maintenance_snapshot?.open_incident_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Compliance items</span><strong>{selectedHandover.compliance_snapshot?.count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Compliance critical</span><strong>{selectedHandover.compliance_snapshot?.critical_count ?? 0}</strong></div>
+                  <div className="detail-item"><span>Compliance attention</span><strong>{selectedHandover.compliance_snapshot?.attention_count ?? 0}</strong></div>
+                </div>
+              </Card>
+
+              <Card>
+                <div className="section-heading">
+                  <div>
+                    <h3>Two-Sided Acknowledgement</h3>
+                    <p>Both acknowledgement records are required by the backend before this handover can be marked completed.</p>
+                  </div>
+                </div>
+
+                <div className="detail-grid">
+                  {(['current_owner', 'new_owner'] as const).map((party) => {
+                    const ack = handoverAcknowledgements.find((item) => item.party === party);
+                    return (
+                      <div className="glass-card" key={party} style={{ marginBottom: 0 }}>
+                        <strong>{party === 'current_owner' ? 'Current owner' : 'New owner / manager'}</strong>
+                        <div style={{ marginTop: 8 }}><Pill value={ack ? 'acknowledged' : 'pending'} /></div>
+                        {ack && <div className="small-empty" style={{ marginTop: 8 }}>{ack.acknowledged_by}<br />{dateText(ack.acknowledged_at)}</div>}
+                        {!ack && (
+                          <button className="btn-secondary full-btn" type="button" style={{ marginTop: 8 }} onClick={() => acknowledgeHandover(party)} disabled={saving}>
+                            Record Acknowledgement
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 12 }}>
+                  <select
+                    className="modal-input"
+                    style={{ flex: 1, minWidth: 180, margin: 0 }}
+                    value={selectedHandover.status || 'ready'}
+                    onChange={(e) => updateHandoverStatus(e.target.value)}
+                    disabled={saving}
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="ready">Ready</option>
+                    <option value="acknowledged">Acknowledged</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                  <button className="btn-primary" type="button" onClick={() => updateHandoverStatus('completed')} disabled={saving || selectedHandover.status === 'completed'}>
+                    {selectedHandover.status === 'completed' ? 'Completed' : 'Complete Handover'}
+                  </button>
+                </div>
+
+                <div className="small-empty" style={{ marginTop: 10 }}>
+                  <strong>Important:</strong> Peacely records the acknowledgement entries you submit; the current session is not a separate legal identity provider for the new owner/manager.
+                </div>
+              </Card>
+
+              <Card>
+                <h3>Tenant Snapshot</h3>
+                {(selectedHandover.tenant_snapshot?.records || []).length ? (
+                  selectedHandover.tenant_snapshot.records.map((tenant: any) => (
+                    <div className="history-row" key={tenant.id}>
+                      <div>
+                        <strong>{tenant.name}</strong>
+                        <span>{tenant.phone || '-'} · Rent {money(tenant.monthly_rent)} · Deposit {money(tenant.deposit_amount)}</span>
+                      </div>
+                      <Pill value={tenant.status || 'active'} />
+                    </div>
+                  ))
+                ) : <div className="small-empty">No tenant records in this snapshot.</div>}
               </Card>
             </>
           )}
