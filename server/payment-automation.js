@@ -2,6 +2,7 @@ import express from 'express';
 import crypto from 'crypto';
 import PDFDocument from 'pdfkit';
 import { pool, query } from './database.js';
+import { sendWhatsAppMessage, whatsappMode } from './whatsapp-provider.js';
 
 const router = express.Router();
 const SESSION_COOKIE = 'peacely_session';
@@ -636,15 +637,53 @@ async function sendDueReminderIfNeeded(invoice, settings) {
   const paymentPageUrl = `${baseUrl()}/api/payment-automation/pay/${paymentToken}`;
   const manualMessage = `Hello ${invoice.tenant_name}, your rent of ₹${num(invoice.amount).toLocaleString('en-IN')} is due on ${invoice.due_date}. Pay directly to the property owner here: ${paymentPageUrl}`;
 
-  await query(
+  const notificationResult = await query(
     `INSERT INTO notifications(owner_id,tenant_id,invoice_id,channel,type,recipient,message,status,sent_at)
      SELECT p.owner_id,$1,$2,'whatsapp',$3,$4,$5,'ready',NULL
      FROM properties p
      INNER JOIN tenants t ON t.property_id=p.id
      WHERE t.id=$1
-     LIMIT 1`,
+     LIMIT 1
+     RETURNING id,owner_id`,
     [invoice.tenant_id, invoice.id, reminderType, normalizePhone(invoice.phone), manualMessage],
   );
+
+  const automationEnabled =
+    clean(process.env.PEACELY_WHATSAPP_AUTOMATION_ENABLED).toLowerCase() === 'true';
+  const templateName = clean(process.env.PEACELY_WHATSAPP_REMINDER_TEMPLATE);
+
+  // Automatic production sending is deliberately opt-in and template-based.
+  // Without an approved template, the notification stays "ready" for manual sending.
+  if (automationEnabled && templateName && notificationResult.rows.length) {
+    try {
+      const languageCode = clean(process.env.PEACELY_WHATSAPP_REMINDER_LANGUAGE || 'en');
+      const sendResult = await sendWhatsAppMessage({
+        to: invoice.phone,
+        text: manualMessage,
+        templateName,
+        languageCode,
+        parameters: [
+          invoice.tenant_name,
+          `₹${num(invoice.amount).toLocaleString('en-IN')}`,
+          formatDate(invoice.due_date),
+          paymentPageUrl,
+        ],
+      });
+
+      await query(
+        `UPDATE notifications
+         SET status='sent',provider_message_id=$1,provider_status='accepted',sent_at=CURRENT_TIMESTAMP
+         WHERE id=$2`,
+        [sendResult.messageId, notificationResult.rows[0].id],
+      );
+    } catch (error) {
+      console.error(`WhatsApp automation failed for invoice ${invoice.id}:`, error.message);
+      await query(
+        `UPDATE notifications SET status='ready',provider_status='failed',provider_error=$1 WHERE id=$2`,
+        [String(error.message || 'WhatsApp send failed').slice(0, 1000), notificationResult.rows[0].id],
+      );
+    }
+  }
 
   return true;
 }
