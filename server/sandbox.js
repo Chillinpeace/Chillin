@@ -239,6 +239,22 @@ router.post('/api/sandbox/verification', requireOwner, asyncHandler(async (req, 
 }));
 
 async function applyWhatsAppStatusForSandbox(ownerId, notificationId, messageId, outcome, eventKey) {
+  await query(`
+    CREATE TABLE IF NOT EXISTS peacely_whatsapp_webhook_events (
+      id BIGSERIAL PRIMARY KEY,
+      event_key VARCHAR(500) NOT NULL UNIQUE,
+      provider_message_id VARCHAR(255) DEFAULT '',
+      status VARCHAR(40) DEFAULT '',
+      owner_id INTEGER,
+      notification_id INTEGER,
+      error_text TEXT DEFAULT '',
+      event_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_wa_webhook_events_message
+      ON peacely_whatsapp_webhook_events(provider_message_id);
+  `);
+
   const ranks = { sent: 1, delivered: 2, read: 3, failed: 99 };
   const current = await query(
     "SELECT provider_status FROM notifications WHERE id=$1 AND owner_id=$2 AND provider_message_id=$3 AND channel='whatsapp' LIMIT 1",
