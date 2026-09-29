@@ -117,7 +117,7 @@ export default function OperationsView({
   tenants: Tenant[];
   properties: Property[];
 }) {
-  const [section, setSection] = useState<'tenant' | 'property' | 'incidents'>('tenant');
+  const [section, setSection] = useState<'tenant' | 'property' | 'maintenance' | 'incidents'>('tenant');
   const [tenantId, setTenantId] = useState('');
   const [propertyId, setPropertyId] = useState('');
   const [passport, setPassport] = useState<Passport | null>(null);
@@ -136,6 +136,20 @@ export default function OperationsView({
   const [incidentType, setIncidentType] = useState('other');
   const [incidentSeverity, setIncidentSeverity] = useState('medium');
   const [incidentDescription, setIncidentDescription] = useState('');
+  const [maintenanceJobs, setMaintenanceJobs] = useState<any[]>([]);
+  const [vendors, setVendors] = useState<any[]>([]);
+  const [maintenanceTitle, setMaintenanceTitle] = useState('');
+  const [maintenanceDescription, setMaintenanceDescription] = useState('');
+  const [maintenanceCategory, setMaintenanceCategory] = useState('General');
+  const [maintenancePriority, setMaintenancePriority] = useState('medium');
+  const [maintenancePropertyId, setMaintenancePropertyId] = useState('');
+  const [maintenanceTenantId, setMaintenanceTenantId] = useState('');
+  const [maintenanceVendorId, setMaintenanceVendorId] = useState('');
+  const [maintenanceEstimatedCost, setMaintenanceEstimatedCost] = useState('');
+  const [maintenancePayer, setMaintenancePayer] = useState('owner');
+  const [vendorName, setVendorName] = useState('');
+  const [vendorPhone, setVendorPhone] = useState('');
+  const [vendorService, setVendorService] = useState('');
 
   const [complianceRequirement, setComplianceRequirement] = useState('');
   const [complianceStatus, setComplianceStatus] = useState('pending');
@@ -212,6 +226,105 @@ export default function OperationsView({
     }
   };
 
+  const loadMaintenance = async () => {
+    setLoading(true); setError('');
+    try {
+      const [jobs, vendorResult] = await Promise.all([
+        request<{ jobs: any[] }>('/maintenance-workflow'),
+        request<{ vendors: any[] }>('/maintenance-workflow/vendors'),
+      ]);
+      setMaintenanceJobs(jobs.jobs || []);
+      setVendors(vendorResult.vendors || []);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to load maintenance workflow.');
+    } finally { setLoading(false); }
+  };
+
+  const createMaintenanceJob = async () => {
+    if (!maintenancePropertyId || !maintenanceDescription.trim()) {
+      setError('Select a property and describe the maintenance request.');
+      return;
+    }
+    setSaving(true); setError(''); setMessage('');
+    try {
+      await request('/maintenance-workflow', {
+        method: 'POST',
+        body: JSON.stringify({
+          property_id: Number(maintenancePropertyId),
+          tenant_id: maintenanceTenantId ? Number(maintenanceTenantId) : null,
+          title: maintenanceTitle.trim() || 'Maintenance request',
+          description: maintenanceDescription.trim(),
+          category: maintenanceCategory,
+          priority: maintenancePriority,
+          vendor_id: maintenanceVendorId ? Number(maintenanceVendorId) : null,
+          estimated_cost: Number(maintenanceEstimatedCost) || 0,
+          payer: maintenancePayer,
+        }),
+      });
+      setMaintenanceTitle(''); setMaintenanceDescription(''); setMaintenanceEstimatedCost('');
+      await loadMaintenance();
+      setMessage('Maintenance request created.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to create maintenance request.');
+    } finally { setSaving(false); }
+  };
+
+  const createVendor = async () => {
+    if (!vendorName.trim()) {
+      setError('Vendor name is required.');
+      return;
+    }
+    setSaving(true); setError('');
+    try {
+      await request('/maintenance-workflow/vendors', {
+        method: 'POST',
+        body: JSON.stringify({ name: vendorName.trim(), phone: vendorPhone.trim(), service: vendorService.trim() }),
+      });
+      setVendorName(''); setVendorPhone(''); setVendorService('');
+      await loadMaintenance();
+      setMessage('Vendor added.');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to add vendor.');
+    } finally { setSaving(false); }
+  };
+
+  const updateMaintenanceStatus = async (job: any, status: string) => {
+    setSaving(true); setError('');
+    try {
+      await request(`/maintenance-workflow/${job.id}/status`, {
+        method: 'PATCH',
+        body: JSON.stringify({ status }),
+      });
+      await loadMaintenance();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to update maintenance status.');
+    } finally { setSaving(false); }
+  };
+
+  const assignMaintenanceVendor = async (job: any, vendorId: string) => {
+    setSaving(true); setError('');
+    try {
+      await request(`/maintenance-workflow/${job.id}/assignment`, {
+        method: 'PATCH',
+        body: JSON.stringify({ vendor_id: vendorId ? Number(vendorId) : null }),
+      });
+      await loadMaintenance();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to assign vendor.');
+    } finally { setSaving(false); }
+  };
+
+  const confirmMaintenance = async (job: any) => {
+    if (!window.confirm('Record tenant confirmation for this completed maintenance job?')) return;
+    setSaving(true); setError('');
+    try {
+      await request(`/maintenance-workflow/${job.id}/tenant-confirm`, { method: 'POST' });
+      await loadMaintenance();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Unable to record tenant confirmation.');
+    } finally { setSaving(false); }
+  };
+
   const loadIncidents = async () => {
     setLoading(true);
     setError('');
@@ -245,6 +358,7 @@ export default function OperationsView({
 
   useEffect(() => {
     if (section === 'incidents') loadIncidents();
+    if (section === 'maintenance') loadMaintenance();
   }, [section]);
 
   const startMoveIn = async () => {
@@ -611,10 +725,11 @@ export default function OperationsView({
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
         {[
           ['tenant', '🪪 Tenant'],
           ['property', '🏠 Property'],
+          ['maintenance', '🔧 Maintenance'],
           ['incidents', '🚨 Incidents'],
         ].map(([key, label]) => (
           <button
@@ -1016,6 +1131,85 @@ export default function OperationsView({
               </Card>
             </>
           )}
+        </>
+      )}
+
+      {section === 'maintenance' && (
+        <>
+          <Card>
+            <h3>Maintenance Workflow</h3>
+            <p style={{ margin: '6px 0 12px', color: 'var(--text-muted)' }}>
+              Reported → Assigned → Work started → Completed → Tenant confirmed.
+            </p>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <select className="modal-input" value={maintenancePropertyId} onChange={(e) => setMaintenancePropertyId(e.target.value)}>
+                <option value="">Select property</option>
+                {properties.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+              </select>
+              <select className="modal-input" value={maintenanceTenantId} onChange={(e) => setMaintenanceTenantId(e.target.value)}>
+                <option value="">Optional tenant</option>
+                {tenants.map((t) => <option key={t.id} value={t.id}>{t.name} · {t.property_name || 'Property'}</option>)}
+              </select>
+              <input className="modal-input" placeholder="Request title" value={maintenanceTitle} onChange={(e) => setMaintenanceTitle(e.target.value)} />
+              <textarea className="modal-input" rows={3} placeholder="Describe the maintenance issue" value={maintenanceDescription} onChange={(e) => setMaintenanceDescription(e.target.value)} />
+              <select className="modal-input" value={maintenanceCategory} onChange={(e) => setMaintenanceCategory(e.target.value)}>
+                <option>General</option><option>Plumbing</option><option>Electrical</option><option>AC</option><option>Cleaning</option><option>Furniture</option><option>Internet</option><option>Security</option>
+              </select>
+              <select className="modal-input" value={maintenancePriority} onChange={(e) => setMaintenancePriority(e.target.value)}>
+                <option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option><option value="critical">Critical</option>
+              </select>
+              <select className="modal-input" value={maintenanceVendorId} onChange={(e) => setMaintenanceVendorId(e.target.value)}>
+                <option value="">Assign later</option>
+                {vendors.filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name} · {v.service || 'Vendor'}</option>)}
+              </select>
+              <input className="modal-input" type="number" min="0" placeholder="Estimated cost" value={maintenanceEstimatedCost} onChange={(e) => setMaintenanceEstimatedCost(e.target.value)} />
+              <select className="modal-input" value={maintenancePayer} onChange={(e) => setMaintenancePayer(e.target.value)}>
+                <option value="owner">Owner</option><option value="tenant">Tenant</option><option value="shared">Shared</option><option value="vendor">Vendor</option><option value="insurance">Insurance</option>
+              </select>
+              <button className="btn-primary full-btn" type="button" onClick={createMaintenanceJob} disabled={saving}>Create Maintenance Request</button>
+            </div>
+          </Card>
+
+          <Card>
+            <h3>Vendors</h3>
+            <div style={{ display: 'grid', gap: 8 }}>
+              <input className="modal-input" placeholder="Vendor name" value={vendorName} onChange={(e) => setVendorName(e.target.value)} />
+              <input className="modal-input" placeholder="Phone" value={vendorPhone} onChange={(e) => setVendorPhone(e.target.value)} />
+              <input className="modal-input" placeholder="Service" value={vendorService} onChange={(e) => setVendorService(e.target.value)} />
+              <button className="btn-secondary full-btn" type="button" onClick={createVendor} disabled={saving}>Add Vendor</button>
+            </div>
+            <div style={{ marginTop: 12 }}>
+              {vendors.map((v) => <div className="history-row" key={v.id}><div><strong>{v.name}</strong><span>{v.service || 'General service'} · {v.phone || 'No phone'}</span></div><Pill value={v.active ? 'active' : 'inactive'} /></div>)}
+              {!vendors.length && <div className="small-empty">No vendors yet.</div>}
+            </div>
+          </Card>
+
+          <Card>
+            <h3>Maintenance Jobs</h3>
+            {loading ? <div className="small-empty">Loading maintenance…</div> : maintenanceJobs.map((job) => (
+              <div className="history-row" key={job.id}>
+                <div>
+                  <strong>{job.title}</strong>
+                  <span>{job.description}</span>
+                  <span>{job.property_name || 'Property'} · {job.tenant_name || 'No tenant'} · {money(job.actual_cost || job.estimated_cost)}</span>
+                  {job.vendor_name && <span>Vendor: {job.vendor_name} · {job.vendor_service || ''}</span>}
+                  {job.tenant_confirmed_at && <span>Tenant confirmed</span>}
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+                  <Pill value={job.priority} />
+                  <select className="modal-input" style={{ minWidth: 140, margin: 0, padding: '7px 9px' }} value={job.status} onChange={(e) => updateMaintenanceStatus(job, e.target.value)} disabled={saving}>
+                    <option value="reported">Reported</option><option value="assigned">Assigned</option><option value="work_started">Work started</option><option value="completed">Completed</option>
+                  </select>
+                  <select className="modal-input" style={{ minWidth: 140, margin: 0, padding: '7px 9px' }} value={job.vendor_id || ''} onChange={(e) => assignMaintenanceVendor(job, e.target.value)} disabled={saving}>
+                    <option value="">No vendor</option>
+                    {vendors.filter((v) => v.active).map((v) => <option key={v.id} value={v.id}>{v.name}</option>)}
+                  </select>
+                  {job.status === 'completed' && !job.tenant_confirmed_at && <button className="btn-secondary" type="button" onClick={() => confirmMaintenance(job)} disabled={saving}>Tenant Confirmed</button>}
+                </div>
+              </div>
+            ))}
+            {!loading && !maintenanceJobs.length && <div className="small-empty">No maintenance jobs yet.</div>}
+          </Card>
         </>
       )}
 
