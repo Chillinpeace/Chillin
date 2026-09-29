@@ -390,6 +390,16 @@ router.get('/whatsapp/status', auth, async (req, res) => {
   });
 });
 
+router.get('/whatsapp/inbound', auth, async (req, res) => {
+  await ensureWhatsAppSchema();
+  const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
+  const result = await query(
+    "SELECT i.id,i.tenant_id,i.property_id,i.provider_message_id,i.from_phone,i.message_type,i.message_text,i.intent,i.intent_confidence,i.status,i.received_at,i.created_at,t.name AS tenant_name,p.name AS property_name FROM peacely_whatsapp_inbound i LEFT JOIN tenants t ON t.id=i.tenant_id LEFT JOIN properties p ON p.id=i.property_id WHERE i.owner_id=$1 ORDER BY i.created_at DESC LIMIT $2",
+    [req.whatsappOwner.id, limit],
+  );
+  return res.json({ success: true, messages: result.rows });
+});
+
 router.get('/whatsapp/notifications', auth, async (req, res) => {
   await ensureWhatsAppSchema();
   const limit = Math.min(100, Math.max(1, Number(req.query?.limit) || 50));
