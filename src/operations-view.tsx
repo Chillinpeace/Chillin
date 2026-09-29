@@ -1633,6 +1633,45 @@ export default function OperationsView({
         </>
       )}
 
+      {section === 'whatsapp' && (
+        <>
+          <Card>
+            <div className="section-heading">
+              <div><h3>WhatsApp Center</h3><p>Send tenant messages and monitor provider status from Peacely.</p></div>
+              <Pill value={whatsappStatus?.mode || 'unknown'} />
+            </div>
+            <div className="detail-grid">
+              <div className="detail-item"><span>Provider</span><strong>{whatsappStatus?.provider || 'Meta WhatsApp Cloud API'}</strong></div>
+              <div className="detail-item"><span>Configured</span><strong>{whatsappStatus?.configured ? 'Yes' : 'No'}</strong></div>
+              <div className="detail-item"><span>Automation</span><strong>{whatsappStatus?.automation_enabled ? 'Enabled' : 'Manual / disabled'}</strong></div>
+              <div className="detail-item"><span>Text messages</span><strong>{whatsappStatus?.text_messages_allowed ? 'Allowed' : 'Template required'}</strong></div>
+            </div>
+            {!whatsappStatus?.configured && <div className="small-empty" style={{ marginTop: 10 }}>WhatsApp is not connected yet. Development uses mock mode and does not call Meta.</div>}
+            <div style={{ display: 'grid', gap: 8, marginTop: 12 }}>
+              <select className="modal-input" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+                <option value="">Select tenant</option>
+                {tenants.map((tenant) => <option key={tenant.id} value={tenant.id}>{tenant.name} · {tenant.phone || 'No phone'}</option>)}
+              </select>
+              <textarea className="modal-input" rows={4} placeholder="Write a WhatsApp message…" value={whatsappMessage} onChange={(e) => setWhatsappMessage(e.target.value)} />
+              <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+                <input className="modal-input" placeholder="Optional approved template name" value={whatsappTemplate} onChange={(e) => setWhatsappTemplate(e.target.value)} />
+                <select className="modal-input" value={whatsappLanguage} onChange={(e) => setWhatsappLanguage(e.target.value)}><option value="en">English</option><option value="hi">Hindi</option><option value="kn">Kannada</option></select>
+              </div>
+              <button className="btn-primary full-btn" type="button" onClick={sendWhatsApp} disabled={saving || !tenantId}>{saving ? 'Sending…' : 'Send WhatsApp'}</button>
+            </div>
+          </Card>
+          <Card>
+            <div className="section-heading"><div><h3>Message History</h3><p>Owner-scoped WhatsApp notification records.</p></div><button className="btn-secondary" type="button" onClick={loadWhatsApp} disabled={loading}>Refresh</button></div>
+            {loading ? <div className="small-empty">Loading WhatsApp history…</div> : whatsappNotifications.map((notification) => (
+              <div className="history-row" key={notification.id}>
+                <div><strong>{notification.tenant_name || notification.recipient || 'Tenant'}</strong><span>{notification.type || 'WhatsApp'} · {dateText(notification.created_at)}</span><span>{notification.message}</span>{notification.provider_message_id && <span>Provider ID: {notification.provider_message_id}</span>}{notification.provider_error && <span>{notification.provider_error}</span>}</div>
+                <Pill value={notification.provider_status || notification.status || 'ready'} />
+              </div>
+            ))}
+            {!loading && !whatsappNotifications.length && <div className="small-empty">No WhatsApp messages yet.</div>}
+          </Card>
+        </>
+      )}
       {section === 'incidents' && (
         <>
           <Card>
